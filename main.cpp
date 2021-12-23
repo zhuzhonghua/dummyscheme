@@ -14,19 +14,8 @@ int read(std::string &input)
 
 std::string eval(std::string &input)
 {
-	int index = 0;
-	index = skipBlank(input, startIndex);
-	switch(input[index])
-	{
-	case TOKEN_LEFT_PAREN:
-		break;
-	default:{
-		std::stringstream ss;
-		ss << "unexpected token " << input[index] << " at " << index;	
-		return ss.str();
-	}
-	}
-	return input;
+	Tokenize tokenize(input);
+	return tokenize.read();
 }
 
 void print(std::string &result)

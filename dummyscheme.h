@@ -3,10 +3,21 @@
 #define TOKEN_LEFT_PAREN '('
 #define TOKEN_RIGHT_PAREN ')'
 
-// space and tab
-// TODO: comment
-int skipBlank(std::string &input, int startIndex);
-// read a word as symbol
-int readSymbol(std::string &input, int startIndex);
-// a lisp form
-int readForm(std::string &input, int startIndex);
+class Tokenize{
+protected:
+	int index;
+	std::string input;
+public:
+	Tokenize(std::string &input);
+	void read();
+public:
+	bool isNum();
+	// space and tab
+	// TODO: comment
+	int skipBlank();
+	int readNum();
+	// read a word as symbol
+	int readSymbol();
+	// a lisp form
+	int readForm();	
+};

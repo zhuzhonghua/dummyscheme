@@ -1,5 +1,7 @@
 #include "dummyscheme.h"
 
+#define CASE_NUM case '0':case '1':case '2':case '3':case '4':case '5':case '6':case '7':case '8':case '9'
+
 void unexpectedToken(std::string &input, int startIndex)
 {
 		std::stringstream ss;
@@ -9,57 +11,109 @@ void unexpectedToken(std::string &input, int startIndex)
 		printf(ss.str());
 }
 
-int skipBlank(std::string &input, int startIndex)
+Tokenize::Tokenize(std::string &input)
 {
-	while(startIndex < input.size())
+	this->input = input;
+	this->index = 0;
+}
+
+void Tokenize::read()
+{
+	index = skipBlank();
+	switch(input[index])
 	{
-		switch(input[startIndex])
+	case TOKEN_LEFT_PAREN:
+		//readForm(input, index);
+		break;
+	CASE_NUM:
+		readNum();
+		break;
+	default:{
+		std::stringstream ss;
+		ss << "unexpected token " << input[index] << " at " << index;	
+		return ss.str();
+	}
+	}
+	return input;
+}
+bool Tokenize::isNum()
+{
+	return input[index] >= '0' && input[index] <= '9';
+}
+
+int Tokenize::readNum()
+{
+	int num = 0;
+	while(index < input.length())
+	{
+		switch(input[index])
+		{
+		CASE_NUM:
+			num *= 10;			
+			num += (input[index++] - '0');		
+			break;
+		default:
+			return index;
+		}
+	}
+
+	return index;
+}
+
+int Tokenize::skipBlank()
+{
+	while(index < input.size())
+	{
+		switch(input[index])
 		{
 		case ' ':
 		case '\t':
 		case '\n':
 		case '\r':
-			startIndex++;
+			index++;
 			break;
 		default:
-			return startIndex;
+			return index;
 		}
 	}
 
 	return -1;
 }
 
-int readSymbol(std::string &input, int startIndex)
+int Tokenize::readSymbol()
 {
 	std::stringstream symbol;
-	if (!(input[startIndex] >= 'a' && input[startIndex] <= 'z') &&
-			!(input[startIndex] >= 'A' && input[startIndex] <= 'Z'))
+	if (!(input[index] >= 'a' && input[index] <= 'z') &&
+			!(input[index] >= 'A' && input[index] <= 'Z'))
 	{
-		unexpectedToken(input, startIndex);
+		unexpectedToken(input, index);
 		return -1;
 	}
 
-	symbol << input[startIndex++];
-	while((input[startIndex] >= 'a' && input[startIndex] <= 'z') ||
-				(input[startIndex] >= 'A' && input[startIndex] <= 'Z') ||
-				(input[startIndex] >= '0' && input[startIndex] <= '9') ||
-				input[startIndex] == '-')
+	symbol << input[index++];
+	while((input[index] >= 'a' && input[index] <= 'z') ||
+				(input[index] >= 'A' && input[index] <= 'Z') ||
+				(input[index] >= '0' && input[index] <= '9') ||
+				input[index] == '-')
 	{
-		symbol << input[startIndex++];
+		symbol << input[index++];
 	}
 
-	return startIndex;
+	return index;
 }
 
-int readForm(std::string &input, int startIndex)
+int Tokenize::readForm()
 {
-	if (input[startIndex] != TOKEN_LEFT_PAREN)
+	switch(input[index])
 	{
-		unexpectedToken(input, startIndex);
+	case TOKEN_LEFT_PAREN:
+		index++;	
+		skipBlank();
+		readSymbol();
+		break;
+	default:
+		unexpectedToken(input, index);	
 		return -1;
 	}
-
-	startIndex++;
-	startIndex = skipBlank(input, startIndex);
-	startIndex = readSymbol(input, startIndex);
+	return -1;
 }
