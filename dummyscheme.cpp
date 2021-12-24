@@ -17,6 +17,9 @@ Tokenize::Tokenize(std::string &input)
 	this->index = 0;
 }
 
+/*
+NUM | LEFT FORM RIGHT
+*/
 void Tokenize::read()
 {
 	index = skipBlank();
@@ -36,6 +39,7 @@ void Tokenize::read()
 	}
 	return input;
 }
+
 bool Tokenize::isNum()
 {
 	return input[index] >= '0' && input[index] <= '9';
