@@ -18,7 +18,7 @@ Tokenize::Tokenize(std::string &input)
 }
 
 /*
-NUM | LEFT FORM RIGHT
+
 */
 void Tokenize::read()
 {
@@ -26,7 +26,7 @@ void Tokenize::read()
 	switch(input[index])
 	{
 	case TOKEN_LEFT_PAREN:
-		//readForm(input, index);
+		readForm();
 		break;
 	CASE_NUM:
 		readNum();
@@ -106,6 +106,9 @@ int Tokenize::readSymbol()
 	return index;
 }
 
+/*
+ STAR BLANK 
+*/
 int Tokenize::readForm()
 {
 	switch(input[index])

@@ -3,6 +3,11 @@
 #define TOKEN_LEFT_PAREN '('
 #define TOKEN_RIGHT_PAREN ')'
 
+/*
+	P = NUM | LEFT LIST RIGHT
+	LIST = SYMBOL LISTP
+	LISTP = P LISTP	
+*/
 class Tokenize{
 protected:
 	int index;
