@@ -2,12 +2,12 @@
 
 #define CASE_NUM case '0':case '1':case '2':case '3':case '4':case '5':case '6':case '7':case '8':case '9'
 
-void unexpectedToken(std::string &input, int startIndex)
+void Tokenize::unexpectedToken()
 {
 		std::stringstream ss;
 		ss << "unexpected token "
-			 << input[startIndex]
-			 << " at " << startIndex;
+			 << input[index]
+			 << " at " << index;
 		printf(ss.str());
 }
 
@@ -15,31 +15,79 @@ Tokenize::Tokenize(std::string &input)
 {
 	this->input = input;
 	this->index = 0;
+
+	read();
+}
+
+TokenType Tokenize::readToken()
+{
+	skipBlank();
+	switch(input[index])
+	{
+	CASE_NUM:
+		return TokenType::TOKEN_NUM;
+	case:'('
+		return TokenType::TOKEN_LEFT_PAREN;
+	case:')'
+		return TokenType::TOKEN_RIGHT_PAREN;	
+	default:
+		return TokenType::TOKEN_UNKNOWN;
+	}
+
+	return TokenType::TOKEN_UNKNOWN;
 }
 
 /*
-
+	P = NUM | LEFT_PAREN LIST RIGHT_PAREN
 */
-void Tokenize::read()
+void Tokenize::readP()
 {
-	index = skipBlank();
-	switch(input[index])
+	TokenType token = readToken();
+	switch(token)
 	{
-	case TOKEN_LEFT_PAREN:
-		readForm();
-		break;
-	CASE_NUM:
+	case TokenType::TOKEN_NUM:
 		readNum();
 		break;
+	case TokenType::TOKEN_LEFT_PAREN:
+		readList();
+		token = readToken();
+		if (token != TokenType::TOKEN_RIGHT_PAREN)
+			unexpectedToken();
+		else
+			index++;
+		break;
 	default:{
-		std::stringstream ss;
-		ss << "unexpected token " << input[index] << " at " << index;	
-		return ss.str();
+		unexpectedToken();
+		break
 	}
 	}
-	return input;
 }
 
+/*
+	LIST = SYMBOL LISTP	
+*/
+void Tokenize::readList()
+{
+	TokenType token = readToken();
+	switch(token)
+	{
+	case TokenType::TOKEN_SYMBOL:
+		readSymbol();
+		readListP();
+		break;
+	default:
+		unexpectedToken();
+		break;
+	}
+}
+
+/*
+	LISTP = P LISTP		
+*/
+void Tokenize::readListP()
+{
+	
+}
 bool Tokenize::isNum()
 {
 	return input[index] >= '0' && input[index] <= '9';
@@ -64,46 +112,33 @@ int Tokenize::readNum()
 	return index;
 }
 
-int Tokenize::skipBlank()
+bool Tokenize::isBlank()
 {
-	while(index < input.size())
+	switch(input[index])
 	{
-		switch(input[index])
-		{
-		case ' ':
-		case '\t':
-		case '\n':
-		case '\r':
-			index++;
-			break;
-		default:
-			return index;
-		}
+	case ' ':
+	case '\t':
+	case '\n':
+	case '\r':
+		return true;
+	default:
+		return false;
 	}
 
-	return -1;
+	return false;
 }
 
-int Tokenize::readSymbol()
+void Tokenize::skipBlank()
+{
+	while(index < input.size() && isBlank())
+		index++;
+}
+
+void Tokenize::readSymbol()
 {
 	std::stringstream symbol;
-	if (!(input[index] >= 'a' && input[index] <= 'z') &&
-			!(input[index] >= 'A' && input[index] <= 'Z'))
-	{
-		unexpectedToken(input, index);
-		return -1;
-	}
-
-	symbol << input[index++];
-	while((input[index] >= 'a' && input[index] <= 'z') ||
-				(input[index] >= 'A' && input[index] <= 'Z') ||
-				(input[index] >= '0' && input[index] <= '9') ||
-				input[index] == '-')
-	{
-		symbol << input[index++];
-	}
-
-	return index;
+	while(index < input.length() && !isBlank())
+		symbol << input[index++];	
 }
 
 /*

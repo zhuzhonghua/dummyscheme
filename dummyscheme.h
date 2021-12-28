@@ -1,10 +1,15 @@
 #pragma once
 
-#define TOKEN_LEFT_PAREN '('
-#define TOKEN_RIGHT_PAREN ')'
+enum TokenType{
+	TOKEN_UNKNOWN,
+	TOKEN_NUM,
+	TOKEN_LEFT_PAREN,
+	TOKEN_RIGHT_PAREN,
+	TOKEN_SYMBOL,
+};
 
 /*
-	P = NUM | LEFT LIST RIGHT
+	P = NUM | LEFT_PAREN LIST RIGHT_PAREN
 	LIST = SYMBOL LISTP
 	LISTP = P LISTP	
 */
@@ -14,15 +19,21 @@ protected:
 	std::string input;
 public:
 	Tokenize(std::string &input);
-	void read();
-public:
+protected:
+	void unexpectedToken();
+	TokenType readToken();
+	void readP();
+	void readList();
+	void readListP();
+	
+protected:
 	bool isNum();
 	// space and tab
 	// TODO: comment
-	int skipBlank();
+	void skipBlank();
 	int readNum();
 	// read a word as symbol
-	int readSymbol();
+	void readSymbol();
 	// a lisp form
 	int readForm();	
 };
