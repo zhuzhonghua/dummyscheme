@@ -9,7 +9,7 @@ void Tokenize::unexpectedToken()
 		ss << "unexpected token "
 			 << input[index]
 			 << " at " << index;
-		printf(ss.str());
+		throw ss.str().c_str();
 }
 
 Tokenize::Tokenize(std::string &input)
@@ -17,7 +17,11 @@ Tokenize::Tokenize(std::string &input)
 	this->input = input;
 	this->index = 0;
 
-	readP();
+	try {
+		readP();
+	}	catch(const char* exception) {
+		printf(exception);
+	}
 }
 
 TokenType Tokenize::readToken()
@@ -51,13 +55,14 @@ TokenType Tokenize::readToken()
 */
 void Tokenize::readP()
 {
-	TokenType token = readToken();
-	switch(token)
+	headType = readToken();
+	switch(headType)
 	{
 	case TokenType::TOKEN_NUM:
 		readNum();
 		break;
 	case TokenType::TOKEN_LEFT_PAREN:
+		index++;
 		readList();
 		token = readToken();
 		if (token != TokenType::TOKEN_RIGHT_PAREN)
@@ -65,10 +70,9 @@ void Tokenize::readP()
 		else
 			index++;
 		break;
-	default:{
+	default:
 		unexpectedToken();
-		break
-	}
+		break;
 	}
 }
 
@@ -77,8 +81,8 @@ void Tokenize::readP()
 */
 void Tokenize::readList()
 {
-	TokenType token = readToken();
-	switch(token)
+	headType = readToken();
+	switch(headType)
 	{
 	case TokenType::TOKEN_SYMBOL:
 		readSymbol();
@@ -95,8 +99,21 @@ void Tokenize::readList()
 */
 void Tokenize::readListP()
 {
-	readP();
-	
+	headType = readToken();
+	switch(headType)
+	{
+	case TokenType::TOKEN_NUM:
+	case TokenType::TOKEN_LEFT_PAREN:
+		readP();
+		readListP();
+		break;
+	case TokenType::TOKEN_RIGHT_PAREN:
+		// DO nothing
+		break;
+	default:
+		unexpectedToken();
+		break;
+	}
 }
 
 bool Tokenize::isNum()
@@ -106,19 +123,22 @@ bool Tokenize::isNum()
 
 int Tokenize::readNum()
 {
-	int num = 0;
+	char num[20] = {0};
+	int temp = 0;
+	
 	while(index < input.length())
 	{
 		switch(input[index])
 		{
 		CASE_NUM:
-			num *= 10;			
-			num += (input[index++] - '0');		
+			num[temp++] = input[index++];
 			break;
 		default:
 			return index;
 		}
 	}
+	int val = 0;
+	sscanf(num, "%d", &val);
 
 	return index;
 }
@@ -152,21 +172,3 @@ void Tokenize::readSymbol()
 		symbol << input[index++];	
 }
 
-/*
- STAR BLANK 
-*/
-int Tokenize::readForm()
-{
-	switch(input[index])
-	{
-	case TOKEN_LEFT_PAREN:
-		index++;	
-		skipBlank();
-		readSymbol();
-		break;
-	default:
-		unexpectedToken(input, index);	
-		return -1;
-	}
-	return -1;
-}

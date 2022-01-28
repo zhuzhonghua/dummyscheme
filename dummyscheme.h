@@ -15,6 +15,7 @@ enum TokenType{
 */
 class Tokenize{
 protected:
+	TokenType headType;
 	int index;
 	std::string input;
 public:
@@ -34,6 +35,4 @@ protected:
 	int readNum();
 	// read a word as symbol
 	void readSymbol();
-	// a lisp form
-	int readForm();	
 };
