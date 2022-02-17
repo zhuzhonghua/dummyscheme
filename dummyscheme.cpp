@@ -31,9 +31,9 @@ TokenType Tokenize::readToken()
 	{
 	CASE_NUM:
 		return TokenType::TOKEN_NUM;
-	case:'('
+	case '(':
 		return TokenType::TOKEN_LEFT_PAREN;
-	case:')'
+	case ')':
 		return TokenType::TOKEN_RIGHT_PAREN;	
 	CASE_SYMBOL:
 		return TokenType::TOKEN_SYMBOL;
@@ -56,6 +56,7 @@ TokenType Tokenize::readToken()
 void Tokenize::readP()
 {
 	headType = readToken();
+	TokenType token;	
 	switch(headType)
 	{
 	case TokenType::TOKEN_NUM:

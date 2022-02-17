@@ -15,7 +15,7 @@ int read(std::string &input)
 std::string eval(std::string &input)
 {
 	Tokenize tokenize(input);
-	return tokenize.read();
+	return "yes";
 }
 
 void print(std::string &result)

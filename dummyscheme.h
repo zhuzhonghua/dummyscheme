@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+#include <sstream>
+
 enum TokenType{
 	TOKEN_UNKNOWN,
 	TOKEN_NUM,
@@ -32,6 +35,7 @@ protected:
 	// space and tab
 	// TODO: comment
 	void skipBlank();
+	bool isBlank();
 	int readNum();
 	// read a word as symbol
 	void readSymbol();
