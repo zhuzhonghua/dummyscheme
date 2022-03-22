@@ -3,6 +3,31 @@
 #define CASE_NUM case '0':case '1':case '2':case '3':case '4':case '5':case '6':case '7':case '8':case '9'
 #define CASE_SYMBOL case '+':case '-':case '*':case '/'
 
+#define TokenError(fmt, ...) Tokenize::error(fmt" File: %s Line: %d, Function: %s", ##__VA_ARGS__, __FILE__, __LINE__, __FUNCTION__)
+
+DummyValue::DummyValue(int num)
+	:type(DummyType::DUMMY_INT_NUM)
+{
+	basic.intnum = num;
+}
+
+DummyValue::DummyValue(DummyType type, std::string val)
+	:type(type)
+{	
+	if (type == DummyType::DUMMY_STRING ||
+			type == DummyType::DUMMY_SYMBOL) {
+		strAndSymbol = val;
+	}	else {
+		TokenError("wrong dummytype %d", type);
+	}
+}
+
+DummyValue::DummyValue(std::vector<DummyValue*> list)
+	:type(DummyType::DUMMY_LIST),
+	 list(list)
+{
+}
+
 void Tokenize::unexpectedToken()
 {
 		std::stringstream ss;
@@ -12,15 +37,57 @@ void Tokenize::unexpectedToken()
 		throw ss.str().c_str();
 }
 
+void Tokenize::error(const char *fmt, ...)
+{
+	char buffer[1024] = {0};
+	va_list args;
+	va_start(args, fmt);	
+	vsnprintf(buffer, sizeof(buffer), fmt, args);
+	va_end(args);
+	throw buffer;
+}
+
+
+void Tokenize::toString(std::stringstream& out, DummyValue * val)
+{
+	switch(val->type) {
+	case DUMMY_INT_NUM:
+		out << val->basic.intnum << " ";
+		break;
+	case DUMMY_FLOAT_NUM:
+		out << val->basic.floatnum << " ";
+		break;
+	case DUMMY_SYMBOL:
+	case DUMMY_STRING:
+		out << val->strAndSymbol << " ";
+		break;
+	case DUMMY_LIST:{
+		out << "(";
+		for (std::vector<DummyValue*>::iterator itr = val->list.begin();
+				 itr != val->list.end(); itr++) {
+			toString(out, *itr);
+		}
+		out << ")";
+		break;
+	}
+	default:
+		TokenError("unknown type %d", val->type);
+		break;
+	}
+}
+
 Tokenize::Tokenize(std::string &input)
 {
 	this->input = input;
 	this->index = 0;
 
 	try {
-		readP();
+		DummyValue* val = readP();
+		std::stringstream out;
+		toString(out, val);
+		printf("%s\n", out.str().c_str());
 	}	catch(const char* exception) {
-		printf(exception);
+		printf("%s\n", exception);
 	}
 }
 
@@ -31,6 +98,8 @@ TokenType Tokenize::readToken()
 	{
 	CASE_NUM:
 		return TokenType::TOKEN_NUM;
+	case '\"':
+		return TokenType::TOKEN_DOUBLE_QUOT;
 	case '(':
 		return TokenType::TOKEN_LEFT_PAREN;
 	case ')':
@@ -51,63 +120,83 @@ TokenType Tokenize::readToken()
 }
 
 /*
-	P = NUM | LEFT_PAREN LIST RIGHT_PAREN
+	P = NUM | STRING | LEFT_PAREN LIST RIGHT_PAREN
 */
-void Tokenize::readP()
+DummyValue* Tokenize::readP()
 {
+	DummyValue* curValue;
 	headType = readToken();
 	TokenType token;	
 	switch(headType)
 	{
 	case TokenType::TOKEN_NUM:
-		readNum();
+		curValue = readNum();
 		break;
-	case TokenType::TOKEN_LEFT_PAREN:
+	case TokenType::TOKEN_DOUBLE_QUOT:
+		curValue = readStr();
+		break;
+	case TokenType::TOKEN_LEFT_PAREN:{	
 		index++;
-		readList();
+		std::vector<DummyValue*> list = readList();
+		curValue = new DummyValue(list);
 		token = readToken();
 		if (token != TokenType::TOKEN_RIGHT_PAREN)
 			unexpectedToken();
 		else
 			index++;
 		break;
+	}
 	default:
 		unexpectedToken();
 		break;
 	}
+	
+	return curValue;
 }
 
 /*
 	LIST = SYMBOL LISTP	
 */
-void Tokenize::readList()
+std::vector<DummyValue*> Tokenize::readList()
 {
+	std::vector<DummyValue*> list;
 	headType = readToken();
 	switch(headType)
 	{
-	case TokenType::TOKEN_SYMBOL:
-		readSymbol();
-		readListP();
+	case TokenType::TOKEN_SYMBOL:{
+		list.push_back(readSymbol());
+		std::vector<DummyValue*> listP = readListP();
+		if (listP.size() > 0) {
+			list.insert(list.end(), listP.begin(), listP.end());
+		}
 		break;
+	}
 	default:
 		unexpectedToken();
 		break;
 	}
+
+	return list;
 }
 
 /*
 	LISTP = P LISTP		
 */
-void Tokenize::readListP()
+std::vector<DummyValue*> Tokenize::readListP()
 {
+	std::vector<DummyValue*> list;	
 	headType = readToken();
 	switch(headType)
 	{
 	case TokenType::TOKEN_NUM:
-	case TokenType::TOKEN_LEFT_PAREN:
-		readP();
-		readListP();
+	case TokenType::TOKEN_LEFT_PAREN: {
+		list.push_back(readP());
+		std::vector<DummyValue*> listP = readListP();	
+		if (listP.size() > 0) {
+			list.insert(list.end(), listP.begin(), listP.end());
+		}
 		break;
+	}
 	case TokenType::TOKEN_RIGHT_PAREN:
 		// DO nothing
 		break;
@@ -115,6 +204,8 @@ void Tokenize::readListP()
 		unexpectedToken();
 		break;
 	}
+
+	return list;
 }
 
 bool Tokenize::isNum()
@@ -122,12 +213,35 @@ bool Tokenize::isNum()
 	return input[index] >= '0' && input[index] <= '9';
 }
 
-int Tokenize::readNum()
+DummyValue* Tokenize::readStr()
+{
+	if (input[index] != '\"') {
+		TokenError("begin expect token \" actually %c index %d", input[index], index);
+	}
+	
+	index++;
+	
+	std::stringstream str;
+	while(index < input.length() && input[index] != '\"') {
+		str << input[index++];
+	}
+	
+	if (input[index] != '\"') {
+		TokenError("end expect token \" actually %c index %d", input[index], index);
+	}
+	
+	index++;
+	
+	return new DummyValue(DummyType::DUMMY_STRING, str.str());	
+}
+
+DummyValue* Tokenize::readNum()
 {
 	char num[20] = {0};
 	int temp = 0;
 	
-	while(index < input.length())
+	bool breakFlag = false;
+	while(index < input.length() && !breakFlag)
 	{
 		switch(input[index])
 		{
@@ -135,13 +249,15 @@ int Tokenize::readNum()
 			num[temp++] = input[index++];
 			break;
 		default:
-			return index;
+			breakFlag = true;
+			break;
 		}
 	}
 	int val = 0;
 	sscanf(num, "%d", &val);
 
-	return index;
+	DummyValue* dValue = new DummyValue(val);
+	return dValue;
 }
 
 bool Tokenize::isBlank()
@@ -166,10 +282,12 @@ void Tokenize::skipBlank()
 		index++;
 }
 
-void Tokenize::readSymbol()
+DummyValue* Tokenize::readSymbol()
 {
 	std::stringstream symbol;
 	while(index < input.length() && !isBlank())
 		symbol << input[index++];	
+
+	return new DummyValue(DummyType::DUMMY_SYMBOL, symbol.str());
 }
 

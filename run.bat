@@ -1,0 +1,2 @@
+.\build\dummyscheme.exe
+pause
