@@ -25,6 +25,8 @@ void print(std::string &result)
 
 int main()
 {
+	Tokenize::init();
+	
 	printf("dummyscheme\n");
 	while(true) {
 		printf("user>");

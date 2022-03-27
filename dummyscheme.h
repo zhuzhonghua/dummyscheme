@@ -4,6 +4,7 @@
 #include <sstream>
 #include <cstdarg>
 #include <vector>
+#include <map>
 
 enum TokenType{
 	TOKEN_UNKNOWN,
@@ -35,10 +36,19 @@ protected:
 	std::string strAndSymbol;
 	std::vector<DummyValue*> list;	
 public:
+	std::string getStr() const { return strAndSymbol; }
+	std::string getSymbol() const { return strAndSymbol; }
+	int getInt() const { return basic.intnum; }
+	double getDouble() const { return basic.floatnum; }
+	std::vector<DummyValue*> getList() { return list; }	
+public:
 	DummyValue(int num);
 	DummyValue(DummyType type, std::string val);
 	DummyValue(std::vector<DummyValue*> list);
 };
+
+// operator function
+typedef void (*OpFunc)(DummyValue*);
 
 /*
 	P = NUM | LEFT_PAREN LIST RIGHT_PAREN
@@ -62,6 +72,12 @@ protected:
 	DummyValue* readSymbol();	
 	
 public:
+	static std::map<std::string, OpFunc> opMap;
+public:
+	static void eval(DummyValue* value);
+	static void addOp(std::string symbol, OpFunc func);
+	static void addOpForCheck(std::string symbol);
+	static void init();
 	static void error(const char *fmt, ...);
 	static void toString(std::stringstream& out, DummyValue * val);
 protected:

@@ -28,6 +28,42 @@ DummyValue::DummyValue(std::vector<DummyValue*> list)
 {
 }
 
+void OpFuncPlus(DummyValue* value)
+{
+}
+
+std::map<std::string, OpFunc> Tokenize::opMap;
+//Tokenize::opMap["+"] = OpFuncPlus;
+void Tokenize::init()
+{
+	opMap["+"] = OpFuncPlus;
+}
+
+/*
+	just for first pass to check
+*/
+void Tokenize::addOpForCheck(std::string symbol)
+{
+	std::map<std::string, OpFunc>::iterator it = opMap.find(symbol);
+	if (it == opMap.end()) {
+		opMap[symbol] = NULL;
+	} else {
+		// do nothing
+	}
+}
+
+/*
+	for define function
+*/
+void Tokenize::addOp(std::string symbol, OpFunc func)
+{
+	std::map<std::string, OpFunc>::iterator it = opMap.find(symbol);
+	if (it != opMap.end() && it->second != NULL) {
+		error("duplicate for symbol %s", symbol);
+	}
+	opMap[symbol] = func;
+}
+
 void Tokenize::unexpectedToken()
 {
 		std::stringstream ss;
@@ -89,6 +125,11 @@ Tokenize::Tokenize(std::string &input)
 	}	catch(const char* exception) {
 		printf("%s\n", exception);
 	}
+}
+
+void Tokenize::eval(DummyValue* value)
+{
+	
 }
 
 TokenType Tokenize::readToken()
@@ -164,7 +205,11 @@ std::vector<DummyValue*> Tokenize::readList()
 	switch(headType)
 	{
 	case TokenType::TOKEN_SYMBOL:{
-		list.push_back(readSymbol());
+		DummyValue* symbol = readSymbol();
+		addOpForCheck(symbol->getSymbol());
+		
+		list.push_back(symbol);
+		
 		std::vector<DummyValue*> listP = readListP();
 		if (listP.size() > 0) {
 			list.insert(list.end(), listP.begin(), listP.end());
