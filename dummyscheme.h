@@ -36,6 +36,7 @@ protected:
 	std::string strAndSymbol;
 	std::vector<DummyValue*> list;	
 public:
+	DummyType getType() { return type; }	
 	std::string getStr() const { return strAndSymbol; }
 	std::string getSymbol() const { return strAndSymbol; }
 	int getInt() const { return basic.intnum; }
@@ -45,10 +46,12 @@ public:
 	DummyValue(int num);
 	DummyValue(DummyType type, std::string val);
 	DummyValue(std::vector<DummyValue*> list);
+	DummyValue(DummyValue* val);
+	~DummyValue();
 };
 
 // operator function
-typedef void (*OpFunc)(DummyValue*);
+typedef DummyValue* (*OpFunc)(DummyValue*);
 
 /*
 	P = NUM | LEFT_PAREN LIST RIGHT_PAREN
@@ -74,7 +77,7 @@ protected:
 public:
 	static std::map<std::string, OpFunc> opMap;
 public:
-	static void eval(DummyValue* value);
+	static DummyValue* eval(DummyValue* value);
 	static void addOp(std::string symbol, OpFunc func);
 	static void addOpForCheck(std::string symbol);
 	static void init();

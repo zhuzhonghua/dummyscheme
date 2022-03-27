@@ -28,8 +28,126 @@ DummyValue::DummyValue(std::vector<DummyValue*> list)
 {
 }
 
-void OpFuncPlus(DummyValue* value)
+DummyValue::DummyValue(DummyValue* val)
+	:type(val->type),
+	basic(val->basic),
+	list(val->list)
 {
+}
+
+DummyValue::~DummyValue()
+{
+	// only check list type
+	if (type == DummyType::DUMMY_LIST) {
+		for (std::vector<DummyValue*>::iterator itr = list.begin();
+				 itr != list.end(); ++itr) {
+			delete *itr;
+		}
+	}
+}
+
+/*
+	(+ 1 2 3)
+	TODO: check parameter length the first pass	
+*/
+DummyValue* OpFuncPlus(DummyValue* value)
+{
+	std::vector<DummyValue*> list = value->getList(); 
+	
+	int num = 0;
+	std::vector<DummyValue*>::iterator itr = list.begin();	
+	// first is the symbol
+	for (itr++; itr != list.end(); ++itr) {
+		DummyValue* item = *itr;	
+		if (item->getType() != DummyType::DUMMY_LIST) {
+			num += item->getInt();
+		} else {
+			DummyValue* realItem = Tokenize::eval(item);
+			// TODO: check type
+			num += realItem->getInt();
+			delete realItem;
+		}
+	}
+	return new DummyValue(num);
+}
+
+/*
+	(- 1 2 3)
+*/
+DummyValue* OpFuncMinus(DummyValue* value)
+{
+	std::vector<DummyValue*> list = value->getList(); 
+	
+	// first is the symbol	
+	std::vector<DummyValue*>::iterator itr = list.begin();	
+	// *itr = "-"
+	// second is the eeeee
+	++itr;
+	int num = (*itr)->getInt();
+	
+	for (++itr; itr != list.end(); ++itr) {
+		DummyValue* item = *itr;	
+		if (item->getType() != DummyType::DUMMY_LIST) {
+			num -= item->getInt();
+		} else {
+			DummyValue* realItem = Tokenize::eval(item);
+			// TODO: check type
+			num -= realItem->getInt();	
+			delete realItem;
+		}
+	}
+	return new DummyValue(num);
+}
+
+/*
+	(* 1 2 3)
+*/
+DummyValue* OpFuncMul(DummyValue* value)
+{
+	std::vector<DummyValue*> list = value->getList(); 
+
+	int num = 1;
+	// first is the symbol	
+	std::vector<DummyValue*>::iterator itr = list.begin();	
+	
+	for (itr++; itr != list.end(); ++itr) {
+		DummyValue* item = *itr;	
+		if (item->getType() != DummyType::DUMMY_LIST) {
+			num *= item->getInt();
+		} else {
+			DummyValue* realItem = Tokenize::eval(item);
+			// TODO: check type
+			num *= realItem->getInt();	
+			delete realItem;	
+		}
+	}
+	return new DummyValue(num);
+}
+
+/*
+	(/ 1 2 3)
+*/
+DummyValue* OpFuncDivide(DummyValue* value)
+{
+	std::vector<DummyValue*> list = value->getList(); 
+	
+	// first is the symbol	
+	std::vector<DummyValue*>::iterator itr = list.begin();	
+	// second is the eeeee
+	int num = (*(++itr))->getInt();
+	
+	for (++itr; itr != list.end(); ++itr) {
+		DummyValue* item = *itr;	
+		if (item->getType() != DummyType::DUMMY_LIST) {
+			num /= item->getInt();
+		} else {
+			DummyValue* realItem = Tokenize::eval(item);
+			// TODO: check type
+			num /= realItem->getInt();	
+			delete realItem;	
+		}
+	}
+	return new DummyValue(num);
 }
 
 std::map<std::string, OpFunc> Tokenize::opMap;
@@ -37,10 +155,13 @@ std::map<std::string, OpFunc> Tokenize::opMap;
 void Tokenize::init()
 {
 	opMap["+"] = OpFuncPlus;
+	opMap["-"] = OpFuncMinus;
+	opMap["*"] = OpFuncMul;
+	opMap["/"] = OpFuncDivide;
 }
 
 /*
-	just for first pass to check
+	Just for first pass to check
 */
 void Tokenize::addOpForCheck(std::string symbol)
 {
@@ -88,20 +209,25 @@ void Tokenize::toString(std::stringstream& out, DummyValue * val)
 {
 	switch(val->type) {
 	case DUMMY_INT_NUM:
-		out << val->basic.intnum << " ";
+		out << val->basic.intnum;
 		break;
 	case DUMMY_FLOAT_NUM:
-		out << val->basic.floatnum << " ";
+		out << val->basic.floatnum;
 		break;
 	case DUMMY_SYMBOL:
+		out << val->strAndSymbol;	
+		break;
 	case DUMMY_STRING:
-		out << val->strAndSymbol << " ";
+		out << "\"" << val->strAndSymbol << "\"";
 		break;
 	case DUMMY_LIST:{
 		out << "(";
 		for (std::vector<DummyValue*>::iterator itr = val->list.begin();
 				 itr != val->list.end(); itr++) {
 			toString(out, *itr);
+			if (itr + 1 != val->list.end()) {
+				out << " ";	
+			}
 		}
 		out << ")";
 		break;
@@ -121,15 +247,41 @@ Tokenize::Tokenize(std::string &input)
 		DummyValue* val = readP();
 		std::stringstream out;
 		toString(out, val);
+		out << "\n";
+		
+		DummyValue* evalVal = eval(val);
+		toString(out, evalVal);
 		printf("%s\n", out.str().c_str());
+		
+		delete val;
+		// TODO: check val is same with evalVal
+		delete evalVal;
 	}	catch(const char* exception) {
 		printf("%s\n", exception);
+		// TODO: how to release val
 	}
 }
 
-void Tokenize::eval(DummyValue* value)
+DummyValue* Tokenize::eval(DummyValue* value)
 {
-	
+	if (value->getType() != DummyType::DUMMY_LIST) {
+		return new DummyValue(value);
+	} else {
+		std::vector<DummyValue*> list = value->getList();
+		if (list.empty()) {
+			return NULL;
+		}
+		DummyValue* symbol = list.front();
+		std::map<std::string, OpFunc>::iterator it = opMap.find(symbol->getSymbol());
+		if (it == opMap.end()) {
+			error("symbol error %s", symbol->getSymbol().c_str());
+			return NULL;
+		}
+
+		OpFunc op = it->second;
+		// this list contains symbol value as the first
+		return op(value);
+	}
 }
 
 TokenType Tokenize::readToken()
