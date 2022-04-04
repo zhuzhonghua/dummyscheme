@@ -3,6 +3,8 @@
 #include <iostream>
 
 #include "dummyscheme.h"
+#include "tokenize.h"
+#include "env.h"
 
 int read(std::string &input)
 {
@@ -12,9 +14,11 @@ int read(std::string &input)
 		return 0;
 }
 
-std::string eval(std::string &input)
+std::string eval(std::string &input, DummyEnvPtr env)
 {
 	Tokenize tokenize(input);
+	tokenize.run(env);
+	
 	return "yes";
 }
 
@@ -26,15 +30,20 @@ void print(std::string &result)
 int main()
 {
 	Tokenize::init();
+	DummyEnvPtr env(new DummyEnv(NULL));
 	
 	printf("dummyscheme\n");
 	while(true) {
-		printf("user>");
-		std::string input;	
-		if(!read(input))
-			break;
-		std::string result = eval(input);	
-		print(result);
+		try {
+			printf("user>");
+			std::string input;	
+			if(!read(input))
+				break;
+			std::string result = eval(input, env);	
+			print(result);
+		}	catch(const char* exception) {
+			printf("%s\n", exception);	
+		}
 	}
 	
 	return 0;
