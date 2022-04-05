@@ -29,6 +29,10 @@ protected:
 	std::string strAndSymbol;
 	DummyValueList list;	
 public:
+	int getInt(DummyEnvPtr env);
+public:
+	DummyValuePtr eval(DummyEnvPtr env);
+public:
 	bool isInt() { return type == DUMMY_INT_NUM; }
 	bool isFloat() { return type == DUMMY_FLOAT_NUM; }
 	bool isString() { return type == DUMMY_STRING; }

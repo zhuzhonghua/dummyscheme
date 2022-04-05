@@ -37,7 +37,6 @@ protected:
 public:
 	static OpMap opMap;
 public:
-	static DummyValuePtr eval(DummyValuePtr value, DummyEnvPtr env);
 	static void addOp(const std::string &symbol, OpFunc func);
 	static void addOpForCheck(const std::string &symbol);
 	static void init();

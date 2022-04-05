@@ -1,5 +1,7 @@
 #include "value.h"
 #include "dummyscheme.h"
+#include "env.h"
+#include "tokenize.h"
 
 DummyValue::DummyValue(int num)
 	:type(DummyType::DUMMY_INT_NUM)
@@ -42,3 +44,47 @@ DummyValue::~DummyValue()
 	}
 }
 
+int DummyValue::getInt(DummyEnvPtr env)
+{
+	if (this->isInt()) {
+		return this->getInt();
+	} else if (this->isSymbol()) {
+		DummyValuePtr symbolValue = env->get(this->getSymbol());
+		if (symbolValue->isInt()) {
+			return symbolValue->getInt();
+		} else {
+				Error("currently don't support type %d", symbolValue->getType());
+		}
+	} else if (this->isList()) {
+		DummyValuePtr realItem = this->eval(env);
+			// TODO: check type
+		return realItem->getInt();	
+	} else {
+		Error("unknown type %d", this->getType());	
+	}
+
+	return 0;
+}
+
+DummyValuePtr DummyValue::eval(DummyEnvPtr env)
+{
+	if (getType() != DummyType::DUMMY_LIST) {
+		return DummyValuePtr(this);
+	} else {
+		DummyValueList list = getList();
+		if (list.empty()) {
+			return DummyValuePtr();
+		}
+		DummyValuePtr symbol = list.front();
+		OpMap::iterator it = Tokenize::opMap.find(symbol->getSymbol());
+		if (it == Tokenize::opMap.end())
+		{
+			Error("symbol error %s", symbol->getSymbol().c_str());
+			return DummyValuePtr();
+		}
+
+		OpFunc op = it->second;
+		// this list contains symbol value as the first
+		return op(DummyValuePtr(this), env);
+	}
+}

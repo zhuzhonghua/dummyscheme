@@ -22,4 +22,3 @@ typedef DummyRefCountPtr<DummyEnv>  DummyEnvPtr;
 // operator function
 typedef DummyValuePtr (*OpFunc)(DummyValuePtr, DummyEnvPtr);
 typedef std::map<std::string, OpFunc> OpMap;
-

@@ -32,22 +32,7 @@ DummyValuePtr OpFuncPlus(DummyValuePtr value, DummyEnvPtr env)
 	for (itr++; itr != list.end(); ++itr)
 	{
 		DummyValuePtr item = *itr;	
-		if (item->isInt()) {
-			num += item->getInt();
-		} else if (item->isSymbol()) {
-			DummyValuePtr symbolValue = env->get(item->getSymbol());
-			if (symbolValue->isInt()) {
-				num += symbolValue->getInt();
-			} else {
-				Error("currently don't support type %d", symbolValue->getType());
-			}
-		} else if (item->isList()) {
-			DummyValuePtr realItem = Tokenize::eval(item, env);
-			// TODO: check type
-			num += realItem->getInt();
-		} else {
-			Error("don't support type %d", item->getType());
-		}
+		num += item->getInt(env);
 	}
 	return DummyValuePtr(new DummyValue(num));
 }
@@ -68,13 +53,7 @@ DummyValuePtr OpFuncMinus(DummyValuePtr value, DummyEnvPtr env)
 	
 	for (++itr; itr != list.end(); ++itr) {
 		DummyValuePtr item = *itr;	
-		if (item->getType() != DummyType::DUMMY_LIST) {
-			num -= item->getInt();
-		} else {
-			DummyValuePtr realItem = Tokenize::eval(item, env);
-			// TODO: check type
-			num -= realItem->getInt();	
-		}
+		num -= item->getInt(env);
 	}
 	return DummyValuePtr(new DummyValue(num));
 }
@@ -92,13 +71,7 @@ DummyValuePtr OpFuncMul(DummyValuePtr value, DummyEnvPtr env)
 	
 	for (itr++; itr != list.end(); ++itr) {
 		DummyValuePtr item = *itr;	
-		if (item->getType() != DummyType::DUMMY_LIST) {
-			num *= item->getInt();
-		} else {
-			DummyValuePtr realItem = Tokenize::eval(item, env);
-			// TODO: check type
-			num *= realItem->getInt();	
-		}
+		num *= item->getInt(env);
 	}
 	return DummyValuePtr(new DummyValue(num));
 }
@@ -117,13 +90,7 @@ DummyValuePtr OpFuncDivide(DummyValuePtr value, DummyEnvPtr env)
 	
 	for (++itr; itr != list.end(); ++itr) {
 		DummyValuePtr item = *itr;	
-		if (item->getType() != DummyType::DUMMY_LIST) {
-			num /= item->getInt();
-		} else {
-			DummyValuePtr realItem = Tokenize::eval(item, env);
-			// TODO: check type
-			num /= realItem->getInt();	
-		}
+		num /= item->getInt(env);
 	}
 	return DummyValuePtr(new DummyValue(num));
 }
@@ -187,6 +154,8 @@ void Tokenize::unexpectedToken()
 		ss << "unexpected token "
 			 << input[index]
 			 << " at " << index;
+		// can't do this
+		// local variable
 		throw ss.str().c_str();
 }
 
@@ -242,33 +211,10 @@ void Tokenize::run(DummyEnvPtr env)
 	toString(out, val);
 	printf("%s\n", out.str().c_str());
 		
-	DummyValuePtr evalVal = eval(val, env);
+	DummyValuePtr evalVal = val->eval(env);
 	std::stringstream evalOut;	
 	toString(evalOut, evalVal);
 	printf("%s\n", evalOut.str().c_str());
-}
-
-DummyValuePtr Tokenize::eval(DummyValuePtr value, DummyEnvPtr env)
-{
-	if (value->getType() != DummyType::DUMMY_LIST) {
-		return DummyValuePtr(new DummyValue(value));
-	} else {
-		DummyValueList list = value->getList();
-		if (list.empty()) {
-			return DummyValuePtr();
-		}
-		DummyValuePtr symbol = list.front();
-		OpMap::iterator it = opMap.find(symbol->getSymbol());
-		if (it == opMap.end())
-		{
-			Error("symbol error %s", symbol->getSymbol().c_str());
-			return DummyValuePtr();
-		}
-
-		OpFunc op = it->second;
-		// this list contains symbol value as the first
-		return op(value, env);
-	}
 }
 
 TokenType Tokenize::readToken()
