@@ -40,7 +40,6 @@ public:
 	static void addOp(const std::string &symbol, OpFunc func);
 	static void addOpForCheck(const std::string &symbol);
 	static void init();
-	static void toString(std::stringstream& out, DummyValuePtr val);
 protected:
 	bool isNum();
 	// space and tab
@@ -49,4 +48,5 @@ protected:
 	bool isBlank();
 	TokenType readToken();
 	void unexpectedToken();
+	char getCurChar() { return input[index]; }
 };

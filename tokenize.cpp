@@ -5,19 +5,6 @@
 #define CASE_NUM case '0':case '1':case '2':case '3':case '4':case '5':case '6':case '7':case '8':case '9'
 #define CASE_SYMBOL case '+':case '-':case '*':case '/'
 
-void errorThrow(const char *fmt, ...)
-{
-	char buffer[512] = {0};
-	va_list args;
-	va_start(args, fmt);	
-	vsnprintf(buffer, sizeof(buffer), fmt, args);
-	perror(buffer);
-	va_end(args);
-
-	// don't throw buffer
-	throw "error happended";
-}
-
 /*
 	(+ 1 2 3)
 	TODO: check parameter length the first pass	
@@ -95,6 +82,10 @@ DummyValuePtr OpFuncDivide(DummyValuePtr value, DummyEnvPtr env)
 	return DummyValuePtr(new DummyValue(num));
 }
 
+/*
+	(define a 2)
+	(define b (+ a 3))
+ */
 DummyValuePtr OpFuncDefine(DummyValuePtr value, DummyEnvPtr env)
 {
 	DummyValueList list = value->getList(); 
@@ -104,15 +95,62 @@ DummyValuePtr OpFuncDefine(DummyValuePtr value, DummyEnvPtr env)
 	// second is the symbol
 	DummyValuePtr second = *(++itr);	
 	if (second->isSymbol()) {
-		DummyValuePtr symbolValue = *(++itr);	
+		DummyValuePtr symbolValue = (*(++itr))->eval(env);	
 		env->set(second->getSymbol(), symbolValue);
 
-		return DummyValuePtr(new DummyValue(symbolValue));
+		return symbolValue;
 	} else {
 		Error("didn't support type %d", second->getType());
 	}
 
 	return DummyValuePtr();
+}
+
+/*
+	(let ((c 2)) c)
+	(let ((c 2) (d 3)) (+ c d))
+	let equals let*
+ */
+DummyValuePtr OpFuncLet(DummyValuePtr value, DummyEnvPtr env)
+{
+	DummyEnvPtr letEnv(new DummyEnv(env));
+	
+	DummyValueList letList = value->getList(); 
+	
+	// first is the let 
+	DummyValueList::iterator letItr = letList.begin();	
+	// second is the all the variables
+	// second is a list
+	DummyValuePtr second = *(++letItr);	
+	if (!second->isList()) {
+		Error("let error needs list but given %d with value %s", second->getType(), second->toString().c_str());
+	}
+	DummyValueList secondList = second->getList(); 	
+	DummyValueList::iterator secondItr = secondList.begin();	
+	for (; secondItr != secondList.end(); ++secondItr) {
+		DummyValuePtr var = *secondItr;
+		if (!var->isList()) {
+			Error("var needs list but given %d with value %s", var->getType(), var->toString().c_str());
+		}
+		DummyValueList varList = var->getList();
+		if (varList.size() != 2) {
+			Error("varlist needs 2 items but given %d with value %s", varList.size(), var->toString().c_str());
+		}
+		DummyValuePtr symbol = varList[0];
+		if (!symbol->isSymbol()) {
+			Error("var must be a symbol but given %s", symbol->toString().c_str());
+		}
+		DummyValuePtr value = varList[1];
+		letEnv->set(symbol->getSymbol(), value->eval(letEnv));
+	}
+
+	// exec the let body
+	DummyValuePtr retValue;
+	for (letItr++; letItr != letList.end(); letItr++) {
+		retValue = (*letItr)->eval(letEnv);
+	}
+
+	return retValue;
 }
 
 OpMap Tokenize::opMap;
@@ -124,6 +162,7 @@ void Tokenize::init()
 	opMap["*"] = OpFuncMul;
 	opMap["/"] = OpFuncDivide;
 	opMap["define"] = OpFuncDefine;
+	opMap["let"] = OpFuncLet;
 }
 
 /*
@@ -144,7 +183,7 @@ void Tokenize::addOpForCheck(const std::string &symbol)
 */
 void Tokenize::addOp(const std::string &symbol, OpFunc func)
 {
-	OpMap::iterator it = opMap.find(symbol);
+	//	OpMap::iterator it = opMap.find(symbol);
 	opMap[symbol] = func;
 }
 
@@ -157,40 +196,6 @@ void Tokenize::unexpectedToken()
 		// can't do this
 		// local variable
 		throw ss.str().c_str();
-}
-
-
-void Tokenize::toString(std::stringstream& out, DummyValuePtr val)
-{
-	switch(val->type) {
-	case DUMMY_INT_NUM:
-		out << val->basic.intnum;
-		break;
-	case DUMMY_FLOAT_NUM:
-		out << val->basic.floatnum;
-		break;
-	case DUMMY_SYMBOL:
-		out << val->strAndSymbol;	
-		break;
-	case DUMMY_STRING:
-		out << "\"" << val->strAndSymbol << "\"";
-		break;
-	case DUMMY_LIST:{
-		out << "(";
-		for (DummyValueList::iterator itr = val->list.begin();
-				 itr != val->list.end(); itr++) {
-			toString(out, *itr);
-			if (itr + 1 != val->list.end()) {
-				out << " ";	
-			}
-		}
-		out << ")";
-		break;
-	}
-	default:
-		Error("unknown type %d", val->type);
-		break;
-	}
 }
 
 Tokenize::Tokenize(const std::string &input)
@@ -207,14 +212,10 @@ void Tokenize::init(const std::string &input)
 void Tokenize::run(DummyEnvPtr env)
 {
 	DummyValuePtr val = readP();
-	std::stringstream out;
-	toString(out, val);
-	printf("%s\n", out.str().c_str());
+	printf("%s\n", val->toString().c_str());
 		
 	DummyValuePtr evalVal = val->eval(env);
-	std::stringstream evalOut;	
-	toString(evalOut, evalVal);
-	printf("%s\n", evalOut.str().c_str());
+	printf("%s\n", evalVal->toString().c_str());
 }
 
 TokenType Tokenize::readToken()
@@ -238,15 +239,16 @@ TokenType Tokenize::readToken()
 		}	else if ('a' <= input[index] && input[index] <= 'z') {
 			return TokenType::TOKEN_SYMBOL;
 		} else {
-			return TokenType::TOKEN_UNKNOWN;
+			Error("unexpected token=%c index=%d\n", input[index], index);
 		}
+		break;
 	}
 
 	return TokenType::TOKEN_UNKNOWN;
 }
 
 /*
-	P = NUM | STRING | LEFT_PAREN LIST RIGHT_PAREN
+	P = NUM | STRING | SYMBOL | LEFT_PAREN LIST RIGHT_PAREN
 */
 DummyValuePtr Tokenize::readP()
 {
@@ -268,7 +270,7 @@ DummyValuePtr Tokenize::readP()
 		DummyValuePtr curValue(readList());
 		token = readToken();
 		if (token != TokenType::TOKEN_RIGHT_PAREN) {
-			Error("unexpected token %d expected \)", token);
+			Error("unexpected token=%d char=%c, index=%d expected \)", token, getCurChar(), index);
 		} else {
 			index++;
 		}
@@ -284,18 +286,21 @@ DummyValuePtr Tokenize::readP()
 }
 
 /*
-	LIST = SYMBOL LISTP	
+	LIST = P LISTP	
+	It's different from readListP with different return value
 */
 DummyValuePtr Tokenize::readList()
 {
 	headType = readToken();
 	switch(headType)
 	{
-	case TokenType::TOKEN_SYMBOL:{
+	case TokenType::TOKEN_RIGHT_PAREN:
+		// )
+		// do nothing
+		break;
+	default: {
 		DummyValueList list;
-		DummyValuePtr symbol = readSymbol();
-		//addOpForCheck(symbol->getSymbol());
-		list.push_back(symbol);
+		list.push_back(readP());
 		
 		DummyValueList listP = readListP();
 		if (listP.size() > 0) {
@@ -304,9 +309,6 @@ DummyValuePtr Tokenize::readList()
 		return DummyValuePtr(new DummyValue(list));
 		break;
 	}
-	default:
-		Error("unexpected token %d", headType);
-		break;
 	}
 
 	return DummyValuePtr();
@@ -321,22 +323,18 @@ DummyValueList Tokenize::readListP()
 	headType = readToken();
 	switch(headType)
 	{
-	case TokenType::TOKEN_NUM:
-	case TokenType::TOKEN_LEFT_PAREN:
-	case TokenType::TOKEN_SYMBOL: {
+	case TokenType::TOKEN_RIGHT_PAREN:
+		// )
+		// DO nothing
+		break;	
+	default: {
 		list.push_back(readP());
 		DummyValueList listP = readListP();	
 		if (listP.size() > 0) {
 			list.insert(list.end(), listP.begin(), listP.end());
-		}
+		}	
 		break;
 	}
-	case TokenType::TOKEN_RIGHT_PAREN:
-		// DO nothing
-		break;
-	default:
-		Error("unexpected token %d", headType);
-		break;
 	}
 
 	return list;
@@ -413,13 +411,22 @@ void Tokenize::skipBlank()
 {
 	while(index < input.size() && isBlank())
 		index++;
+	
+	if(index >= input.size()) {
+		Error("something is error index outof range %d", input.size());
+	}
 }
 
 DummyValuePtr Tokenize::readSymbol()
 {
 	std::stringstream symbol;
-	while(index < input.length() && !isBlank())
+	while(index < input.length() && !isBlank()) {
+		char c = input[index];
+		if (c == ')')
+			break;
+		// TODO: other wrong character
 		symbol << input[index++];	
+	}
 
 	return DummyValuePtr(new DummyValue(DummyType::DUMMY_SYMBOL, symbol.str()));
 }

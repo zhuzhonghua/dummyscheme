@@ -68,9 +68,17 @@ int DummyValue::getInt(DummyEnvPtr env)
 
 DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 {
-	if (getType() != DummyType::DUMMY_LIST) {
+	DummyType type = getType();
+	switch(type) {
+	case DummyType::DUMMY_SYMBOL:
+		return env->get(this->getSymbol());	
+		break;
+	case DummyType::DUMMY_INT_NUM:
+	case DummyType::DUMMY_FLOAT_NUM:
+	case DummyType::DUMMY_STRING:
 		return DummyValuePtr(this);
-	} else {
+		break;
+	case DummyType::DUMMY_LIST:{
 		DummyValueList list = getList();
 		if (list.empty()) {
 			return DummyValuePtr();
@@ -79,12 +87,53 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 		OpMap::iterator it = Tokenize::opMap.find(symbol->getSymbol());
 		if (it == Tokenize::opMap.end())
 		{
-			Error("symbol error %s", symbol->getSymbol().c_str());
+			Error("didn't define symbol=%s", symbol->getSymbol().c_str());
 			return DummyValuePtr();
 		}
 
 		OpFunc op = it->second;
 		// this list contains symbol value as the first
-		return op(DummyValuePtr(this), env);
+		return op(DummyValuePtr(this), env);	
+		break;
 	}
+	default:
+		Error("unknown dummytype %d", type);	
+		return DummyValuePtr();
+	}
+}
+
+std::string DummyValue::toString()
+{
+	std::stringstream out;
+	switch(this->type) {
+	case DUMMY_INT_NUM:
+		out << this->basic.intnum;
+		break;
+	case DUMMY_FLOAT_NUM:
+		out << this->basic.floatnum;
+		break;
+	case DUMMY_SYMBOL:
+		out << this->strAndSymbol;	
+		break;
+	case DUMMY_STRING:
+		out << "\"" << this->strAndSymbol << "\"";
+		break;
+	case DUMMY_LIST:{
+		out << "(";
+		DummyValueList::iterator itr = this->list.begin();	
+		for (;itr != this->list.end(); itr++) {
+			out << (*itr)->toString();
+			if (itr + 1 != this->list.end()) {
+				out << " ";	
+			}
+		}
+		out << ")";
+		break;
+	}
+	default:
+		Error("unknown type %d", this->type);
+		break;
+	}	
+
+	return out.str();
 }
