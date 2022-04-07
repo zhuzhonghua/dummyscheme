@@ -76,6 +76,16 @@ void test5()
 	tokenize.run(env);
 }
 
+void test6()
+{
+	DummyEnvPtr env(new DummyEnv(NULL));	
+	Tokenize tokenize("nil");
+	tokenize.run(env);
+	
+	tokenize.init("t");
+	tokenize.run(env);
+}
+
 int main()
 {
 	Tokenize::init();
@@ -84,4 +94,5 @@ int main()
 	RUNTEST(test3);
 	RUNTEST(test4);
 	RUNTEST(test5);
+	RUNTEST(test6);
 }

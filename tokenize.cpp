@@ -249,6 +249,7 @@ TokenType Tokenize::readToken()
 
 /*
 	P = NUM | STRING | SYMBOL | LEFT_PAREN LIST RIGHT_PAREN
+	add check for p at the first pass
 */
 DummyValuePtr Tokenize::readP()
 {
@@ -428,5 +429,12 @@ DummyValuePtr Tokenize::readSymbol()
 		symbol << input[index++];	
 	}
 
-	return DummyValuePtr(new DummyValue(DummyType::DUMMY_SYMBOL, symbol.str()));
+	std::string symStr = symbol.str();
+	if (0 == symStr.compare(DummyValue::nil->getSymbol())) {
+		return DummyValue::nil;
+	} else if (0 == symStr.compare(DummyValue::t->getSymbol())) {
+		return DummyValue::t;
+	} else {
+		return DummyValuePtr(new DummyValue(DummyType::DUMMY_SYMBOL, symStr));
+	}
 }

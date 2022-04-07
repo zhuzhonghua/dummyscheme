@@ -3,20 +3,28 @@
 #include "env.h"
 #include "tokenize.h"
 
+DummyValuePtr DummyValue::nil(new DummyValue(DummyType::DUMMY_NIL, std::string("nil")));
+DummyValuePtr DummyValue::t(new DummyValue(DummyType::DUMMY_TRUE, std::string("t")));
+
 DummyValue::DummyValue(int num)
 	:type(DummyType::DUMMY_INT_NUM)
 {
 	basic.intnum = num;
 }
 
-DummyValue::DummyValue(DummyType type, std::string val)
+DummyValue::DummyValue(DummyType type, const std::string& val)
 	:type(type)
 {	
-	if (type == DummyType::DUMMY_STRING ||
-			type == DummyType::DUMMY_SYMBOL) {
-		strAndSymbol = val;
-	}	else {
-		Error("wrong dummytype %d", type);
+	switch(type) {
+	case DummyType::DUMMY_STRING:
+	case DummyType::DUMMY_SYMBOL:
+	case DummyType::DUMMY_NIL:
+	case DummyType::DUMMY_TRUE:
+		strAndSymbol = val;	
+		break;
+	default:
+		Error("wrong dummytype %d with %s", type, val.c_str());
+		break;
 	}
 }
 
@@ -76,6 +84,8 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	case DummyType::DUMMY_INT_NUM:
 	case DummyType::DUMMY_FLOAT_NUM:
 	case DummyType::DUMMY_STRING:
+	case DummyType::DUMMY_NIL:
+	case DummyType::DUMMY_TRUE:
 		return DummyValuePtr(this);
 		break;
 	case DummyType::DUMMY_LIST:{
@@ -113,6 +123,8 @@ std::string DummyValue::toString()
 		out << this->basic.floatnum;
 		break;
 	case DUMMY_SYMBOL:
+	case DUMMY_NIL:
+	case DUMMY_TRUE:
 		out << this->strAndSymbol;	
 		break;
 	case DUMMY_STRING:

@@ -13,12 +13,17 @@ enum DummyType {
 	DUMMY_FLOAT_NUM,
 	DUMMY_STRING,
 	DUMMY_SYMBOL,
+	DUMMY_NIL,
+	DUMMY_TRUE,
 	DUMMY_LIST,
 };
 
 class Tokenize;
 
 class DummyValue : public DummyRefCount {
+public:
+	static DummyValuePtr nil;
+	static DummyValuePtr t;
 protected:
 	friend class Tokenize;
 	DummyType type;
@@ -48,7 +53,7 @@ public:
 	DummyValueList getList() { return list; }
 public:
 	DummyValue(int num);
-	DummyValue(DummyType type, std::string val);
+	DummyValue(DummyType type, const std::string& val);
 	DummyValue(DummyValueList list);
 	DummyValue(DummyValuePtr val);
 	~DummyValue();
