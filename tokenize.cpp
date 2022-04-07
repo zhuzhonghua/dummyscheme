@@ -2,201 +2,10 @@
 #include "env.h"
 #include "value.h"
 
+using namespace DummyScheme;
+
 #define CASE_NUM case '0':case '1':case '2':case '3':case '4':case '5':case '6':case '7':case '8':case '9'
 #define CASE_SYMBOL case '+':case '-':case '*':case '/'
-
-/*
-	(+ 1 2 3)
-	TODO: check parameter length the first pass	
-*/
-DummyValuePtr OpFuncPlus(DummyValuePtr value, DummyEnvPtr env)
-{
-	DummyValueList list = value->getList(); 
-	
-	int num = 0;
-	DummyValueList::iterator itr = list.begin();	
-	// first is the symbol
-	for (itr++; itr != list.end(); ++itr)
-	{
-		DummyValuePtr item = *itr;	
-		num += item->getInt(env);
-	}
-	return DummyValuePtr(new DummyValue(num));
-}
-
-/*
-	(- 1 2 3)
-*/
-DummyValuePtr OpFuncMinus(DummyValuePtr value, DummyEnvPtr env)
-{
-	DummyValueList list = value->getList(); 
-	
-	// first is the symbol	
-	DummyValueList::iterator itr = list.begin();	
-	// *itr = "-"
-	// second is the eeeee
-	++itr;
-	int num = (*itr)->getInt();
-	
-	for (++itr; itr != list.end(); ++itr) {
-		DummyValuePtr item = *itr;	
-		num -= item->getInt(env);
-	}
-	return DummyValuePtr(new DummyValue(num));
-}
-
-/*
-	(* 1 2 3)
-*/
-DummyValuePtr OpFuncMul(DummyValuePtr value, DummyEnvPtr env)
-{
-	DummyValueList list = value->getList(); 
-
-	int num = 1;
-	// first is the symbol	
-	DummyValueList::iterator itr = list.begin();	
-	
-	for (itr++; itr != list.end(); ++itr) {
-		DummyValuePtr item = *itr;	
-		num *= item->getInt(env);
-	}
-	return DummyValuePtr(new DummyValue(num));
-}
-
-/*
-	(/ 1 2 3)
-*/
-DummyValuePtr OpFuncDivide(DummyValuePtr value, DummyEnvPtr env)
-{
-	DummyValueList list = value->getList(); 
-	
-	// first is the symbol	
-	DummyValueList::iterator itr = list.begin();	
-	// second is the eeeee
-	int num = (*(++itr))->getInt();
-	
-	for (++itr; itr != list.end(); ++itr) {
-		DummyValuePtr item = *itr;	
-		num /= item->getInt(env);
-	}
-	return DummyValuePtr(new DummyValue(num));
-}
-
-/*
-	(define a 2)
-	(define b (+ a 3))
- */
-DummyValuePtr OpFuncDefine(DummyValuePtr value, DummyEnvPtr env)
-{
-	DummyValueList list = value->getList(); 
-	
-	// first is the symbol	
-	DummyValueList::iterator itr = list.begin();	
-	// second is the symbol
-	DummyValuePtr second = *(++itr);	
-	if (second->isSymbol()) {
-		DummyValuePtr symbolValue = (*(++itr))->eval(env);	
-		env->set(second->getSymbol(), symbolValue);
-
-		return symbolValue;
-	} else {
-		Error("didn't support type %d", second->getType());
-	}
-
-	return DummyValuePtr();
-}
-
-/*
-	(let ((c 2)) c)
-	(let ((c 2) (d 3)) (+ c d))
-	let equals let*
- */
-DummyValuePtr OpFuncLet(DummyValuePtr value, DummyEnvPtr env)
-{
-	DummyEnvPtr letEnv(new DummyEnv(env));
-	
-	DummyValueList letList = value->getList(); 
-	
-	// first is the let 
-	DummyValueList::iterator letItr = letList.begin();	
-	// second is the all the variables
-	// second is a list
-	DummyValuePtr second = *(++letItr);	
-	if (!second->isList()) {
-		Error("let error needs list but given %d with value %s", second->getType(), second->toString().c_str());
-	}
-	DummyValueList secondList = second->getList(); 	
-	DummyValueList::iterator secondItr = secondList.begin();	
-	for (; secondItr != secondList.end(); ++secondItr) {
-		DummyValuePtr var = *secondItr;
-		if (!var->isList()) {
-			Error("var needs list but given %d with value %s", var->getType(), var->toString().c_str());
-		}
-		DummyValueList varList = var->getList();
-		if (varList.size() != 2) {
-			Error("varlist needs 2 items but given %d with value %s", varList.size(), var->toString().c_str());
-		}
-		DummyValuePtr symbol = varList[0];
-		if (!symbol->isSymbol()) {
-			Error("var must be a symbol but given %s", symbol->toString().c_str());
-		}
-		DummyValuePtr value = varList[1];
-		letEnv->set(symbol->getSymbol(), value->eval(letEnv));
-	}
-
-	// exec the let body
-	DummyValuePtr retValue;
-	for (letItr++; letItr != letList.end(); letItr++) {
-		retValue = (*letItr)->eval(letEnv);
-	}
-
-	return retValue;
-}
-
-OpMap Tokenize::opMap;
-
-void Tokenize::init()
-{
-	opMap["+"] = OpFuncPlus;
-	opMap["-"] = OpFuncMinus;
-	opMap["*"] = OpFuncMul;
-	opMap["/"] = OpFuncDivide;
-	opMap["define"] = OpFuncDefine;
-	opMap["let"] = OpFuncLet;
-}
-
-/*
-	Just for first pass to check
-*/
-void Tokenize::addOpForCheck(const std::string &symbol)
-{
-//	std::map<std::string, OpFunc>::iterator it = opMap.find(symbol);
-//	if (it == opMap.end()) {
-//		opMap[symbol] = NULL;
-//	} else {
-//		// do nothing
-//	}
-}
-
-/*
-	for define function
-*/
-void Tokenize::addOp(const std::string &symbol, OpFunc func)
-{
-	//	OpMap::iterator it = opMap.find(symbol);
-	opMap[symbol] = func;
-}
-
-void Tokenize::unexpectedToken()
-{
-		std::stringstream ss;
-		ss << "unexpected token "
-			 << input[index]
-			 << " at " << index;
-		// can't do this
-		// local variable
-		throw ss.str().c_str();
-}
 
 Tokenize::Tokenize(const std::string &input)
 {
@@ -253,8 +62,7 @@ TokenType Tokenize::readToken()
 */
 DummyValuePtr Tokenize::readP()
 {
-	headType = readToken();
-	TokenType token;	
+	TokenType headType = readToken();
 	switch(headType)
 	{
 	case TokenType::TOKEN_NUM:
@@ -269,9 +77,9 @@ DummyValuePtr Tokenize::readP()
 	case TokenType::TOKEN_LEFT_PAREN:{	
 		index++;
 		DummyValuePtr curValue(readList());
-		token = readToken();
+		TokenType token = readToken();
 		if (token != TokenType::TOKEN_RIGHT_PAREN) {
-			Error("unexpected token=%d char=%c, index=%d expected \)", token, getCurChar(), index);
+			Error("unexpected token=%d char=%c, index=%d expected \)", token, input[index], index);
 		} else {
 			index++;
 		}
@@ -292,7 +100,7 @@ DummyValuePtr Tokenize::readP()
 */
 DummyValuePtr Tokenize::readList()
 {
-	headType = readToken();
+	TokenType headType = readToken();
 	switch(headType)
 	{
 	case TokenType::TOKEN_RIGHT_PAREN:
@@ -321,7 +129,7 @@ DummyValuePtr Tokenize::readList()
 DummyValueList Tokenize::readListP()
 {
 	DummyValueList list;	
-	headType = readToken();
+	TokenType headType = readToken();
 	switch(headType)
 	{
 	case TokenType::TOKEN_RIGHT_PAREN:
@@ -339,11 +147,6 @@ DummyValueList Tokenize::readListP()
 	}
 
 	return list;
-}
-
-bool Tokenize::isNum()
-{
-	return input[index] >= '0' && input[index] <= '9';
 }
 
 DummyValuePtr Tokenize::readStr()

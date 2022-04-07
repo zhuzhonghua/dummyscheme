@@ -8,6 +8,7 @@
 
 #include "dummyscheme.h"
 
+namespace DummyScheme {
 enum DummyType {
 	DUMMY_INT_NUM,
 	DUMMY_FLOAT_NUM,
@@ -58,4 +59,4 @@ public:
 	DummyValue(DummyValuePtr val);
 	~DummyValue();
 };
-
+}

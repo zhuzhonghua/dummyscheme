@@ -2,6 +2,8 @@
 #include "dummyscheme.h"
 #include "value.h"
 
+using namespace DummyScheme;
+
 DummyEnv::DummyEnv(DummyEnvPtr out)
 	:outer(out)
 {

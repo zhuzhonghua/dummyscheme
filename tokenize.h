@@ -2,6 +2,8 @@
 
 #include "dummyscheme.h"
 
+namespace DummyScheme {	
+	
 enum TokenType{
 	TOKEN_UNKNOWN,
 	TOKEN_NUM,
@@ -18,7 +20,6 @@ enum TokenType{
 */
 class Tokenize {
 protected:
-	TokenType headType;
 	int index;
 	std::string input;
 public:
@@ -32,21 +33,12 @@ protected:
 	DummyValuePtr readNum();
 	DummyValuePtr readStr();
 	// read a word as symbol
-	DummyValuePtr readSymbol();	
-	
-public:
-	static OpMap opMap;
-public:
-	static void addOp(const std::string &symbol, OpFunc func);
-	static void addOpForCheck(const std::string &symbol);
-	static void init();
+	DummyValuePtr readSymbol();
 protected:
-	bool isNum();
 	// space and tab
 	// TODO: comment
 	void skipBlank();
 	bool isBlank();
 	TokenType readToken();
-	void unexpectedToken();
-	char getCurChar() { return input[index]; }
 };
+}

@@ -2,15 +2,13 @@
 
 #include <string>
 #include <sstream>
-#include <cstdarg>
 #include <vector>
 #include <map>
 
 #include "refcount.h"
+#include "util.h"
 
-#define Error(fmt, ...) errorThrow(fmt" File: %s Line: %d, Function: %s", ##__VA_ARGS__, __FILE__, __LINE__, __FUNCTION__)
-
-extern void errorThrow(const char *fmt, ...);
+namespace DummyScheme{
 
 class DummyValue;
 typedef DummyRefCountPtr<DummyValue>  DummyValuePtr;
@@ -22,3 +20,9 @@ typedef DummyRefCountPtr<DummyEnv>  DummyEnvPtr;
 // operator function
 typedef DummyValuePtr (*OpFunc)(DummyValuePtr, DummyEnvPtr);
 typedef std::map<std::string, OpFunc> OpMap;
+
+extern OpFunc getOpFunc(const std::string& symbol);
+extern void addOpFunc(const std::string& symbol, OpFunc func);
+
+extern void init();
+}

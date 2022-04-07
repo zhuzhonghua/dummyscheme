@@ -22,8 +22,8 @@ void runtest(TestFunc testfunc, char* funcname)
 
 void test1()
 {
-	DummyEnvPtr env(new DummyEnv(NULL));	
-	Tokenize tokenize("(define a 2)");
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
+	DummyScheme::Tokenize tokenize("(define a 2)");
 	tokenize.run(env);
 	
 	tokenize.init("(+ a 3)");
@@ -32,15 +32,15 @@ void test1()
 
 void test2()
 {
-	DummyEnvPtr env(new DummyEnv(NULL));	
-	Tokenize tokenize("(+ 2 (- 3 2) 4)");
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
+	DummyScheme::Tokenize tokenize("(+ 2 (- 3 2) 4)");
 	tokenize.run(env);
 }
 
 void test3()
 {
-	DummyEnvPtr env(new DummyEnv(NULL));	
-	Tokenize tokenize("(define a 3)");
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
+	DummyScheme::Tokenize tokenize("(define a 3)");
 	tokenize.run(env);
 	
 	tokenize.init("a");
@@ -49,8 +49,8 @@ void test3()
 
 void test4()
 {
-	DummyEnvPtr env(new DummyEnv(NULL));	
-	Tokenize tokenize("(define a 3)");
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
+	DummyScheme::Tokenize tokenize("(define a 3)");
 	tokenize.run(env);
 	
 	tokenize.init("(define b (+ a 2))");
@@ -62,8 +62,8 @@ void test4()
 
 void test5()
 {
-	DummyEnvPtr env(new DummyEnv(NULL));	
-	Tokenize tokenize("(let ((c 2)) c)");
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
+	DummyScheme::Tokenize tokenize("(let ((c 2)) c)");
 	tokenize.run(env);
 	
 	tokenize.init("(let ((c 2) (d 3)) (* c d))");
@@ -78,21 +78,29 @@ void test5()
 
 void test6()
 {
-	DummyEnvPtr env(new DummyEnv(NULL));	
-	Tokenize tokenize("nil");
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
+	DummyScheme::Tokenize tokenize("nil");
 	tokenize.run(env);
 	
 	tokenize.init("t");
 	tokenize.run(env);
 }
 
+void test7()
+{
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
+	DummyScheme::Tokenize tokenize("(begin (+ 2 3) (- 4 5))");
+	tokenize.run(env);
+}
+
 int main()
 {
-	Tokenize::init();
+	DummyScheme::init();
 	RUNTEST(test1);
 	RUNTEST(test2);
 	RUNTEST(test3);
 	RUNTEST(test4);
 	RUNTEST(test5);
 	RUNTEST(test6);
+	RUNTEST(test7);
 }

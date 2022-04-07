@@ -3,6 +3,8 @@
 #include "env.h"
 #include "tokenize.h"
 
+using namespace DummyScheme;
+
 DummyValuePtr DummyValue::nil(new DummyValue(DummyType::DUMMY_NIL, std::string("nil")));
 DummyValuePtr DummyValue::t(new DummyValue(DummyType::DUMMY_TRUE, std::string("t")));
 
@@ -94,14 +96,8 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 			return DummyValuePtr();
 		}
 		DummyValuePtr symbol = list.front();
-		OpMap::iterator it = Tokenize::opMap.find(symbol->getSymbol());
-		if (it == Tokenize::opMap.end())
-		{
-			Error("didn't define symbol=%s", symbol->getSymbol().c_str());
-			return DummyValuePtr();
-		}
 
-		OpFunc op = it->second;
+		OpFunc op = getOpFunc(symbol->getSymbol());
 		// this list contains symbol value as the first
 		return op(DummyValuePtr(this), env);	
 		break;

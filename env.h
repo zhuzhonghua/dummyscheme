@@ -5,6 +5,7 @@
 
 #include "dummyscheme.h"
 
+namespace DummyScheme {
 class DummyEnv : public DummyRefCount {
 public:
 	DummyEnv(DummyEnvPtr outer);
@@ -18,3 +19,4 @@ protected:
 	SymbolMap symbols;
 	DummyEnvPtr outer;
 };
+}

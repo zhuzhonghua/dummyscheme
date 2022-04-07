@@ -2,6 +2,7 @@
 
 #include <vector>
 
+namespace DummyScheme {
 class DummyRefCount {
 public:
 	DummyRefCount() : refcount(0) { }
@@ -66,3 +67,4 @@ private:
 
 	T* object;
 };
+}

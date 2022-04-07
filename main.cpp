@@ -14,9 +14,9 @@ int read(std::string &input)
 		return 0;
 }
 
-std::string eval(std::string &input, DummyEnvPtr env)
+std::string eval(std::string &input, DummyScheme::DummyEnvPtr env)
 {
-	Tokenize tokenize(input);
+	DummyScheme::Tokenize tokenize(input);
 	tokenize.run(env);
 	
 	return "yes";
@@ -29,8 +29,8 @@ void print(std::string &result)
 
 int main()
 {
-	Tokenize::init();
-	DummyEnvPtr env(new DummyEnv(NULL));
+	DummyScheme::init();
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));
 	
 	printf("dummyscheme\n");
 	while(true) {
