@@ -88,10 +88,9 @@ DummyValuePtr Tokenize::readP()
 	}
 	default:
 		Error("unexpected token %d", headType);
+		return DummyValue::nil;
 		break;
-	}
-	
-	return DummyValuePtr();
+	}	
 }
 
 /*
@@ -119,8 +118,6 @@ DummyValuePtr Tokenize::readList()
 		break;
 	}
 	}
-
-	return DummyValuePtr();
 }
 
 /*

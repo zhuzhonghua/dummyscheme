@@ -93,7 +93,7 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	case DummyType::DUMMY_LIST:{
 		DummyValueList list = getList();
 		if (list.empty()) {
-			return DummyValuePtr();
+			return DummyValue::nil;
 		}
 		DummyValuePtr symbol = list.front();
 
@@ -104,7 +104,7 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	}
 	default:
 		Error("unknown dummytype %d", type);	
-		return DummyValuePtr();
+		return DummyValue::nil;
 	}
 }
 

@@ -29,6 +29,7 @@ DummyValuePtr OpFuncDivide(DummyValuePtr value, DummyEnvPtr env);
 DummyValuePtr OpFuncDefine(DummyValuePtr value, DummyEnvPtr env);
 DummyValuePtr OpFuncLet(DummyValuePtr value, DummyEnvPtr env);
 DummyValuePtr OpFuncBegin(DummyValuePtr value, DummyEnvPtr env);
+DummyValuePtr OpFuncIf(DummyValuePtr value, DummyEnvPtr env);
 	
 void init()
 {
@@ -39,6 +40,7 @@ void init()
 	opMap["define"] = OpFuncDefine;
 	opMap["let"] = OpFuncLet;
 	opMap["begin"] = OpFuncBegin;
+	opMap["if"] = OpFuncIf;
 }
 
 /*
@@ -137,9 +139,8 @@ DummyValuePtr OpFuncDefine(DummyValuePtr value, DummyEnvPtr env)
 		return symbolValue;
 	} else {
 		Error("didn't support type %d", second->getType());
+		return DummyValue::nil;
 	}
-
-	return DummyValuePtr();
 }
 
 /*
@@ -205,5 +206,42 @@ DummyValuePtr OpFuncBegin(DummyValuePtr value, DummyEnvPtr env)
 	}
 
 	return retValue;
+}
+
+/*
+	(if true 1 2)
+	(if true 1 2 3)
+ */
+DummyValuePtr OpFuncIf(DummyValuePtr value, DummyEnvPtr env)
+{
+	DummyValueList list = value->getList();
+
+	if (list.size() < 2) {
+		Error("if syntax error too little items with %s", value->toString().c_str());
+	}
+	
+	// first is the if 
+	DummyValueList::iterator itr = list.begin();		
+	// second is the condtion to check nil
+	DummyValuePtr condition = *(++itr);
+	DummyValuePtr ifTrueBody = DummyValue::nil;
+	if (list.size() >= 3) {
+		ifTrueBody = *(++itr);
+	}
+	
+	DummyValuePtr retValue = DummyValue::nil;
+
+	// first check condition
+	if (condition->eval(env) != DummyValue::nil) {
+		// TRUE != nil
+		retValue = ifTrueBody->eval(env);
+	} else {
+		// Exec other values
+		for (itr++; itr != list.end(); itr++) {
+			retValue = (*itr)->eval(env);
+		}
+	}
+
+	return retValue;	
 }
 }

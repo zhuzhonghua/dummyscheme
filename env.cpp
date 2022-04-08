@@ -26,7 +26,7 @@ DummyValuePtr DummyEnv::get(const std::string& symbol)
 
 	Error("didn't find value of symobl %s", symbol.c_str());
 	
-	return DummyValuePtr();
+	return DummyValue::nil;
 }
 
 DummyEnvPtr DummyEnv::find(const std::string& symbol)

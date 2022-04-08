@@ -93,6 +93,19 @@ void test7()
 	tokenize.run(env);
 }
 
+void test8()
+{
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
+	DummyScheme::Tokenize tokenize("(if nil 1 2)");
+	tokenize.run(env);
+	
+	tokenize.init("(if t 1 2)");
+	tokenize.run(env);	
+
+	tokenize.init("(if nil 1 2 3)");
+	tokenize.run(env);		
+}
+
 int main()
 {
 	DummyScheme::init();
@@ -103,4 +116,5 @@ int main()
 	RUNTEST(test5);
 	RUNTEST(test6);
 	RUNTEST(test7);
+	RUNTEST(test8);
 }
