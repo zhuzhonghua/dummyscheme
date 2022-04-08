@@ -5,8 +5,10 @@
 
 using namespace DummyScheme;
 
-DummyValuePtr DummyValue::nil(new DummyValue(DummyType::DUMMY_NIL, std::string("nil")));
-DummyValuePtr DummyValue::t(new DummyValue(DummyType::DUMMY_TRUE, std::string("t")));
+DummyValuePtr DummyValue::nil(new DummyValue(DummyType::DUMMY_NIL, "nil"));
+DummyValuePtr DummyValue::t(new DummyValue(DummyType::DUMMY_TRUE, "t"));
+std::string DummyValue::apply("apply");
+std::string DummyValue::lambda("lambda");
 
 DummyValue::DummyValue(int num)
 	:type(DummyType::DUMMY_INT_NUM)
@@ -14,7 +16,7 @@ DummyValue::DummyValue(int num)
 	basic.intnum = num;
 }
 
-DummyValue::DummyValue(DummyType type, const std::string& val)
+DummyValue::DummyValue(DummyType type, const std::string &val)
 	:type(type)
 {	
 	switch(type) {
@@ -22,12 +24,32 @@ DummyValue::DummyValue(DummyType type, const std::string& val)
 	case DummyType::DUMMY_SYMBOL:
 	case DummyType::DUMMY_NIL:
 	case DummyType::DUMMY_TRUE:
-		strAndSymbol = val;	
+		strOrSymOrBind.push_back(val);	
 		break;
 	default:
 		Error("wrong dummytype %d with %s", type, val.c_str());
 		break;
 	}
+}
+
+DummyValue::DummyValue(DummyValuePtr binds, DummyValueList::iterator begin, DummyValueList::iterator end)
+	:type(DummyType::DUMMY_LAMBDA)
+{
+	Assert(binds->isList(), "lambda binds must list %s", binds->toString().c_str());
+	
+	DummyValueList bindsList = binds->getList();
+	DummyValueList::iterator itr = bindsList.begin();
+	for(; itr != bindsList.end(); itr++) {
+		DummyValuePtr symbol = *itr;
+		Assert(symbol->isSymbol(), "lambda binds must be symbol %s", symbol->toString().c_str());
+		strOrSymOrBind.push_back(symbol->getSymbol());
+	}
+
+	for (; begin != end; ++begin) {
+		list.push_back(*begin);
+	}
+
+	//list = DummyValueList(begin, end);
 }
 
 DummyValue::DummyValue(DummyValueList list)
@@ -95,11 +117,37 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 		if (list.empty()) {
 			return DummyValue::nil;
 		}
-		DummyValuePtr symbol = list.front();
+		DummyValuePtr front = list.front();
+		std::string symbolStr;
+		if (front->isList()) {
+			// TODO: check front must be lambda
+			symbolStr = DummyValue::apply;
+		} else {
+			symbolStr = front->getSymbol();
+		}
 
-		OpFunc op = getOpFunc(symbol->getSymbol());
+		OpFunc op = getOpFunc(symbolStr);
 		// this list contains symbol value as the first
 		return op(DummyValuePtr(this), env);	
+		// code down is error
+		// this be changed
+//		// the first might be a lambda
+//		if (front->isSymbol() && 0 == front->getSymbol().compare(DummyValue::lambda)) {
+//			return getOpFunc(DummyValue::lambda)(DummyValuePtr(this), env);
+//		} else {
+//			DummyValuePtr symbol = front->eval(env);
+//			Print("func symbol %s\n", symbol->toString().c_str());
+//			std::string symbolStr;
+//			if (symbol->isLambda()) {
+//				symbolStr = DummyValue::apply;
+//				list[0] = symbol;
+//			} else {
+//				symbolStr = symbol->getSymbol();
+//			}
+//
+//			OpFunc op = getOpFunc(symbolStr);
+//			// this list contains symbol value as the first
+//			return op(DummyValuePtr(this), env);	
 		break;
 	}
 	default:
@@ -121,11 +169,31 @@ std::string DummyValue::toString()
 	case DUMMY_SYMBOL:
 	case DUMMY_NIL:
 	case DUMMY_TRUE:
-		out << this->strAndSymbol;	
+		out << this->strOrSymOrBind[0];
 		break;
 	case DUMMY_STRING:
-		out << "\"" << this->strAndSymbol << "\"";
+		out << "\"" << this->strOrSymOrBind[0] << "\"";
 		break;
+	case DUMMY_LAMBDA:{
+		out << "#<function>";
+		out << " [";
+		BindList::iterator bindItr = strOrSymOrBind.begin();
+		for (; bindItr != strOrSymOrBind.end(); bindItr++) {
+			out << (*bindItr);
+			if (bindItr + 1 != strOrSymOrBind.end()) {
+				out << " ";	
+			}
+		}
+		out << "] ";
+		DummyValueList::iterator itr = this->list.begin();	
+		for (;itr != this->list.end(); itr++) {
+			out << (*itr)->toString();
+			if (itr + 1 != this->list.end()) {
+				out << " ";	
+			}
+		}
+		break;	
+	}
 	case DUMMY_LIST:{
 		out << "(";
 		DummyValueList::iterator itr = this->list.begin();	

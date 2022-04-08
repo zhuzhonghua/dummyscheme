@@ -104,6 +104,22 @@ void test8()
 
 	tokenize.init("(if nil 1 2 3)");
 	tokenize.run(env);		
+	
+	tokenize.init("(if nil 1)");
+	tokenize.run(env);
+}
+
+void test9()
+{
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
+	DummyScheme::Tokenize tokenize("(lambda (a) (+ a 2))");
+	tokenize.run(env);
+	
+	tokenize.init("((lambda (a) (+ a 2)) 4)");
+	tokenize.run(env);
+
+	tokenize.init("(apply (lambda (a) (+ a 2)) 4)");
+	tokenize.run(env);	
 }
 
 int main()
@@ -117,4 +133,5 @@ int main()
 	RUNTEST(test6);
 	RUNTEST(test7);
 	RUNTEST(test8);
+	RUNTEST(test9);
 }

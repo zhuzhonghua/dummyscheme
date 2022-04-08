@@ -21,10 +21,10 @@ void Tokenize::init(const std::string &input)
 void Tokenize::run(DummyEnvPtr env)
 {
 	DummyValuePtr val = readP();
-	printf("%s\n", val->toString().c_str());
+	Print("%s\n", val->toString().c_str());
 		
 	DummyValuePtr evalVal = val->eval(env);
-	printf("%s\n", evalVal->toString().c_str());
+	Print("%s\n", evalVal->toString().c_str());
 }
 
 TokenType Tokenize::readToken()

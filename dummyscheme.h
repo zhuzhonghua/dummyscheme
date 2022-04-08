@@ -21,6 +21,8 @@ typedef DummyRefCountPtr<DummyEnv>  DummyEnvPtr;
 typedef DummyValuePtr (*OpFunc)(DummyValuePtr, DummyEnvPtr);
 typedef std::map<std::string, OpFunc> OpMap;
 
+typedef std::vector<std::string> BindList;
+
 extern OpFunc getOpFunc(const std::string& symbol);
 extern void addOpFunc(const std::string& symbol, OpFunc func);
 

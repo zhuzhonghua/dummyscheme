@@ -30,6 +30,8 @@ DummyValuePtr OpFuncDefine(DummyValuePtr value, DummyEnvPtr env);
 DummyValuePtr OpFuncLet(DummyValuePtr value, DummyEnvPtr env);
 DummyValuePtr OpFuncBegin(DummyValuePtr value, DummyEnvPtr env);
 DummyValuePtr OpFuncIf(DummyValuePtr value, DummyEnvPtr env);
+DummyValuePtr OpFuncLambda(DummyValuePtr value, DummyEnvPtr env);
+DummyValuePtr OpFuncApply(DummyValuePtr value, DummyEnvPtr env);
 	
 void init()
 {
@@ -41,6 +43,8 @@ void init()
 	opMap["let"] = OpFuncLet;
 	opMap["begin"] = OpFuncBegin;
 	opMap["if"] = OpFuncIf;
+	opMap["lambda"] = OpFuncLambda;
+	opMap[DummyValue::apply] = OpFuncApply;
 }
 
 /*
@@ -215,19 +219,14 @@ DummyValuePtr OpFuncBegin(DummyValuePtr value, DummyEnvPtr env)
 DummyValuePtr OpFuncIf(DummyValuePtr value, DummyEnvPtr env)
 {
 	DummyValueList list = value->getList();
-
-	if (list.size() < 2) {
-		Error("if syntax error too little items with %s", value->toString().c_str());
-	}
+	Assert(list.size() >= 3, "if syntax error too little items with %s", value->toString().c_str());
 	
 	// first is the if 
 	DummyValueList::iterator itr = list.begin();		
 	// second is the condtion to check nil
 	DummyValuePtr condition = *(++itr);
-	DummyValuePtr ifTrueBody = DummyValue::nil;
-	if (list.size() >= 3) {
-		ifTrueBody = *(++itr);
-	}
+	// third is the body
+	DummyValuePtr ifTrueBody = *(++itr);
 	
 	DummyValuePtr retValue = DummyValue::nil;
 
@@ -242,6 +241,68 @@ DummyValuePtr OpFuncIf(DummyValuePtr value, DummyEnvPtr env)
 		}
 	}
 
-	return retValue;	
+	return retValue;
+}
+
+/*
+	(lambda (a) (+ a 2))
+ */
+DummyValuePtr OpFuncLambda(DummyValuePtr value, DummyEnvPtr env)
+{
+	DummyValueList list = value->getList();
+	Assert(list.size() >= 3, "lambda syntax error too little items with %s", value->toString().c_str());
+	// first is the lambda 
+	DummyValueList::iterator itr = list.begin();
+	// second is the binds
+	DummyValuePtr binds = *(++itr);
+
+	// rest is the body
+	return DummyValuePtr(new DummyValue(binds, ++itr, list.end()));
+}
+
+/*
+	((lambda (a) (+ a 2)) 3)
+	(apply (lambda (a) (+ a 2)) 3)
+ */
+DummyValuePtr OpFuncApply(DummyValuePtr value, DummyEnvPtr env)
+{
+	DummyValueList applyList = value->getList(); 
+	DummyValueList::iterator applyItr = applyList.begin();	
+	DummyValuePtr lambda = *applyItr;
+	
+	if (lambda->isList()) {
+		// TODO: check lambda
+		// TODO: do check at the first pass
+		lambda = lambda->eval(env);
+	} else {
+		// first must be apply
+		Assert(lambda->isSymbol(), "first apply must be symbol type=%d value=%s", lambda->getType(), lambda->toString().c_str());
+		Assert(0 == lambda->getSymbol().compare(DummyValue::apply), "first item must be apply %s", lambda->toString().c_str());
+		
+		// TODO: check second be lambda
+		lambda = (*++applyItr)->eval(env);
+	}
+	
+	DummyEnvPtr applyEnv(new DummyEnv(env));
+		
+	// set parameter binds
+	BindList binds = lambda->getBind();
+	BindList::iterator bindItr = binds.begin();
+	for (; bindItr != binds.end(); ++bindItr) {
+		++applyItr;	
+		Assert(applyItr != applyList.end(), "parameter less %s", value->toString().c_str());
+			
+		applyEnv->set(*bindItr, (*applyItr)->eval(env));
+	}
+
+	// exec the body
+	DummyValuePtr retValue;
+	DummyValueList lambdaBody = lambda->getList();
+	DummyValueList::iterator bodyItr = lambdaBody.begin();	
+	for (; bodyItr != lambdaBody.end(); ++bodyItr) {
+		retValue = (*bodyItr)->eval(applyEnv);
+	}
+
+	return retValue;
 }
 }
