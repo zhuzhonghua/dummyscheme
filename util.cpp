@@ -1,4 +1,5 @@
 #include "util.h"
+#include "value.h"
 
 namespace DummyScheme {
 
@@ -24,5 +25,10 @@ void Print(const char *fmt, ...)
 	//perror(buffer);
 	vprintf(fmt, args);
 	va_end(args);	
+}
+
+bool isEqual(const std::string& first, const std::string& second)
+{
+	return 0 == first.compare(second);
 }
 }

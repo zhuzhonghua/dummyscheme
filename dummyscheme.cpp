@@ -4,6 +4,12 @@
 
 namespace DummyScheme {
 
+bool isEqual(const std::string& first, const DummyValuePtr& second)
+{
+	AssertDummyValue(second->isSymbol(), "compare must be a symbol", second);
+	return 0 == first.compare(second->getSymbol());
+}
+
 OpMap opMap;
 OpFunc getOpFunc(const std::string& symbol)
 {
@@ -270,17 +276,10 @@ DummyValuePtr OpFuncApply(DummyValuePtr value, DummyEnvPtr env)
 	DummyValueList::iterator applyItr = applyList.begin();	
 	DummyValuePtr lambda = *applyItr;
 	
-	if (lambda->isList()) {
-		// TODO: check lambda
-		// TODO: do check at the first pass
-		lambda = lambda->eval(env);
-	} else {
-		// first must be apply
-		Assert(lambda->isSymbol(), "first apply must be symbol type=%d value=%s", lambda->getType(), lambda->toString().c_str());
-		Assert(0 == lambda->getSymbol().compare(DummyValue::apply), "first item must be apply %s", lambda->toString().c_str());
-		
-		// TODO: check second be lambda
-		lambda = (*++applyItr)->eval(env);
+	if (!lambda->isLambda()) {
+		AssertDummyValue(isEqual(DummyValue::apply, lambda), "first must be apply", lambda);
+		lambda = *++applyItr;	
+		AssertDummyValue(lambda->isLambda(), "second must be lambda", lambda);
 	}
 	
 	DummyEnvPtr applyEnv(new DummyEnv(env));
@@ -290,7 +289,7 @@ DummyValuePtr OpFuncApply(DummyValuePtr value, DummyEnvPtr env)
 	BindList::iterator bindItr = binds.begin();
 	for (; bindItr != binds.end(); ++bindItr) {
 		++applyItr;	
-		Assert(applyItr != applyList.end(), "parameter less %s", value->toString().c_str());
+		AssertDummyValue(applyItr != applyList.end(), "parameter less", value);
 			
 		applyEnv->set(*bindItr, (*applyItr)->eval(env));
 	}

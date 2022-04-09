@@ -78,11 +78,8 @@ DummyValuePtr Tokenize::readP()
 		index++;
 		DummyValuePtr curValue(readList());
 		TokenType token = readToken();
-		if (token != TokenType::TOKEN_RIGHT_PAREN) {
-			Error("unexpected token=%d char=%c, index=%d expected \)", token, input[index], index);
-		} else {
-			index++;
-		}
+		Assert(token == TokenType::TOKEN_RIGHT_PAREN, "unexpected token=%d char=%c, index=%d expected \)", token, input[index], index);
+		index++;
 		return curValue;
 		break;
 	}
@@ -114,7 +111,7 @@ DummyValuePtr Tokenize::readList()
 		if (listP.size() > 0) {
 			list.insert(list.end(), listP.begin(), listP.end());
 		}
-		return DummyValuePtr(new DummyValue(list));
+		return DummyValue::construct(list);
 		break;
 	}
 	}
@@ -230,9 +227,9 @@ DummyValuePtr Tokenize::readSymbol()
 	}
 
 	std::string symStr = symbol.str();
-	if (0 == symStr.compare(DummyValue::nil->getSymbol())) {
+	if (IsSymbolNil(symStr)) {
 		return DummyValue::nil;
-	} else if (0 == symStr.compare(DummyValue::t->getSymbol())) {
+	} else if (IsSymbolTrue(symStr)) {
 		return DummyValue::t;
 	} else {
 		return DummyValuePtr(new DummyValue(DummyType::DUMMY_SYMBOL, symStr));

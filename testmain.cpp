@@ -15,6 +15,7 @@ void runtest(TestFunc testfunc, char* funcname)
 		printf("%s run success\n", funcname);	
 	}	catch(const char* exception) {
 		printf("%s Failed with exception %s\n", funcname, exception);	
+		throw "failed test";
 	}
 }
 
@@ -124,14 +125,19 @@ void test9()
 
 int main()
 {
-	DummyScheme::init();
-	RUNTEST(test1);
-	RUNTEST(test2);
-	RUNTEST(test3);
-	RUNTEST(test4);
-	RUNTEST(test5);
-	RUNTEST(test6);
-	RUNTEST(test7);
-	RUNTEST(test8);
-	RUNTEST(test9);
+	try{
+		DummyScheme::init();
+		RUNTEST(test1);
+		RUNTEST(test2);
+		RUNTEST(test3);
+		RUNTEST(test4);
+		RUNTEST(test5);
+		RUNTEST(test6);
+		RUNTEST(test7);
+		RUNTEST(test8);
+		RUNTEST(test9);
+	}
+	catch(const char* excep) {
+		printf(excep);
+	}
 }

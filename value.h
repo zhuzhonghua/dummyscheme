@@ -16,7 +16,17 @@ enum DummyType {
 	DUMMY_SYMBOL,
 	DUMMY_NIL,
 	DUMMY_TRUE,
+	DUMMY_PLUS,
+	DUMMY_MINUS,
+	DUMMY_MUL,
+	DUMMY_DIVIDE,
+	DUMMY_DEFINE,
+	DUMMY_LET,
+	DUMMY_BEGIN,
+	DUMMY_IF,
+	DUMMY_IF,
 	DUMMY_LAMBDA,
+	DUMMY_APPLY,
 	DUMMY_LIST,
 };
 
@@ -28,6 +38,8 @@ public:
 	static DummyValuePtr t;
 	static std::string apply;
 	static std::string lambda;
+public:
+	static DummyValuePtr construct(DummyValueList& list);
 protected:
 	friend class Tokenize;
 	DummyType type;

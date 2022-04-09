@@ -110,6 +110,7 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	case DummyType::DUMMY_STRING:
 	case DummyType::DUMMY_NIL:
 	case DummyType::DUMMY_TRUE:
+	case DummyType::DUMMY_LAMBDA:
 		return DummyValuePtr(this);
 		break;
 	case DummyType::DUMMY_LIST:{
@@ -119,10 +120,12 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 		}
 		DummyValuePtr front = list.front();
 		std::string symbolStr;
-		if (front->isList()) {
+		if (front->isLambda()) {
+//		if (front->isList()) {
 			// TODO: check front must be lambda
 			symbolStr = DummyValue::apply;
 		} else {
+			Assert(front->isSymbol(), "front must be a symbol %s", DummyValueCStr(front));
 			symbolStr = front->getSymbol();
 		}
 
@@ -212,4 +215,31 @@ std::string DummyValue::toString()
 	}	
 
 	return out.str();
+}
+
+/*
+	lambda
+	let 
+	define
+	if 
+	and so on
+ */
+DummyValuePtr DummyValue::construct(DummyValueList& list)
+{
+	Assert(list.size() > 0, "construct list must > 0");
+
+	// list is (lambda (a) (+ a 2))
+	DummyValuePtr front = list.front();
+	if (front->isSymbol() && isEqual(DummyValue::lambda, front->getSymbol())) {
+		AssertDummyValueList(list.size() >= 3, "lambda syntax error too little items ", list);
+		// first is the lambda 
+		DummyValueList::iterator lambdaItr = list.begin();
+		// second is the binds
+		DummyValuePtr binds = *(++lambdaItr);
+
+		// rest is the body
+		return DummyValuePtr(new DummyValue(binds, ++lambdaItr, list.end()));
+	}
+
+	return DummyValuePtr(new DummyValue(list));
 }

@@ -27,4 +27,6 @@ extern OpFunc getOpFunc(const std::string& symbol);
 extern void addOpFunc(const std::string& symbol, OpFunc func);
 
 extern void init();
+extern bool isEqual(const std::string& first, const DummyValuePtr& second);
 }
+
