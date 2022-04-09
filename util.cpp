@@ -29,6 +29,6 @@ void Print(const char *fmt, ...)
 
 bool isEqual(const std::string& first, const std::string& second)
 {
-	return 0 == first.compare(second);
+	return first.size() == second.size() && first.size() > 0 && 0 == first.compare(second);
 }
 }

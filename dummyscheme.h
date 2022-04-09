@@ -17,16 +17,12 @@ typedef std::vector<DummyValuePtr> DummyValueList;
 class DummyEnv;
 typedef DummyRefCountPtr<DummyEnv>  DummyEnvPtr;
 
-// operator function
-typedef DummyValuePtr (*OpFunc)(DummyValuePtr, DummyEnvPtr);
-typedef std::map<std::string, OpFunc> OpMap;
-
 typedef std::vector<std::string> BindList;
-
-extern OpFunc getOpFunc(const std::string& symbol);
-extern void addOpFunc(const std::string& symbol, OpFunc func);
 
 extern void init();
 extern bool isEqual(const std::string& first, const DummyValuePtr& second);
+extern DummyValuePtr createDummyValue(DummyValueList& list);
+extern DummyValuePtr valueEval(DummyValuePtr value, DummyEnvPtr env);
+extern std::string valueToString(DummyValuePtr value);
 }
 

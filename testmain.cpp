@@ -108,6 +108,12 @@ void test8()
 	
 	tokenize.init("(if nil 1)");
 	tokenize.run(env);
+	
+	tokenize.init("(when true 1 2)");
+	tokenize.run(env);	
+	
+	tokenize.init("(when nil 1 2)");
+	tokenize.run(env);		
 }
 
 void test9()

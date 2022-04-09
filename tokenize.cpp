@@ -111,7 +111,7 @@ DummyValuePtr Tokenize::readList()
 		if (listP.size() > 0) {
 			list.insert(list.end(), listP.begin(), listP.end());
 		}
-		return DummyValue::construct(list);
+		return createDummyValue(list);
 		break;
 	}
 	}

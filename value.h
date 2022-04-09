@@ -24,10 +24,12 @@ enum DummyType {
 	DUMMY_LET,
 	DUMMY_BEGIN,
 	DUMMY_IF,
-	DUMMY_IF,
+	DUMMY_WHEN,
+	DUMMY_UNLESS,
 	DUMMY_LAMBDA,
 	DUMMY_APPLY,
 	DUMMY_LIST,
+	DUMMY_MAX,
 };
 
 class Tokenize;
@@ -39,7 +41,6 @@ public:
 	static std::string apply;
 	static std::string lambda;
 public:
-	static DummyValuePtr construct(DummyValueList& list);
 protected:
 	friend class Tokenize;
 	DummyType type;
@@ -65,16 +66,17 @@ public:
 	bool isList() { return type == DUMMY_LIST; }
 	
 	DummyType getType() { return type; }
-	std::string getStr() const { return strOrSymOrBind[0]; }
-	std::string getSymbol() const { return strOrSymOrBind[0]; }
-	BindList getBind() const { return strOrSymOrBind; }
-	int getInt() const { return basic.intnum; }
-	double getDouble() const { return basic.floatnum; }
-	DummyValueList getList() { return list; }
+	std::string getStr() { AssertDummyValue(isString(), "", this); return strOrSymOrBind[0]; }
+	std::string getSymbol() { AssertDummyValue(isSymbol(), "", this); return strOrSymOrBind[0]; }
+	BindList getBind() { return strOrSymOrBind; }
+	int getInt() { AssertDummyValue(isInt(), "", this); return basic.intnum; }
+	double getDouble() { AssertDummyValue(isFloat(), "", this); return basic.floatnum; }
+	DummyValueList getList() { AssertDummyValue(isList(), "", this); return list; }
 public:
 	DummyValue(int num);
 	DummyValue(DummyType type, const std::string &val);
-	DummyValue(DummyValuePtr binds, DummyValueList::iterator begin, DummyValueList::iterator end);
+	DummyValue(DummyType type, DummyValueList list);
+	DummyValue(BindList binds, DummyValueList list);
 	DummyValue(DummyValueList list);
 	DummyValue(DummyValuePtr val);
 	~DummyValue();

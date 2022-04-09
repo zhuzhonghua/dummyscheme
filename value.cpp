@@ -32,24 +32,18 @@ DummyValue::DummyValue(DummyType type, const std::string &val)
 	}
 }
 
-DummyValue::DummyValue(DummyValuePtr binds, DummyValueList::iterator begin, DummyValueList::iterator end)
-	:type(DummyType::DUMMY_LAMBDA)
+DummyValue::DummyValue(BindList binds, DummyValueList list)
+	:type(DummyType::DUMMY_LAMBDA),
+	 list(list),
+	 strOrSymOrBind(binds)
 {
-	Assert(binds->isList(), "lambda binds must list %s", binds->toString().c_str());
-	
-	DummyValueList bindsList = binds->getList();
-	DummyValueList::iterator itr = bindsList.begin();
-	for(; itr != bindsList.end(); itr++) {
-		DummyValuePtr symbol = *itr;
-		Assert(symbol->isSymbol(), "lambda binds must be symbol %s", symbol->toString().c_str());
-		strOrSymOrBind.push_back(symbol->getSymbol());
-	}
 
-	for (; begin != end; ++begin) {
-		list.push_back(*begin);
-	}
+}
 
-	//list = DummyValueList(begin, end);
+DummyValue::DummyValue(DummyType type, DummyValueList list)
+	:type(type),
+	 list(list)
+{
 }
 
 DummyValue::DummyValue(DummyValueList list)
@@ -100,146 +94,10 @@ int DummyValue::getInt(DummyEnvPtr env)
 
 DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 {
-	DummyType type = getType();
-	switch(type) {
-	case DummyType::DUMMY_SYMBOL:
-		return env->get(this->getSymbol());	
-		break;
-	case DummyType::DUMMY_INT_NUM:
-	case DummyType::DUMMY_FLOAT_NUM:
-	case DummyType::DUMMY_STRING:
-	case DummyType::DUMMY_NIL:
-	case DummyType::DUMMY_TRUE:
-	case DummyType::DUMMY_LAMBDA:
-		return DummyValuePtr(this);
-		break;
-	case DummyType::DUMMY_LIST:{
-		DummyValueList list = getList();
-		if (list.empty()) {
-			return DummyValue::nil;
-		}
-		DummyValuePtr front = list.front();
-		std::string symbolStr;
-		if (front->isLambda()) {
-//		if (front->isList()) {
-			// TODO: check front must be lambda
-			symbolStr = DummyValue::apply;
-		} else {
-			Assert(front->isSymbol(), "front must be a symbol %s", DummyValueCStr(front));
-			symbolStr = front->getSymbol();
-		}
-
-		OpFunc op = getOpFunc(symbolStr);
-		// this list contains symbol value as the first
-		return op(DummyValuePtr(this), env);	
-		// code down is error
-		// this be changed
-//		// the first might be a lambda
-//		if (front->isSymbol() && 0 == front->getSymbol().compare(DummyValue::lambda)) {
-//			return getOpFunc(DummyValue::lambda)(DummyValuePtr(this), env);
-//		} else {
-//			DummyValuePtr symbol = front->eval(env);
-//			Print("func symbol %s\n", symbol->toString().c_str());
-//			std::string symbolStr;
-//			if (symbol->isLambda()) {
-//				symbolStr = DummyValue::apply;
-//				list[0] = symbol;
-//			} else {
-//				symbolStr = symbol->getSymbol();
-//			}
-//
-//			OpFunc op = getOpFunc(symbolStr);
-//			// this list contains symbol value as the first
-//			return op(DummyValuePtr(this), env);	
-		break;
-	}
-	default:
-		Error("unknown dummytype %d", type);	
-		return DummyValue::nil;
-	}
+	return valueEval(this, env);
 }
 
 std::string DummyValue::toString()
 {
-	std::stringstream out;
-	switch(this->type) {
-	case DUMMY_INT_NUM:
-		out << this->basic.intnum;
-		break;
-	case DUMMY_FLOAT_NUM:
-		out << this->basic.floatnum;
-		break;
-	case DUMMY_SYMBOL:
-	case DUMMY_NIL:
-	case DUMMY_TRUE:
-		out << this->strOrSymOrBind[0];
-		break;
-	case DUMMY_STRING:
-		out << "\"" << this->strOrSymOrBind[0] << "\"";
-		break;
-	case DUMMY_LAMBDA:{
-		out << "#<function>";
-		out << " [";
-		BindList::iterator bindItr = strOrSymOrBind.begin();
-		for (; bindItr != strOrSymOrBind.end(); bindItr++) {
-			out << (*bindItr);
-			if (bindItr + 1 != strOrSymOrBind.end()) {
-				out << " ";	
-			}
-		}
-		out << "] ";
-		DummyValueList::iterator itr = this->list.begin();	
-		for (;itr != this->list.end(); itr++) {
-			out << (*itr)->toString();
-			if (itr + 1 != this->list.end()) {
-				out << " ";	
-			}
-		}
-		break;	
-	}
-	case DUMMY_LIST:{
-		out << "(";
-		DummyValueList::iterator itr = this->list.begin();	
-		for (;itr != this->list.end(); itr++) {
-			out << (*itr)->toString();
-			if (itr + 1 != this->list.end()) {
-				out << " ";	
-			}
-		}
-		out << ")";
-		break;
-	}
-	default:
-		Error("unknown type %d", this->type);
-		break;
-	}	
-
-	return out.str();
-}
-
-/*
-	lambda
-	let 
-	define
-	if 
-	and so on
- */
-DummyValuePtr DummyValue::construct(DummyValueList& list)
-{
-	Assert(list.size() > 0, "construct list must > 0");
-
-	// list is (lambda (a) (+ a 2))
-	DummyValuePtr front = list.front();
-	if (front->isSymbol() && isEqual(DummyValue::lambda, front->getSymbol())) {
-		AssertDummyValueList(list.size() >= 3, "lambda syntax error too little items ", list);
-		// first is the lambda 
-		DummyValueList::iterator lambdaItr = list.begin();
-		// second is the binds
-		DummyValuePtr binds = *(++lambdaItr);
-
-		// rest is the body
-		return DummyValuePtr(new DummyValue(binds, ++lambdaItr, list.end()));
-	}
-
-	return DummyValuePtr(new DummyValue(list));
+	return valueToString(this);
 }
