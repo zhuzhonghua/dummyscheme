@@ -29,7 +29,6 @@ void print(std::string &result)
 
 int main()
 {
-	DummyScheme::init();
 	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));
 	
 	printf("dummyscheme\n");

@@ -5,7 +5,7 @@
 using namespace DummyScheme;
 
 #define CASE_NUM case '0':case '1':case '2':case '3':case '4':case '5':case '6':case '7':case '8':case '9'
-#define CASE_SYMBOL case '+':case '-':case '*':case '/'
+#define CASE_SYMBOL case '+':case '-':case '*':case '/':case '#'
 
 Tokenize::Tokenize(const std::string &input)
 {
@@ -111,7 +111,7 @@ DummyValuePtr Tokenize::readList()
 		if (listP.size() > 0) {
 			list.insert(list.end(), listP.begin(), listP.end());
 		}
-		return createDummyValue(list);
+		return DummyValue::create(list);
 		break;
 	}
 	}
@@ -227,10 +227,12 @@ DummyValuePtr Tokenize::readSymbol()
 	}
 
 	std::string symStr = symbol.str();
-	if (IsSymbolNil(symStr)) {
+	if (DummyValue::nil->isSame(symStr)) {
 		return DummyValue::nil;
-	} else if (IsSymbolTrue(symStr)) {
+	} else if (DummyValue::t->isSame(symStr)) {
 		return DummyValue::t;
+	} else if (DummyValue::f->isSame(symStr)) {
+		return DummyValue::f;
 	} else {
 		return DummyValuePtr(new DummyValue(DummyType::DUMMY_SYMBOL, symStr));
 	}

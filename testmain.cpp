@@ -83,8 +83,11 @@ void test6()
 	DummyScheme::Tokenize tokenize("nil");
 	tokenize.run(env);
 	
-	tokenize.init("t");
+	tokenize.init("#t");
 	tokenize.run(env);
+	
+	tokenize.init("#f");
+	tokenize.run(env);	
 }
 
 void test7()
@@ -100,7 +103,7 @@ void test8()
 	DummyScheme::Tokenize tokenize("(if nil 1 2)");
 	tokenize.run(env);
 	
-	tokenize.init("(if t 1 2)");
+	tokenize.init("(if #t 1 2)");
 	tokenize.run(env);	
 
 	tokenize.init("(if nil 1 2 3)");
@@ -109,11 +112,14 @@ void test8()
 	tokenize.init("(if nil 1)");
 	tokenize.run(env);
 	
-	tokenize.init("(when true 1 2)");
+	tokenize.init("(when #t 1 2)");
 	tokenize.run(env);	
 	
 	tokenize.init("(when nil 1 2)");
 	tokenize.run(env);		
+	
+	tokenize.init("(when #f 1 2)");
+	tokenize.run(env);
 }
 
 void test9()
@@ -132,7 +138,6 @@ void test9()
 int main()
 {
 	try{
-		DummyScheme::init();
 		RUNTEST(test1);
 		RUNTEST(test2);
 		RUNTEST(test3);
@@ -142,6 +147,7 @@ int main()
 		RUNTEST(test7);
 		RUNTEST(test8);
 		RUNTEST(test9);
+		printf("test all success");
 	}
 	catch(const char* excep) {
 		printf(excep);

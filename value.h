@@ -16,6 +16,7 @@ enum DummyType {
 	DUMMY_SYMBOL,
 	DUMMY_NIL,
 	DUMMY_TRUE,
+	DUMMY_FALSE,
 	DUMMY_PLUS,
 	DUMMY_MINUS,
 	DUMMY_MUL,
@@ -38,9 +39,7 @@ class DummyValue : public DummyRefCount {
 public:
 	static DummyValuePtr nil;
 	static DummyValuePtr t;
-	static std::string apply;
-	static std::string lambda;
-public:
+	static DummyValuePtr f;
 protected:
 	friend class Tokenize;
 	DummyType type;
@@ -50,6 +49,10 @@ protected:
 	} basic;
 	BindList strOrSymOrBind;
 	DummyValueList list;
+public:
+	static std::string getTypeStr(int type);
+	static DummyType getStrType(const std::string& symbol);
+	static DummyValuePtr create(DummyValueList& list);
 public:
 	int getInt(DummyEnvPtr env);
 public:
@@ -62,16 +65,20 @@ public:
 	bool isSymbol() { return type == DUMMY_SYMBOL; }
 	bool isNil() { return type == DUMMY_NIL; }
 	bool isTrue() { return type == DUMMY_TRUE; }
+	bool isFalse() { return type == DUMMY_FALSE; }
 	bool isLambda() { return type == DUMMY_LAMBDA; }
 	bool isList() { return type == DUMMY_LIST; }
 	
+	bool isSame(const std::string& sym) { return 0 == strOrSymOrBind[0].compare(sym); }
+	bool isNilValue() { return isNil() || isFalse(); }
+	
 	DummyType getType() { return type; }
-	std::string getStr() { AssertDummyValue(isString(), "", this); return strOrSymOrBind[0]; }
-	std::string getSymbol() { AssertDummyValue(isSymbol(), "", this); return strOrSymOrBind[0]; }
+	std::string getStr() { return strOrSymOrBind[0]; }
+	std::string getSymbol() { return strOrSymOrBind[0]; }
 	BindList getBind() { return strOrSymOrBind; }
 	int getInt() { AssertDummyValue(isInt(), "", this); return basic.intnum; }
 	double getDouble() { AssertDummyValue(isFloat(), "", this); return basic.floatnum; }
-	DummyValueList getList() { AssertDummyValue(isList(), "", this); return list; }
+	DummyValueList getList() { return list; }
 public:
 	DummyValue(int num);
 	DummyValue(DummyType type, const std::string &val);

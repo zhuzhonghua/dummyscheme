@@ -6,9 +6,8 @@
 using namespace DummyScheme;
 
 DummyValuePtr DummyValue::nil(new DummyValue(DummyType::DUMMY_NIL, "nil"));
-DummyValuePtr DummyValue::t(new DummyValue(DummyType::DUMMY_TRUE, "t"));
-std::string DummyValue::apply("apply");
-std::string DummyValue::lambda("lambda");
+DummyValuePtr DummyValue::t(new DummyValue(DummyType::DUMMY_TRUE, "#t"));
+DummyValuePtr DummyValue::f(new DummyValue(DummyType::DUMMY_FALSE, "#f"));
 
 DummyValue::DummyValue(int num)
 	:type(DummyType::DUMMY_INT_NUM)
@@ -24,6 +23,7 @@ DummyValue::DummyValue(DummyType type, const std::string &val)
 	case DummyType::DUMMY_SYMBOL:
 	case DummyType::DUMMY_NIL:
 	case DummyType::DUMMY_TRUE:
+	case DummyType::DUMMY_FALSE:
 		strOrSymOrBind.push_back(val);	
 		break;
 	default:
@@ -73,31 +73,190 @@ DummyValue::~DummyValue()
 int DummyValue::getInt(DummyEnvPtr env)
 {
 	if (this->isInt()) {
-		return this->getInt();
+		return this->basic.intnum;
 	} else if (this->isSymbol()) {
 		DummyValuePtr symbolValue = env->get(this->getSymbol());
-		if (symbolValue->isInt()) {
-			return symbolValue->getInt();
-		} else {
-				Error("currently don't support type %d", symbolValue->getType());
-		}
-	} else if (this->isList()) {
-		DummyValuePtr realItem = this->eval(env);
-			// TODO: check type
-		return realItem->getInt();	
+		return symbolValue->getInt();
 	} else {
-		Error("unknown type %d", this->getType());	
+		DummyValuePtr realItem = this->eval(env);
+		return realItem->getInt();	
 	}
-
-	return 0;
 }
+
+#define CaseReturnEval(type, op, env) case type: return op(DummyValuePtr(this), env)
 
 DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 {
-	return valueEval(this, env);
+	switch(type) {
+	case DummyType::DUMMY_INT_NUM:
+	case DummyType::DUMMY_FLOAT_NUM:
+	case DummyType::DUMMY_STRING:
+	case DummyType::DUMMY_TRUE:
+	case DummyType::DUMMY_FALSE:
+	case DummyType::DUMMY_NIL:
+	case DummyType::DUMMY_LAMBDA: // the real lambda eval needs apply
+		return DummyValuePtr(this);
+	case DummyType::DUMMY_SYMBOL:{
+		return env->get(strOrSymOrBind[0]);
+	}
+	case DummyType::DUMMY_LIST:{
+		return OpEvalApply(DummyValuePtr(this), env);
+	}
+	CaseReturnEval(DummyType::DUMMY_PLUS, OpEvalPlus, env);
+	CaseReturnEval(DummyType::DUMMY_MINUS, OpEvalMinus, env);
+	CaseReturnEval(DummyType::DUMMY_MUL, OpEvalMul, env);
+	CaseReturnEval(DummyType::DUMMY_DIVIDE, OpEvalDivide, env);
+	CaseReturnEval(DummyType::DUMMY_DEFINE, OpEvalDefine, env);
+	CaseReturnEval(DummyType::DUMMY_LET, OpEvalLet, env);
+	CaseReturnEval(DummyType::DUMMY_BEGIN, OpEvalBegin, env);
+	CaseReturnEval(DummyType::DUMMY_IF, OpEvalIf, env);
+	CaseReturnEval(DummyType::DUMMY_WHEN, OpEvalWhen, env);
+	CaseReturnEval(DummyType::DUMMY_UNLESS, OpEvalUnless, env);
+	CaseReturnEval(DummyType::DUMMY_APPLY, OpEvalApply, env);
+	}
+
+	Error("unexpected type %d", type);
+	
+	return DummyValue::nil;
 }
 
 std::string DummyValue::toString()
 {
-	return valueToString(this);
+	std::stringstream out;		
+	switch(type) {
+	case DummyType::DUMMY_INT_NUM:
+		out << this->basic.intnum;
+		break;
+	case DummyType::DUMMY_FLOAT_NUM:
+		out << this->basic.floatnum;	
+		break;
+	case DummyType::DUMMY_STRING:
+		out << "\"" << strOrSymOrBind[0] << "\"";	
+		break;
+	case DummyType::DUMMY_TRUE:	
+	case DummyType::DUMMY_FALSE:
+	case DummyType::DUMMY_NIL:
+	case DummyType::DUMMY_SYMBOL:
+		out << strOrSymOrBind[0];
+		break;
+	case DummyType::DUMMY_LAMBDA:{
+		out << "#<function>";
+		out << " [";
+		BindList binds = getBind();
+		BindList::iterator bindItr = binds.begin();
+		for (; bindItr != binds.end(); bindItr++) {
+			out << (*bindItr);
+			if (bindItr + 1 != binds.end()) {
+				out << " ";	
+			}
+		}
+		out << "] ";
+		DummyValueList::iterator itr = list.begin();	
+		for (;itr != list.end(); itr++) {
+			out << (*itr)->toString();
+			if (itr + 1 != list.end()) {
+				out << " ";	
+			}
+		}
+		break;
+	}
+	case DummyType::DUMMY_LIST:{
+		out << "(";
+		DummyValueList::iterator itr = list.begin();
+		for (;itr != list.end(); itr++) {
+			out << (*itr)->toString();
+			if (itr + 1 != list.end()) {
+				out << " ";	
+			}
+		}
+		out << ")";	
+		break;
+	}
+	default:{
+		out << "(" << getTypeStr(type) << " ";	
+		DummyValueList::iterator itr = list.begin();	
+		for (;itr != list.end(); itr++) {
+			out << (*itr)->toString();
+			if (itr + 1 != list.end()) {
+				out << " ";	
+			}
+		}
+		out << ")";	
+		break;
+	}
+	}
+
+	return out.str();
+}
+
+#define CaseReturn(type, str)	case type: return str
+
+std::string DummyValue::getTypeStr(int type)
+{
+	switch(type) {
+	CaseReturn(DummyType::DUMMY_PLUS, "+");
+	CaseReturn(DummyType::DUMMY_MINUS, "-");
+	CaseReturn(DummyType::DUMMY_MUL, "*");
+	CaseReturn(DummyType::DUMMY_DIVIDE, "/");
+	CaseReturn(DummyType::DUMMY_DEFINE, "define");
+	CaseReturn(DummyType::DUMMY_LET, "let");
+	CaseReturn(DummyType::DUMMY_BEGIN, "begin");
+	CaseReturn(DummyType::DUMMY_IF, "if");
+	CaseReturn(DummyType::DUMMY_WHEN, "when");
+	CaseReturn(DummyType::DUMMY_UNLESS, "unless");
+	CaseReturn(DummyType::DUMMY_LAMBDA, "lambda");
+	CaseReturn(DummyType::DUMMY_APPLY, "apply");
+	}
+	Error("unexpected type %d", type);
+	return "";	
+}
+
+#define CompareReturn(symbol, str, type) if (0 == symbol.compare(str)) return type
+
+DummyType DummyValue::getStrType(const std::string& symbol)
+{
+	CompareReturn(symbol, "+", DummyType::DUMMY_PLUS);
+	CompareReturn(symbol, "-", DummyType::DUMMY_MINUS);
+	CompareReturn(symbol, "*", DummyType::DUMMY_MUL);
+	CompareReturn(symbol, "/", DummyType::DUMMY_DIVIDE);
+	CompareReturn(symbol, "define", DummyType::DUMMY_DEFINE);
+	CompareReturn(symbol, "let", DummyType::DUMMY_LET);
+	CompareReturn(symbol, "begin", DummyType::DUMMY_BEGIN);
+	CompareReturn(symbol, "if", DummyType::DUMMY_IF);
+	CompareReturn(symbol, "when", DummyType::DUMMY_WHEN);
+	CompareReturn(symbol, "unless", DummyType::DUMMY_UNLESS);
+	CompareReturn(symbol, "lambda", DummyType::DUMMY_LAMBDA);
+	CompareReturn(symbol, "apply", DummyType::DUMMY_APPLY);
+	
+	return DummyType::DUMMY_MAX;
+}
+
+#define CaseReturnValue(type, op, list) case type: return op(list);
+
+DummyValuePtr DummyValue::create(DummyValueList& list)
+{
+	DummyValuePtr front = list.front();
+	if (front->isSymbol()) {
+		std::string symbol = front->getSymbol();	
+		DummyType type = getStrType(symbol);
+		switch(type) {
+		CaseReturnValue(DummyType::DUMMY_PLUS, OpConstructPlus, list);
+		CaseReturnValue(DummyType::DUMMY_MINUS, OpConstructMinus, list);
+		CaseReturnValue(DummyType::DUMMY_MUL, OpConstructMul, list);
+		CaseReturnValue(DummyType::DUMMY_DIVIDE, OpConstructDivide, list);
+		CaseReturnValue(DummyType::DUMMY_DEFINE, OpConstructDefine, list);
+		CaseReturnValue(DummyType::DUMMY_LET, OpConstructLet, list);
+		CaseReturnValue(DummyType::DUMMY_BEGIN, OpConstructBegin, list);
+		CaseReturnValue(DummyType::DUMMY_IF, OpConstructIf, list);
+		CaseReturnValue(DummyType::DUMMY_WHEN, OpConstructWhen, list);
+		CaseReturnValue(DummyType::DUMMY_UNLESS, OpConstructUnless, list);
+		CaseReturnValue(DummyType::DUMMY_LAMBDA, OpConstructLambda, list);
+		CaseReturnValue(DummyType::DUMMY_APPLY, OpConstructApply, list);
+		}
+		
+		// (let ((c 2)) c)
+		//	Error("unexpected type %d", type);	
+	}
+
+	return DummyValuePtr(new DummyValue(list));
 }

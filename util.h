@@ -20,9 +20,6 @@ namespace DummyScheme {
 			Error(fmt" value=%s", DummyValueCStr(DummyValuePtr(new DummyValue(list)))); \
 		} } while (0)
 
-#define IsSymbolNil(sym) isEqual(sym, DummyValue::nil->getSymbol())
-#define IsSymbolTrue(sym) isEqual(sym, DummyValue::t->getSymbol())
-
 //#define isSymEqual(first, second) \
 //	AssertDummyValue(second->isSymbol(), "compare must be a symbol", second); \
 //	return 0 == first.compare(second->getSymbol());
