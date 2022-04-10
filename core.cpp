@@ -289,41 +289,50 @@ DummyValuePtr DummyCore::OpEvalApply(DummyValuePtr value, DummyEnvPtr env)
 }
 
 /*
-	construct plus
+	(display a b c)
  */
-DummyValuePtr DummyCore::OpConstructPlus(DummyValueList& list)
+DummyValuePtr DummyCore::OpEvalDisplay(DummyValuePtr value, DummyEnvPtr env)
 {
-	return DummyValuePtr(new DummyValue(DummyType::DUMMY_PLUS, DummyValueList(list.begin()+1, list.end())));
+	DummyValueList list = value->getList();
+	
+	DummyValueList::iterator itr = list.begin();		
+	// exec the begin body
+	for (; itr != list.end(); itr++) {
+		std::string result = (*itr)->eval(env)->toString();
+		Print(result.c_str());
+	}
+
+	Print("\n");
+	return DummyValue::nil;
 }
 
 /*
-	construct minus
+	(list 1 a b)
  */
-DummyValuePtr DummyCore::OpConstructMinus(DummyValueList& list)
+DummyValuePtr DummyCore::OpEvalList(DummyValuePtr value, DummyEnvPtr env)
 {
-	AssertDummyValueList(list.size() >= 3, "minus parameter >= 3", list);
-
-	return DummyValuePtr(new DummyValue(DummyType::DUMMY_MINUS, DummyValueList(list.begin()+1, list.end())));
+	DummyValueList list = value->getList();
+	DummyValueList evalList;
+	
+	DummyValueList::iterator itr = list.begin();		
+	// exec the begin body
+	for (; itr != list.end(); itr++) {
+		evalList.push_back((*itr)->eval(env));
+	}
+	
+	return DummyValuePtr(new DummyValue(DummyType::DUMMY_LIST, evalList));		
 }
 
 /*
-	construct mul
+	for simple
  */
-DummyValuePtr DummyCore::OpConstructMul(DummyValueList& list)
+DummyValuePtr DummyCore::OpConstructTypeList(DummyType type, DummyValueList list, int paraLenMin)
 {
-	AssertDummyValueList(list.size() >= 3, "parameter >= 3", list);
+	if (paraLenMin > 0) {
+		AssertDummyValueList(list.size() >= paraLenMin, "", list);	
+	}
 
-	return DummyValuePtr(new DummyValue(DummyType::DUMMY_MUL, DummyValueList(list.begin()+1, list.end())));
-}
-
-/*
-	construct divide
- */
-DummyValuePtr DummyCore::OpConstructDivide(DummyValueList& list)
-{
-	AssertDummyValueList(list.size() >= 3, "parameter >= 3", list);
-
-	return DummyValuePtr(new DummyValue(DummyType::DUMMY_DIVIDE, DummyValueList(list.begin()+1, list.end())));
+	return DummyValuePtr(new DummyValue(type, list));
 }
 
 /*
@@ -361,50 +370,6 @@ DummyValuePtr DummyCore::OpConstructLet(DummyValueList& list)
 	}
 
 	return DummyValuePtr(new DummyValue(DummyType::DUMMY_LET, DummyValueList(list.begin()+1, list.end())));
-}
-
-/*
-	construct begin
- */
-DummyValuePtr DummyCore::OpConstructBegin(DummyValueList& list)
-{
-	DummyValuePtr front = list.front();
-	AssertDummyValueList(list.size() >= 2, "parameter >= 2", list);
-
-	return DummyValuePtr(new DummyValue(DummyType::DUMMY_BEGIN, DummyValueList(list.begin()+1, list.end())));
-}
-
-/*
-	construct if
- */
-DummyValuePtr DummyCore::OpConstructIf(DummyValueList& list)
-{
-	DummyValuePtr front = list.front();
-	AssertDummyValueList(list.size() >= 3, "parameter >= 3", list);
-
-	return DummyValuePtr(new DummyValue(DummyType::DUMMY_IF, DummyValueList(list.begin()+1, list.end())));
-}
-
-/*
-	construct when
- */
-DummyValuePtr DummyCore::OpConstructWhen(DummyValueList& list)
-{
-	DummyValuePtr front = list.front();
-	AssertDummyValueList(list.size() >= 3, "parameter >= 3", list);
-
-	return DummyValuePtr(new DummyValue(DummyType::DUMMY_WHEN, DummyValueList(list.begin()+1, list.end())));
-}
-
-/*
-	construct unless
- */
-DummyValuePtr DummyCore::OpConstructUnless(DummyValueList& list)
-{
-	DummyValuePtr front = list.front();
-	AssertDummyValueList(list.size() >= 3, "parameter >= 3", list);
-
-	return DummyValuePtr(new DummyValue(DummyType::DUMMY_UNLESS, DummyValueList(list.begin()+1, list.end())));
 }
 
 /*

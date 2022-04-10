@@ -102,9 +102,6 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	case DummyType::DUMMY_SYMBOL:{
 		return env->get(strOrSymOrBind[0]);
 	}
-//	case DummyType::DUMMY_LIST:{
-//		return OpEvalApply(DummyValuePtr(this), env);
-//	}
 	CaseReturnEval(DummyType::DUMMY_PLUS, OpEvalPlus, this, env);
 	CaseReturnEval(DummyType::DUMMY_MINUS, OpEvalMinus, this, env);
 	CaseReturnEval(DummyType::DUMMY_MUL, OpEvalMul, this, env);
@@ -116,6 +113,8 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	CaseReturnEval(DummyType::DUMMY_WHEN, OpEvalWhen, this, env);
 	CaseReturnEval(DummyType::DUMMY_UNLESS, OpEvalUnless, this, env);
 	CaseReturnEval(DummyType::DUMMY_APPLY, OpEvalApply, this, env);
+	CaseReturnEval(DummyType::DUMMY_DISPLAY, OpEvalDisplay, this, env);
+	CaseReturnEval(DummyType::DUMMY_LIST, OpEvalList, this, env);
 	}
 
 	Error("unexpected type %d", type);
@@ -209,6 +208,8 @@ std::string DummyValue::getTypeStr(int type)
 	CaseReturn(DummyType::DUMMY_UNLESS, "unless");
 	CaseReturn(DummyType::DUMMY_LAMBDA, "lambda");
 	CaseReturn(DummyType::DUMMY_APPLY, "apply");
+	CaseReturn(DummyType::DUMMY_DISPLAY, "display");
+	CaseReturn(DummyType::DUMMY_LIST, "list");
 	}
 	Error("unexpected type %d", type);
 	return "";	
@@ -230,11 +231,16 @@ DummyType DummyValue::getStrType(const std::string& symbol)
 	CompareReturn(symbol, "unless", DummyType::DUMMY_UNLESS);
 	CompareReturn(symbol, "lambda", DummyType::DUMMY_LAMBDA);
 	CompareReturn(symbol, "apply", DummyType::DUMMY_APPLY);
+	CompareReturn(symbol, "display", DummyType::DUMMY_DISPLAY);
+	CompareReturn(symbol, "list", DummyType::DUMMY_LIST);
 	
 	return DummyType::DUMMY_MAX;
 }
 
 #define CaseReturnValue(type, op, list) case type: return DummyCore:: op(list);
+
+#define CaseReturnValueTypeList(type, list, num) \
+case type: {return DummyCore::OpConstructTypeList(type, list, num);}
 
 DummyValuePtr DummyValue::create(DummyValueList& list)
 {
@@ -243,18 +249,22 @@ DummyValuePtr DummyValue::create(DummyValueList& list)
 		std::string symbol = front->getSymbol();	
 		DummyType type = getStrType(symbol);
 		switch(type) {
-		CaseReturnValue(DummyType::DUMMY_PLUS, OpConstructPlus, list);
-		CaseReturnValue(DummyType::DUMMY_MINUS, OpConstructMinus, list);
-		CaseReturnValue(DummyType::DUMMY_MUL, OpConstructMul, list);
-		CaseReturnValue(DummyType::DUMMY_DIVIDE, OpConstructDivide, list);
+		CaseReturnValueTypeList(DummyType::DUMMY_PLUS, DummyValueList(list.begin()+1, list.end()), 1);
+		CaseReturnValueTypeList(DummyType::DUMMY_MINUS, DummyValueList(list.begin()+1, list.end()), 2);
+		CaseReturnValueTypeList(DummyType::DUMMY_MUL, DummyValueList(list.begin()+1, list.end()), 2);
+		CaseReturnValueTypeList(DummyType::DUMMY_DIVIDE, DummyValueList(list.begin()+1, list.end()), 2);
+		CaseReturnValueTypeList(DummyType::DUMMY_BEGIN, DummyValueList(list.begin()+1, list.end()), 1);	
+		CaseReturnValueTypeList(DummyType::DUMMY_IF, DummyValueList(list.begin()+1, list.end()), 2);	
+		CaseReturnValueTypeList(DummyType::DUMMY_WHEN, DummyValueList(list.begin()+1, list.end()), 2);
+		CaseReturnValueTypeList(DummyType::DUMMY_UNLESS, DummyValueList(list.begin()+1, list.end()), 2);	
+		CaseReturnValueTypeList(DummyType::DUMMY_DISPLAY, DummyValueList(list.begin()+1, list.end()), 1);
+		CaseReturnValueTypeList(DummyType::DUMMY_LIST, DummyValueList(list.begin()+1, list.end()), 0);	
+		
 		CaseReturnValue(DummyType::DUMMY_DEFINE, OpConstructDefine, list);
 		CaseReturnValue(DummyType::DUMMY_LET, OpConstructLet, list);
-		CaseReturnValue(DummyType::DUMMY_BEGIN, OpConstructBegin, list);
-		CaseReturnValue(DummyType::DUMMY_IF, OpConstructIf, list);
-		CaseReturnValue(DummyType::DUMMY_WHEN, OpConstructWhen, list);
-		CaseReturnValue(DummyType::DUMMY_UNLESS, OpConstructUnless, list);
 		CaseReturnValue(DummyType::DUMMY_LAMBDA, OpConstructLambda, list);
 		CaseReturnValue(DummyType::DUMMY_APPLY, OpConstructApply, list);
+
 		}
 		
 		// (let ((c 2)) c)

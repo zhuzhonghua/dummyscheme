@@ -9,30 +9,6 @@
 #include "dummyscheme.h"
 
 namespace DummyScheme {
-enum DummyType {
-	DUMMY_INT_NUM,
-	DUMMY_FLOAT_NUM,
-	DUMMY_STRING,
-	DUMMY_SYMBOL,
-	DUMMY_NIL,
-	DUMMY_TRUE,
-	DUMMY_FALSE,
-	DUMMY_PLUS,
-	DUMMY_MINUS,
-	DUMMY_MUL,
-	DUMMY_DIVIDE,
-	DUMMY_DEFINE,
-	DUMMY_LET,
-	DUMMY_BEGIN,
-	DUMMY_IF,
-	DUMMY_WHEN,
-	DUMMY_UNLESS,
-	DUMMY_LAMBDA,
-	DUMMY_APPLY,
-	DUMMY_LIST,
-	DUMMY_MAX,
-};
-
 class Tokenize;
 
 class DummyValue : public DummyRefCount {

@@ -8,16 +8,10 @@ class DummyCore{
 public:
 	static bool isEqual(const std::string& first, const DummyValuePtr& second);
 
-	static DummyValuePtr OpConstructPlus(DummyValueList& list);
-	static DummyValuePtr OpConstructMinus(DummyValueList& list);
-	static DummyValuePtr OpConstructMul(DummyValueList& list);
-	static DummyValuePtr OpConstructDivide(DummyValueList& list);
+	static DummyValuePtr OpConstructTypeList(DummyType type, DummyValueList list, int paraLenMin);
+
 	static DummyValuePtr OpConstructDefine(DummyValueList& list);
 	static DummyValuePtr OpConstructLet(DummyValueList& list);
-	static DummyValuePtr OpConstructBegin(DummyValueList& list);
-	static DummyValuePtr OpConstructIf(DummyValueList& list);
-	static DummyValuePtr OpConstructWhen(DummyValueList& list);
-	static DummyValuePtr OpConstructUnless(DummyValueList& list);
 	static DummyValuePtr OpConstructLambda(DummyValueList& list);
 	static DummyValuePtr OpConstructApply(DummyValueList& list);
 
@@ -32,5 +26,7 @@ public:
 	static DummyValuePtr OpEvalWhen(DummyValuePtr value, DummyEnvPtr env);
 	static DummyValuePtr OpEvalUnless(DummyValuePtr value, DummyEnvPtr env);
 	static DummyValuePtr OpEvalApply(DummyValuePtr value, DummyEnvPtr env);
+	static DummyValuePtr OpEvalDisplay(DummyValuePtr value, DummyEnvPtr env);
+	static DummyValuePtr OpEvalList(DummyValuePtr value, DummyEnvPtr env);
 };
 };

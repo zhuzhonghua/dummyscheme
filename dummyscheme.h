@@ -7,6 +7,7 @@
 
 #include "refcount.h"
 #include "util.h"
+#include "type.h"
 
 namespace DummyScheme{
 

@@ -24,39 +24,21 @@ void test1()
 	
 	tokenize.init("(+ a 3)");
 	tokenize.run(env);
-}
 
-void test2()
-{
-	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
-	DummyScheme::Tokenize tokenize("(+ 2 (- 3 2) 4)");
-	tokenize.run(env);
-}
+	tokenize.init("(+ 2 (- 3 2) 4)");
+	tokenize.run(env);	
 
-void test3()
-{
-	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
-	DummyScheme::Tokenize tokenize("(define a 3)");
-	tokenize.run(env);
-	
 	tokenize.init("a");
-	tokenize.run(env);
-}
+	tokenize.run(env);	
 
-void test4()
-{
-	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
-	DummyScheme::Tokenize tokenize("(define a 3)");
-	tokenize.run(env);
-	
 	tokenize.init("(define b (+ a 2))");
 	tokenize.run(env);
 	
 	tokenize.init("(* a b)");
-	tokenize.run(env);
+	tokenize.run(env);	
 }
 
-void test5()
+void test2()
 {
 	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
 	DummyScheme::Tokenize tokenize("(let ((c 2)) c)");
@@ -72,7 +54,7 @@ void test5()
 	tokenize.run(env);
 }
 
-void test6()
+void test3()
 {
 	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
 	DummyScheme::Tokenize tokenize("nil");
@@ -85,14 +67,14 @@ void test6()
 	tokenize.run(env);	
 }
 
-void test7()
+void test4()
 {
 	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
 	DummyScheme::Tokenize tokenize("(begin (+ 2 3) (- 4 5))");
 	tokenize.run(env);
 }
 
-void test8()
+void test5()
 {
 	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
 	DummyScheme::Tokenize tokenize("(if nil 1 2)");
@@ -115,9 +97,15 @@ void test8()
 	
 	tokenize.init("(when #f 1 2)");
 	tokenize.run(env);
+	
+	tokenize.init("(unless #f 1 2)");
+	tokenize.run(env);
+	
+	tokenize.init("(unless #t 1 2)");
+	tokenize.run(env);
 }
 
-void test9()
+void test6()
 {
 	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
 	DummyScheme::Tokenize tokenize("(lambda (a) (+ a 2))");
@@ -127,6 +115,32 @@ void test9()
 	tokenize.run(env);
 
 	tokenize.init("(apply (lambda (a) (+ a 2)) 4)");
+	tokenize.run(env);	
+}
+
+void test7()
+{
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
+	DummyScheme::Tokenize tokenize("(display \"a b c\")");
+	tokenize.run(env);
+	
+	tokenize.init("(define a 4)");
+	tokenize.run(env);
+
+	tokenize.init("(display a)");
+	tokenize.run(env);	
+}
+
+void test8()
+{
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
+	DummyScheme::Tokenize tokenize("(list 1 2 3)");
+	tokenize.run(env);
+	
+	tokenize.init("(define a 4)");
+	tokenize.run(env);
+
+	tokenize.init("(list a 3 4 5)");
 	tokenize.run(env);	
 }
 
@@ -141,7 +155,7 @@ int main()
 		RUNTEST(test6);
 		RUNTEST(test7);
 		RUNTEST(test8);
-		RUNTEST(test9);
+
 		printf("test all success");
 	}
 	catch(const char* excep) {
