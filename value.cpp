@@ -2,6 +2,7 @@
 #include "dummyscheme.h"
 #include "env.h"
 #include "tokenize.h"
+#include "core.h"
 
 using namespace DummyScheme;
 
@@ -83,7 +84,7 @@ int DummyValue::getInt(DummyEnvPtr env)
 	}
 }
 
-#define CaseReturnEval(type, op, env) case type: return op(DummyValuePtr(this), env)
+#define CaseReturnEval(type, op, value, env) case type: return DummyCore:: op(DummyValuePtr(value), env)
 
 DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 {
@@ -94,25 +95,27 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	case DummyType::DUMMY_TRUE:
 	case DummyType::DUMMY_FALSE:
 	case DummyType::DUMMY_NIL:
-	case DummyType::DUMMY_LAMBDA: // the real lambda eval needs apply
+	// the real lambda eval needs apply	
+	// may be a returnvalue
+	case DummyType::DUMMY_LAMBDA: 
 		return DummyValuePtr(this);
 	case DummyType::DUMMY_SYMBOL:{
 		return env->get(strOrSymOrBind[0]);
 	}
-	case DummyType::DUMMY_LIST:{
-		return OpEvalApply(DummyValuePtr(this), env);
-	}
-	CaseReturnEval(DummyType::DUMMY_PLUS, OpEvalPlus, env);
-	CaseReturnEval(DummyType::DUMMY_MINUS, OpEvalMinus, env);
-	CaseReturnEval(DummyType::DUMMY_MUL, OpEvalMul, env);
-	CaseReturnEval(DummyType::DUMMY_DIVIDE, OpEvalDivide, env);
-	CaseReturnEval(DummyType::DUMMY_DEFINE, OpEvalDefine, env);
-	CaseReturnEval(DummyType::DUMMY_LET, OpEvalLet, env);
-	CaseReturnEval(DummyType::DUMMY_BEGIN, OpEvalBegin, env);
-	CaseReturnEval(DummyType::DUMMY_IF, OpEvalIf, env);
-	CaseReturnEval(DummyType::DUMMY_WHEN, OpEvalWhen, env);
-	CaseReturnEval(DummyType::DUMMY_UNLESS, OpEvalUnless, env);
-	CaseReturnEval(DummyType::DUMMY_APPLY, OpEvalApply, env);
+//	case DummyType::DUMMY_LIST:{
+//		return OpEvalApply(DummyValuePtr(this), env);
+//	}
+	CaseReturnEval(DummyType::DUMMY_PLUS, OpEvalPlus, this, env);
+	CaseReturnEval(DummyType::DUMMY_MINUS, OpEvalMinus, this, env);
+	CaseReturnEval(DummyType::DUMMY_MUL, OpEvalMul, this, env);
+	CaseReturnEval(DummyType::DUMMY_DIVIDE, OpEvalDivide, this, env);
+	CaseReturnEval(DummyType::DUMMY_DEFINE, OpEvalDefine, this, env);
+	CaseReturnEval(DummyType::DUMMY_LET, OpEvalLet, this, env);
+	CaseReturnEval(DummyType::DUMMY_BEGIN, OpEvalBegin, this, env);
+	CaseReturnEval(DummyType::DUMMY_IF, OpEvalIf, this, env);
+	CaseReturnEval(DummyType::DUMMY_WHEN, OpEvalWhen, this, env);
+	CaseReturnEval(DummyType::DUMMY_UNLESS, OpEvalUnless, this, env);
+	CaseReturnEval(DummyType::DUMMY_APPLY, OpEvalApply, this, env);
 	}
 
 	Error("unexpected type %d", type);
@@ -231,7 +234,7 @@ DummyType DummyValue::getStrType(const std::string& symbol)
 	return DummyType::DUMMY_MAX;
 }
 
-#define CaseReturnValue(type, op, list) case type: return op(list);
+#define CaseReturnValue(type, op, list) case type: return DummyCore:: op(list);
 
 DummyValuePtr DummyValue::create(DummyValueList& list)
 {
@@ -256,6 +259,9 @@ DummyValuePtr DummyValue::create(DummyValueList& list)
 		
 		// (let ((c 2)) c)
 		//	Error("unexpected type %d", type);	
+	} else if (front->isLambda()) {
+		// ((lambda (a) (+ a 2)) 2)
+		return DummyCore::OpConstructApply(list);
 	}
 
 	return DummyValuePtr(new DummyValue(list));

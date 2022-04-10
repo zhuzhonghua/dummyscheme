@@ -10,13 +10,8 @@ typedef void (*TestFunc)();
 
 void runtest(TestFunc testfunc, char* funcname)
 {
-	try {
-		testfunc();
-		printf("%s run success\n", funcname);	
-	}	catch(const char* exception) {
-		printf("%s Failed with exception %s\n", funcname, exception);	
-		throw "failed test";
-	}
+	testfunc();
+	printf("%s run success\n", funcname);
 }
 
 #define RUNTEST(func) runtest(func, #func)
@@ -151,5 +146,9 @@ int main()
 	}
 	catch(const char* excep) {
 		printf(excep);
+
+		printf("test failed");
+		char c;
+		std::cin >> c;
 	}
 }

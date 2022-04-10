@@ -75,10 +75,12 @@ public:
 	DummyType getType() { return type; }
 	std::string getStr() { return strOrSymOrBind[0]; }
 	std::string getSymbol() { return strOrSymOrBind[0]; }
+	std::string getSymbolCheck() { AssertDummyValue(isSymbol(), "", this); return strOrSymOrBind[0]; }
 	BindList getBind() { return strOrSymOrBind; }
 	int getInt() { AssertDummyValue(isInt(), "", this); return basic.intnum; }
 	double getDouble() { AssertDummyValue(isFloat(), "", this); return basic.floatnum; }
 	DummyValueList getList() { return list; }
+	DummyValueList getListCheck() { AssertDummyValue(isList(), "", this); return list; }
 public:
 	DummyValue(int num);
 	DummyValue(DummyType type, const std::string &val);
