@@ -324,6 +324,24 @@ DummyValuePtr DummyCore::OpEvalList(DummyValuePtr value, DummyEnvPtr env)
 }
 
 /*
+	(list? (list 1 2 3))
+	support multi item
+ */
+DummyValuePtr DummyCore::OpEvalListMark(DummyValuePtr value, DummyEnvPtr env)
+{
+	DummyValueList list = value->getList();
+	
+	DummyValueList::iterator itr = list.begin();		
+	for (; itr != list.end(); itr++) {
+		if(!(*itr)->eval(env)->isList()) {
+			return DummyValue::nil;
+		}
+	}
+	
+	return DummyValue::t;
+}
+
+/*
 	for simple
  */
 DummyValuePtr DummyCore::OpConstructTypeList(DummyType type, DummyValueList list, int paraLenMin)

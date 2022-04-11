@@ -141,7 +141,19 @@ void test8()
 	tokenize.run(env);
 
 	tokenize.init("(list a 3 4 5)");
+	tokenize.run(env);
+	
+	tokenize.init("(list? (list a 3 4 5))");
+	tokenize.run(env);
+
+	tokenize.init("(define b (list 4 5 6))");
 	tokenize.run(env);	
+
+	tokenize.init("(list? b (list a 3 4 5))");
+	tokenize.run(env);	
+
+	tokenize.init("(list? nil b)");
+	tokenize.run(env);
 }
 
 int main()

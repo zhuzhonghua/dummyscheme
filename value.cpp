@@ -115,6 +115,7 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	CaseReturnEval(DummyType::DUMMY_APPLY, OpEvalApply, this, env);
 	CaseReturnEval(DummyType::DUMMY_DISPLAY, OpEvalDisplay, this, env);
 	CaseReturnEval(DummyType::DUMMY_LIST, OpEvalList, this, env);
+	CaseReturnEval(DummyType::DUMMY_LIST_MARK, OpEvalListMark, this, env);
 	}
 
 	Error("unexpected type %d", type);
@@ -210,6 +211,7 @@ std::string DummyValue::getTypeStr(int type)
 	CaseReturn(DummyType::DUMMY_APPLY, "apply");
 	CaseReturn(DummyType::DUMMY_DISPLAY, "display");
 	CaseReturn(DummyType::DUMMY_LIST, "list");
+	CaseReturn(DummyType::DUMMY_LIST_MARK, "list?");
 	}
 	Error("unexpected type %d", type);
 	return "";	
@@ -233,6 +235,7 @@ DummyType DummyValue::getStrType(const std::string& symbol)
 	CompareReturn(symbol, "apply", DummyType::DUMMY_APPLY);
 	CompareReturn(symbol, "display", DummyType::DUMMY_DISPLAY);
 	CompareReturn(symbol, "list", DummyType::DUMMY_LIST);
+	CompareReturn(symbol, "list?", DummyType::DUMMY_LIST_MARK);
 	
 	return DummyType::DUMMY_MAX;
 }
@@ -259,6 +262,7 @@ DummyValuePtr DummyValue::create(DummyValueList& list)
 		CaseReturnValueTypeList(DummyType::DUMMY_UNLESS, DummyValueList(list.begin()+1, list.end()), 2);	
 		CaseReturnValueTypeList(DummyType::DUMMY_DISPLAY, DummyValueList(list.begin()+1, list.end()), 1);
 		CaseReturnValueTypeList(DummyType::DUMMY_LIST, DummyValueList(list.begin()+1, list.end()), 0);	
+		CaseReturnValueTypeList(DummyType::DUMMY_LIST_MARK, DummyValueList(list.begin()+1, list.end()), 1);	
 		
 		CaseReturnValue(DummyType::DUMMY_DEFINE, OpConstructDefine, list);
 		CaseReturnValue(DummyType::DUMMY_LET, OpConstructLet, list);
