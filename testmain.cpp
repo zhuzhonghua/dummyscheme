@@ -156,6 +156,19 @@ void test8()
 	tokenize.run(env);
 }
 
+void test9()
+{
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
+	DummyScheme::Tokenize tokenize("(null? (list 1 2 3))");
+	tokenize.run(env);
+	
+	tokenize.init("(null? (list))");
+	tokenize.run(env);
+
+	tokenize.init("(length (list 1 2 3))");
+	tokenize.run(env);
+}
+
 int main()
 {
 	try{
@@ -167,6 +180,7 @@ int main()
 		RUNTEST(test6);
 		RUNTEST(test7);
 		RUNTEST(test8);
+		RUNTEST(test9);
 
 		printf("test all success");
 	}

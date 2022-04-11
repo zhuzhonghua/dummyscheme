@@ -342,6 +342,46 @@ DummyValuePtr DummyCore::OpEvalListMark(DummyValuePtr value, DummyEnvPtr env)
 }
 
 /*
+	(null? (list 1 2 3))
+ */
+DummyValuePtr DummyCore::OpEvalNullMark(DummyValuePtr value, DummyEnvPtr env)
+{
+	DummyValueList list = value->getList();
+	
+	DummyValueList::iterator itr = list.begin();		
+	for (; itr != list.end(); itr++) {
+		DummyValuePtr evalVal = (*itr)->eval(env);
+		if (evalVal == DummyValue::nil) {
+			// do nohting
+		} else if (evalVal->isList()) {
+			if (evalVal->getList().size() <= 0) {
+				// do nohting
+			} else {
+				return DummyValue::nil;	
+			}
+		} else {
+			return DummyValue::nil;
+		}
+	}
+	
+	return DummyValue::t;	
+}
+
+
+/*
+	(length (list 1 2 3))
+ */
+DummyValuePtr DummyCore::OpEvalLength(DummyValuePtr value, DummyEnvPtr env)
+{
+	DummyValuePtr evalVal = value->getList().front()->eval(env);	
+	if (evalVal->isList()) {
+		return DummyValuePtr(new DummyValue(evalVal->getList().size()));
+	} else {
+		return DummyValue::nil;
+	}
+}
+
+/*
 	for simple
  */
 DummyValuePtr DummyCore::OpConstructTypeList(DummyType type, DummyValueList list, int paraLenMin)
