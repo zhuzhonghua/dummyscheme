@@ -30,6 +30,7 @@ public:
 	static DummyValuePtr OpEvalList(DummyValuePtr value, DummyEnvPtr env);
 	static DummyValuePtr OpEvalListMark(DummyValuePtr value, DummyEnvPtr env);
 	static DummyValuePtr OpEvalNullMark(DummyValuePtr value, DummyEnvPtr env);
+	static DummyValuePtr OpEvalEqualMark(DummyValuePtr value, DummyEnvPtr env);
 	static DummyValuePtr OpEvalLength(DummyValuePtr value, DummyEnvPtr env);
 };
 };

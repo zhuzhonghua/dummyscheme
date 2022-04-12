@@ -30,4 +30,5 @@ namespace DummyScheme {
 extern void errorThrow(const char *fmt, ...);
 extern void Print(const char *fmt, ...);
 extern bool isEqual(const std::string& first, const std::string& second);
+extern bool isFloatEqual(double a, double b);
 }

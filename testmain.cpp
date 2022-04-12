@@ -154,6 +154,18 @@ void test8()
 
 	tokenize.init("(list? nil b)");
 	tokenize.run(env);
+
+	tokenize.init("(equal? 1 2)");
+	tokenize.run(env);
+
+	tokenize.init("(equal? 1 1 1)");
+	tokenize.run(env);
+	
+	tokenize.init("(equal? (list 1 2 3) (list 1 2 3))");
+	tokenize.run(env);	
+
+	tokenize.init("(equal? (list 1 2 3) 1)");
+	tokenize.run(env);
 }
 
 void test9()

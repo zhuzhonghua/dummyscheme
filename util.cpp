@@ -1,5 +1,7 @@
 #include "util.h"
 #include "value.h"
+#include <cfloat>
+#include <cmath>
 
 namespace DummyScheme {
 
@@ -32,4 +34,8 @@ bool isEqual(const std::string& first, const std::string& second)
 	return first.size() == second.size() && first.size() > 0 && 0 == first.compare(second);
 }
 
+bool isFloatEqual(double a, double b)
+{
+	return std::abs(a - b) <= DBL_EPSILON;
+}
 }

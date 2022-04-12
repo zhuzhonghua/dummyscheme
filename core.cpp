@@ -367,6 +367,26 @@ DummyValuePtr DummyCore::OpEvalNullMark(DummyValuePtr value, DummyEnvPtr env)
 	return DummyValue::t;	
 }
 
+/*
+	(equal? 1 2)
+	(equal? 1 1 1)
+	(equal? (list 1 2 3) (list 1 2 3))
+	(equal? (list 1 2 3) 1)
+ */
+DummyValuePtr DummyCore::OpEvalEqualMark(DummyValuePtr value, DummyEnvPtr env)
+{
+	DummyValueList list = value->getList();
+	
+	DummyValueList::iterator itr = list.begin();		
+	DummyValuePtr first = *itr;
+	for (++itr; itr != list.end(); itr++) {
+		if (!first->equal(*itr, env)) {
+			return DummyValue::nil;
+		}
+	}
+	
+	return DummyValue::t;	
+}
 
 /*
 	(length (list 1 2 3))
