@@ -31,6 +31,11 @@ public:
 	static DummyValuePtr OpEvalListMark(DummyValuePtr value, DummyEnvPtr env);
 	static DummyValuePtr OpEvalNullMark(DummyValuePtr value, DummyEnvPtr env);
 	static DummyValuePtr OpEvalEqualMark(DummyValuePtr value, DummyEnvPtr env);
+	static DummyValuePtr OpEvalEqual(DummyValuePtr value, DummyEnvPtr env);
+	static DummyValuePtr OpEvalLess(DummyValuePtr value, DummyEnvPtr env);
+	static DummyValuePtr OpEvalLessEqual(DummyValuePtr value, DummyEnvPtr env);
+	static DummyValuePtr OpEvalBig(DummyValuePtr value, DummyEnvPtr env);
+	static DummyValuePtr OpEvalBigEqual(DummyValuePtr value, DummyEnvPtr env);
 	static DummyValuePtr OpEvalLength(DummyValuePtr value, DummyEnvPtr env);
 };
 };

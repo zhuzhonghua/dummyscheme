@@ -229,6 +229,11 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	CaseReturnEval(DummyType::DUMMY_LIST_MARK, OpEvalListMark, this, env);
 	CaseReturnEval(DummyType::DUMMY_NULL_MARK, OpEvalNullMark, this, env);
 	CaseReturnEval(DummyType::DUMMY_EQUAL_MARK, OpEvalEqualMark, this, env);
+	CaseReturnEval(DummyType::DUMMY_EQUAL, OpEvalEqual, this, env);
+	CaseReturnEval(DummyType::DUMMY_LESS, OpEvalLess, this, env);
+	CaseReturnEval(DummyType::DUMMY_LESS_EQUAL, OpEvalLessEqual, this, env);
+	CaseReturnEval(DummyType::DUMMY_BIG, OpEvalBig, this, env);
+	CaseReturnEval(DummyType::DUMMY_BIG_EQUAL, OpEvalBigEqual, this, env);
 	CaseReturnEval(DummyType::DUMMY_LENGTH, OpEvalLength, this, env);
 	}
 
@@ -260,6 +265,11 @@ std::string DummyValue::getTypeStr(int type)
 	CaseReturn(DummyType::DUMMY_LIST_MARK, "list?");
 	CaseReturn(DummyType::DUMMY_NULL_MARK, "null?");
 	CaseReturn(DummyType::DUMMY_EQUAL_MARK, "equal?");
+	CaseReturn(DummyType::DUMMY_EQUAL, "=");
+	CaseReturn(DummyType::DUMMY_LESS, "<");
+	CaseReturn(DummyType::DUMMY_LESS_EQUAL, "<=");
+	CaseReturn(DummyType::DUMMY_BIG, ">");
+	CaseReturn(DummyType::DUMMY_BIG_EQUAL, ">=");
 	CaseReturn(DummyType::DUMMY_LENGTH, "lenght");
 	}
 	Error("unexpected type %d", type);
@@ -288,6 +298,11 @@ DummyType DummyValue::getStrType(const std::string& symbol)
 	CompareReturn(symbol, "null?", DummyType::DUMMY_NULL_MARK);
 	CompareReturn(symbol, "equal?", DummyType::DUMMY_EQUAL_MARK);
 	CompareReturn(symbol, "length", DummyType::DUMMY_LENGTH);
+	CompareReturn(symbol, "=", DummyType::DUMMY_EQUAL);
+	CompareReturn(symbol, "<", DummyType::DUMMY_LESS);
+	CompareReturn(symbol, "<=", DummyType::DUMMY_LESS_EQUAL);
+	CompareReturn(symbol, ">", DummyType::DUMMY_BIG);
+	CompareReturn(symbol, ">=", DummyType::DUMMY_BIG_EQUAL);	
 	
 	return DummyType::DUMMY_MAX;
 }
@@ -317,6 +332,11 @@ DummyValuePtr DummyValue::create(DummyValueList& list)
 		CaseReturnValueTypeList(DummyType::DUMMY_LIST_MARK, DummyValueList(list.begin()+1, list.end()), 1);
 		CaseReturnValueTypeList(DummyType::DUMMY_NULL_MARK, DummyValueList(list.begin()+1, list.end()), 1);
 		CaseReturnValueTypeList(DummyType::DUMMY_EQUAL_MARK, DummyValueList(list.begin()+1, list.end()), 2);
+		CaseReturnValueTypeList(DummyType::DUMMY_EQUAL, DummyValueList(list.begin()+1, list.end()), 2);
+		CaseReturnValueTypeList(DummyType::DUMMY_LESS, DummyValueList(list.begin()+1, list.end()), 2);
+		CaseReturnValueTypeList(DummyType::DUMMY_LESS_EQUAL, DummyValueList(list.begin()+1, list.end()), 2);
+		CaseReturnValueTypeList(DummyType::DUMMY_BIG, DummyValueList(list.begin()+1, list.end()), 2);
+		CaseReturnValueTypeList(DummyType::DUMMY_BIG_EQUAL, DummyValueList(list.begin()+1, list.end()), 2);
 		CaseReturnValueTypeList(DummyType::DUMMY_LENGTH, DummyValueList(list.begin()+1, list.end()), 1);
 		
 		CaseReturnValue(DummyType::DUMMY_DEFINE, OpConstructDefine, list);

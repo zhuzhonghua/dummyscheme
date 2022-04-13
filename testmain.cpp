@@ -181,6 +181,40 @@ void test9()
 	tokenize.run(env);
 }
 
+void test10()
+{
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
+	DummyScheme::Tokenize tokenize("(= 1 1)");
+	tokenize.run(env);
+	
+	tokenize.init("(= 1 1 3)");
+	tokenize.run(env);
+	
+	tokenize.init("(< 1 2 3 4 5)");
+	tokenize.run(env);
+	
+	tokenize.init("(< 1 1 3 4 5)");
+	tokenize.run(env);
+	
+	tokenize.init("(<= 1 2 3 4 4)");
+	tokenize.run(env);
+	
+	tokenize.init("(<= 1 2 5 4 4)");
+	tokenize.run(env);		
+
+	tokenize.init("(> 5 4 3 2 1)");
+	tokenize.run(env);
+	
+	tokenize.init("(> 5 4 3 2 2)");
+	tokenize.run(env);
+
+	tokenize.init("(>= 4 4 3 2 1)");
+	tokenize.run(env);
+	
+	tokenize.init("(>= 4 4 3 2 4)");
+	tokenize.run(env);	
+}
+
 int main()
 {
 	try{
@@ -193,6 +227,7 @@ int main()
 		RUNTEST(test7);
 		RUNTEST(test8);
 		RUNTEST(test9);
+		RUNTEST(test10);
 
 		printf("test all success");
 	}
