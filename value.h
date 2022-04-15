@@ -22,12 +22,11 @@ protected:
 	union {
 		int intnum;
 		double floatnum;	
+		const char* typeStr;
 	} basic;
 	BindList strOrSymOrBind;
 	DummyValueList list;
 public:
-	static std::string getTypeStr(int type);
-	static DummyType getStrType(const std::string& symbol);
 	static DummyValuePtr create(DummyValueList& list);
 public:
 	int getInt(DummyEnvPtr env);
@@ -50,6 +49,7 @@ public:
 	bool isNilValue() { return isNil() || isFalse(); }
 	
 	DummyType getType() { return type; }
+	const char* getTypeStr() { return basic.typeStr; }
 	std::string getStr() { return strOrSymOrBind[0]; }
 	std::string getSymbol() { return strOrSymOrBind[0]; }
 	std::string getSymbolCheck() { AssertDummyValue(isSymbol(), "", this); return strOrSymOrBind[0]; }
@@ -61,7 +61,7 @@ public:
 public:
 	DummyValue(int num);
 	DummyValue(DummyType type, const std::string &val);
-	DummyValue(DummyType type, DummyValueList list);
+	DummyValue(const char* typeStr, DummyType type, DummyValueList list);
 	DummyValue(BindList binds, DummyValueList list);
 	DummyValue(DummyValueList list);
 	DummyValue(DummyValuePtr val);

@@ -8,7 +8,7 @@ class DummyCore{
 public:
 	static bool isEqual(const std::string& first, const DummyValuePtr& second);
 
-	static DummyValuePtr OpConstructTypeList(DummyType type, DummyValueList list, int paraLenMin);
+	static DummyValuePtr OpConstructTypeList(const char* typeStr, DummyType type, DummyValueList list, int paraLenMin);
 
 	static DummyValuePtr OpConstructDefine(DummyValueList& list);
 	static DummyValuePtr OpConstructLet(DummyValueList& list);

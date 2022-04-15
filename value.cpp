@@ -26,6 +26,7 @@ DummyValue::DummyValue(DummyType type, const std::string &val)
 	case DummyType::DUMMY_TRUE:
 	case DummyType::DUMMY_FALSE:
 		strOrSymOrBind.push_back(val);	
+		basic.intnum = 0;
 		break;
 	default:
 		Error("wrong dummytype %d with %s", type, val.c_str());
@@ -38,19 +39,21 @@ DummyValue::DummyValue(BindList binds, DummyValueList list)
 	 list(list),
 	 strOrSymOrBind(binds)
 {
-
+	basic.intnum = 0;
 }
 
-DummyValue::DummyValue(DummyType type, DummyValueList list)
+DummyValue::DummyValue(const char* typeStr, DummyType type, DummyValueList list)
 	:type(type),
 	 list(list)
 {
+	basic.typeStr = typeStr;
 }
 
 DummyValue::DummyValue(DummyValueList list)
 	:type(DummyType::DUMMY_LIST),
 	 list(list)
 {
+	basic.intnum = 0;	
 }
 
 DummyValue::DummyValue(DummyValuePtr val)
@@ -62,13 +65,7 @@ DummyValue::DummyValue(DummyValuePtr val)
 
 DummyValue::~DummyValue()
 {
-	// only check list type
-	if (type == DummyType::DUMMY_LIST) {
-//		for (DummyValueList::iterator itr = list.begin();
-//				 itr != list.end(); ++itr) {
-//			delete *itr;
-//		}
-	}
+	list.clear();
 }
 
 int DummyValue::getInt(DummyEnvPtr env)
@@ -137,7 +134,7 @@ std::string DummyValue::toString()
 		break;
 	}
 	default:{
-		out << "(" << getTypeStr(type) << " ";	
+		out << "(" << basic.typeStr << " ";	
 		DummyValueList::iterator itr = list.begin();	
 		for (;itr != list.end(); itr++) {
 			out << (*itr)->toString();
@@ -195,10 +192,11 @@ bool DummyValue::equal(DummyValuePtr other, DummyEnvPtr env)
 	}
 }
 
-#define CaseReturnEval(type, op, value, env) case type: return DummyCore:: op(DummyValuePtr(value), env)
 
 DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 {
+#define CaseReturnEval(type, op) case type: return DummyCore:: op(DummyValuePtr(this), env)
+	
 	switch(type) {
 	case DummyType::DUMMY_INT_NUM:
 	case DummyType::DUMMY_FLOAT_NUM:
@@ -213,28 +211,28 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	case DummyType::DUMMY_SYMBOL:{
 		return env->get(strOrSymOrBind[0]);
 	}
-	CaseReturnEval(DummyType::DUMMY_PLUS, OpEvalPlus, this, env);
-	CaseReturnEval(DummyType::DUMMY_MINUS, OpEvalMinus, this, env);
-	CaseReturnEval(DummyType::DUMMY_MUL, OpEvalMul, this, env);
-	CaseReturnEval(DummyType::DUMMY_DIVIDE, OpEvalDivide, this, env);
-	CaseReturnEval(DummyType::DUMMY_DEFINE, OpEvalDefine, this, env);
-	CaseReturnEval(DummyType::DUMMY_LET, OpEvalLet, this, env);
-	CaseReturnEval(DummyType::DUMMY_BEGIN, OpEvalBegin, this, env);
-	CaseReturnEval(DummyType::DUMMY_IF, OpEvalIf, this, env);
-	CaseReturnEval(DummyType::DUMMY_WHEN, OpEvalWhen, this, env);
-	CaseReturnEval(DummyType::DUMMY_UNLESS, OpEvalUnless, this, env);
-	CaseReturnEval(DummyType::DUMMY_APPLY, OpEvalApply, this, env);
-	CaseReturnEval(DummyType::DUMMY_DISPLAY, OpEvalDisplay, this, env);
-	CaseReturnEval(DummyType::DUMMY_LIST, OpEvalList, this, env);
-	CaseReturnEval(DummyType::DUMMY_LIST_MARK, OpEvalListMark, this, env);
-	CaseReturnEval(DummyType::DUMMY_NULL_MARK, OpEvalNullMark, this, env);
-	CaseReturnEval(DummyType::DUMMY_EQUAL_MARK, OpEvalEqualMark, this, env);
-	CaseReturnEval(DummyType::DUMMY_EQUAL, OpEvalEqual, this, env);
-	CaseReturnEval(DummyType::DUMMY_LESS, OpEvalLess, this, env);
-	CaseReturnEval(DummyType::DUMMY_LESS_EQUAL, OpEvalLessEqual, this, env);
-	CaseReturnEval(DummyType::DUMMY_BIG, OpEvalBig, this, env);
-	CaseReturnEval(DummyType::DUMMY_BIG_EQUAL, OpEvalBigEqual, this, env);
-	CaseReturnEval(DummyType::DUMMY_LENGTH, OpEvalLength, this, env);
+	CaseReturnEval(DummyType::DUMMY_PLUS, OpEvalPlus);
+	CaseReturnEval(DummyType::DUMMY_MINUS, OpEvalMinus);
+	CaseReturnEval(DummyType::DUMMY_MUL, OpEvalMul);
+	CaseReturnEval(DummyType::DUMMY_DIVIDE, OpEvalDivide);
+	CaseReturnEval(DummyType::DUMMY_DEFINE, OpEvalDefine);
+	CaseReturnEval(DummyType::DUMMY_LET, OpEvalLet);
+	CaseReturnEval(DummyType::DUMMY_BEGIN, OpEvalBegin);
+	CaseReturnEval(DummyType::DUMMY_IF, OpEvalIf);
+	CaseReturnEval(DummyType::DUMMY_WHEN, OpEvalWhen);
+	CaseReturnEval(DummyType::DUMMY_UNLESS, OpEvalUnless);
+	CaseReturnEval(DummyType::DUMMY_APPLY, OpEvalApply);
+	CaseReturnEval(DummyType::DUMMY_DISPLAY, OpEvalDisplay);
+	CaseReturnEval(DummyType::DUMMY_LIST, OpEvalList);
+	CaseReturnEval(DummyType::DUMMY_LIST_MARK, OpEvalListMark);
+	CaseReturnEval(DummyType::DUMMY_NULL_MARK, OpEvalNullMark);
+	CaseReturnEval(DummyType::DUMMY_EQUAL_MARK, OpEvalEqualMark);
+	CaseReturnEval(DummyType::DUMMY_EQUAL, OpEvalEqual);
+	CaseReturnEval(DummyType::DUMMY_LESS, OpEvalLess);
+	CaseReturnEval(DummyType::DUMMY_LESS_EQUAL, OpEvalLessEqual);
+	CaseReturnEval(DummyType::DUMMY_BIG, OpEvalBig);
+	CaseReturnEval(DummyType::DUMMY_BIG_EQUAL, OpEvalBigEqual);
+	CaseReturnEval(DummyType::DUMMY_LENGTH, OpEvalLength);
 	}
 
 	Error("unexpected type %d", type);
@@ -242,109 +240,44 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	return DummyValue::nil;
 }
 
-
-#define CaseReturn(type, str)	case type: return str
-
-std::string DummyValue::getTypeStr(int type)
-{
-	switch(type) {
-	CaseReturn(DummyType::DUMMY_PLUS, "+");
-	CaseReturn(DummyType::DUMMY_MINUS, "-");
-	CaseReturn(DummyType::DUMMY_MUL, "*");
-	CaseReturn(DummyType::DUMMY_DIVIDE, "/");
-	CaseReturn(DummyType::DUMMY_DEFINE, "define");
-	CaseReturn(DummyType::DUMMY_LET, "let");
-	CaseReturn(DummyType::DUMMY_BEGIN, "begin");
-	CaseReturn(DummyType::DUMMY_IF, "if");
-	CaseReturn(DummyType::DUMMY_WHEN, "when");
-	CaseReturn(DummyType::DUMMY_UNLESS, "unless");
-	CaseReturn(DummyType::DUMMY_LAMBDA, "lambda");
-	CaseReturn(DummyType::DUMMY_APPLY, "apply");
-	CaseReturn(DummyType::DUMMY_DISPLAY, "display");
-	CaseReturn(DummyType::DUMMY_LIST, "list");
-	CaseReturn(DummyType::DUMMY_LIST_MARK, "list?");
-	CaseReturn(DummyType::DUMMY_NULL_MARK, "null?");
-	CaseReturn(DummyType::DUMMY_EQUAL_MARK, "equal?");
-	CaseReturn(DummyType::DUMMY_EQUAL, "=");
-	CaseReturn(DummyType::DUMMY_LESS, "<");
-	CaseReturn(DummyType::DUMMY_LESS_EQUAL, "<=");
-	CaseReturn(DummyType::DUMMY_BIG, ">");
-	CaseReturn(DummyType::DUMMY_BIG_EQUAL, ">=");
-	CaseReturn(DummyType::DUMMY_LENGTH, "lenght");
-	}
-	Error("unexpected type %d", type);
-	return "";	
-}
-
-#define CompareReturn(symbol, str, type) if (0 == symbol.compare(str)) return type
-
-DummyType DummyValue::getStrType(const std::string& symbol)
-{
-	CompareReturn(symbol, "+", DummyType::DUMMY_PLUS);
-	CompareReturn(symbol, "-", DummyType::DUMMY_MINUS);
-	CompareReturn(symbol, "*", DummyType::DUMMY_MUL);
-	CompareReturn(symbol, "/", DummyType::DUMMY_DIVIDE);
-	CompareReturn(symbol, "define", DummyType::DUMMY_DEFINE);
-	CompareReturn(symbol, "let", DummyType::DUMMY_LET);
-	CompareReturn(symbol, "begin", DummyType::DUMMY_BEGIN);
-	CompareReturn(symbol, "if", DummyType::DUMMY_IF);
-	CompareReturn(symbol, "when", DummyType::DUMMY_WHEN);
-	CompareReturn(symbol, "unless", DummyType::DUMMY_UNLESS);
-	CompareReturn(symbol, "lambda", DummyType::DUMMY_LAMBDA);
-	CompareReturn(symbol, "apply", DummyType::DUMMY_APPLY);
-	CompareReturn(symbol, "display", DummyType::DUMMY_DISPLAY);
-	CompareReturn(symbol, "list", DummyType::DUMMY_LIST);
-	CompareReturn(symbol, "list?", DummyType::DUMMY_LIST_MARK);
-	CompareReturn(symbol, "null?", DummyType::DUMMY_NULL_MARK);
-	CompareReturn(symbol, "equal?", DummyType::DUMMY_EQUAL_MARK);
-	CompareReturn(symbol, "length", DummyType::DUMMY_LENGTH);
-	CompareReturn(symbol, "=", DummyType::DUMMY_EQUAL);
-	CompareReturn(symbol, "<", DummyType::DUMMY_LESS);
-	CompareReturn(symbol, "<=", DummyType::DUMMY_LESS_EQUAL);
-	CompareReturn(symbol, ">", DummyType::DUMMY_BIG);
-	CompareReturn(symbol, ">=", DummyType::DUMMY_BIG_EQUAL);	
-	
-	return DummyType::DUMMY_MAX;
-}
-
-#define CaseReturnValue(type, op, list) case type: return DummyCore:: op(list);
-
-#define CaseReturnValueTypeList(type, list, num) \
-case type: {return DummyCore::OpConstructTypeList(type, list, num);}
-
 DummyValuePtr DummyValue::create(DummyValueList& list)
 {
+#define CompareReturn(str, type, num)																		\
+	if (0 == symbol.compare(str))																					\
+		return DummyCore::OpConstructTypeList(str, type, DummyValueList(list.begin()+1, list.end()), num); 
+	
+#define CompareReturnValue(str, op) \
+	if (0 == symbol.compare(str)) return DummyCore:: op(list);
+
 	DummyValuePtr front = list.front();
 	if (front->isSymbol()) {
-		std::string symbol = front->getSymbol();	
-		DummyType type = getStrType(symbol);
-		switch(type) {
-		CaseReturnValueTypeList(DummyType::DUMMY_PLUS, DummyValueList(list.begin()+1, list.end()), 1);
-		CaseReturnValueTypeList(DummyType::DUMMY_MINUS, DummyValueList(list.begin()+1, list.end()), 2);
-		CaseReturnValueTypeList(DummyType::DUMMY_MUL, DummyValueList(list.begin()+1, list.end()), 2);
-		CaseReturnValueTypeList(DummyType::DUMMY_DIVIDE, DummyValueList(list.begin()+1, list.end()), 2);
-		CaseReturnValueTypeList(DummyType::DUMMY_BEGIN, DummyValueList(list.begin()+1, list.end()), 1);	
-		CaseReturnValueTypeList(DummyType::DUMMY_IF, DummyValueList(list.begin()+1, list.end()), 2);
-		CaseReturnValueTypeList(DummyType::DUMMY_WHEN, DummyValueList(list.begin()+1, list.end()), 2);
-		CaseReturnValueTypeList(DummyType::DUMMY_UNLESS, DummyValueList(list.begin()+1, list.end()), 2);	
-		CaseReturnValueTypeList(DummyType::DUMMY_DISPLAY, DummyValueList(list.begin()+1, list.end()), 1);
-		CaseReturnValueTypeList(DummyType::DUMMY_LIST, DummyValueList(list.begin()+1, list.end()), 0);
-		CaseReturnValueTypeList(DummyType::DUMMY_LIST_MARK, DummyValueList(list.begin()+1, list.end()), 1);
-		CaseReturnValueTypeList(DummyType::DUMMY_NULL_MARK, DummyValueList(list.begin()+1, list.end()), 1);
-		CaseReturnValueTypeList(DummyType::DUMMY_EQUAL_MARK, DummyValueList(list.begin()+1, list.end()), 2);
-		CaseReturnValueTypeList(DummyType::DUMMY_EQUAL, DummyValueList(list.begin()+1, list.end()), 2);
-		CaseReturnValueTypeList(DummyType::DUMMY_LESS, DummyValueList(list.begin()+1, list.end()), 2);
-		CaseReturnValueTypeList(DummyType::DUMMY_LESS_EQUAL, DummyValueList(list.begin()+1, list.end()), 2);
-		CaseReturnValueTypeList(DummyType::DUMMY_BIG, DummyValueList(list.begin()+1, list.end()), 2);
-		CaseReturnValueTypeList(DummyType::DUMMY_BIG_EQUAL, DummyValueList(list.begin()+1, list.end()), 2);
-		CaseReturnValueTypeList(DummyType::DUMMY_LENGTH, DummyValueList(list.begin()+1, list.end()), 1);
+		std::string symbol = front->getSymbol();
 		
-		CaseReturnValue(DummyType::DUMMY_DEFINE, OpConstructDefine, list);
-		CaseReturnValue(DummyType::DUMMY_LET, OpConstructLet, list);
-		CaseReturnValue(DummyType::DUMMY_LAMBDA, OpConstructLambda, list);
-		CaseReturnValue(DummyType::DUMMY_APPLY, OpConstructApply, list);
-
-		}
+		CompareReturnValue("define", OpConstructDefine);
+		CompareReturnValue("let", OpConstructLet);
+		CompareReturnValue("lambda", OpConstructLambda);
+		CompareReturnValue("apply", OpConstructApply);
+		
+		CompareReturn("+", DummyType::DUMMY_PLUS, 1);
+		CompareReturn("-", DummyType::DUMMY_MINUS, 2);
+		CompareReturn("*", DummyType::DUMMY_MUL, 2);
+		CompareReturn("/", DummyType::DUMMY_DIVIDE, 2);
+		CompareReturn("let", DummyType::DUMMY_LET, 2);
+		CompareReturn("begin", DummyType::DUMMY_BEGIN, 1);
+		CompareReturn("if", DummyType::DUMMY_IF, 2);
+		CompareReturn("when", DummyType::DUMMY_WHEN, 2);
+		CompareReturn("unless", DummyType::DUMMY_UNLESS, 2);
+		CompareReturn("display", DummyType::DUMMY_DISPLAY, 1);
+		CompareReturn("list", DummyType::DUMMY_LIST, 0);
+		CompareReturn("list?", DummyType::DUMMY_LIST_MARK, 1);
+		CompareReturn("null?", DummyType::DUMMY_NULL_MARK, 1);
+		CompareReturn("equal?", DummyType::DUMMY_EQUAL_MARK, 2);
+		CompareReturn("length", DummyType::DUMMY_LENGTH, 1);
+		CompareReturn("=", DummyType::DUMMY_EQUAL, 2);
+		CompareReturn("<", DummyType::DUMMY_LESS, 2);
+		CompareReturn("<=", DummyType::DUMMY_LESS_EQUAL, 2);
+		CompareReturn(">", DummyType::DUMMY_BIG, 2);
+		CompareReturn(">=", DummyType::DUMMY_BIG_EQUAL, 2);
 		
 		// (let ((c 2)) c)
 		//	Error("unexpected type %d", type);	

@@ -320,7 +320,7 @@ DummyValuePtr DummyCore::OpEvalList(DummyValuePtr value, DummyEnvPtr env)
 		evalList.push_back((*itr)->eval(env));
 	}
 	
-	return DummyValuePtr(new DummyValue(DummyType::DUMMY_LIST, evalList));		
+	return DummyValuePtr(new DummyValue("list", DummyType::DUMMY_LIST, evalList));		
 }
 
 /*
@@ -511,13 +511,13 @@ DummyValuePtr DummyCore::OpEvalLength(DummyValuePtr value, DummyEnvPtr env)
 /*
 	for simple
  */
-DummyValuePtr DummyCore::OpConstructTypeList(DummyType type, DummyValueList list, int paraLenMin)
+DummyValuePtr DummyCore::OpConstructTypeList(const char* typeStr, DummyType type, DummyValueList list, int paraLenMin)
 {
 	if (paraLenMin > 0) {
 		AssertDummyValueList(list.size() >= paraLenMin, "", list);	
 	}
 
-	return DummyValuePtr(new DummyValue(type, list));
+	return DummyValuePtr(new DummyValue(typeStr, type, list));
 }
 
 /*
@@ -532,7 +532,7 @@ DummyValuePtr DummyCore::OpConstructDefine(DummyValueList& list)
 	DummyValuePtr second = *(list.begin() + 1);
 	AssertDummyValueList(second->isSymbol() || second->isList(), "second must be a symbol or list", list);
 
-	return DummyValuePtr(new DummyValue(DummyType::DUMMY_DEFINE, DummyValueList(list.begin()+1, list.end())));
+	return DummyValuePtr(new DummyValue("define", DummyType::DUMMY_DEFINE, DummyValueList(list.begin()+1, list.end())));
 }
 
 /*
@@ -554,7 +554,7 @@ DummyValuePtr DummyCore::OpConstructLet(DummyValueList& list)
 		AssertDummyValueList(varList.front()->isSymbol(), "symbol first must be symbol", varList);
 	}
 
-	return DummyValuePtr(new DummyValue(DummyType::DUMMY_LET, DummyValueList(list.begin()+1, list.end())));
+	return DummyValuePtr(new DummyValue("let", DummyType::DUMMY_LET, DummyValueList(list.begin()+1, list.end())));
 }
 
 /*
@@ -591,5 +591,5 @@ DummyValuePtr DummyCore::OpConstructApply(DummyValueList& list)
 	}
 	// first maybe the lambda
 
-	return DummyValuePtr(new DummyValue(DummyType::DUMMY_APPLY, DummyValueList(itr, list.end())));
+	return DummyValuePtr(new DummyValue("apply", DummyType::DUMMY_APPLY, DummyValueList(itr, list.end())));
 }
