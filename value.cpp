@@ -216,11 +216,6 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	CaseReturnEval(DummyType::DUMMY_MUL, OpEvalMul);
 	CaseReturnEval(DummyType::DUMMY_DIVIDE, OpEvalDivide);
 	CaseReturnEval(DummyType::DUMMY_DEFINE, OpEvalDefine);
-	CaseReturnEval(DummyType::DUMMY_LET, OpEvalLet);
-	CaseReturnEval(DummyType::DUMMY_BEGIN, OpEvalBegin);
-	CaseReturnEval(DummyType::DUMMY_IF, OpEvalIf);
-	CaseReturnEval(DummyType::DUMMY_WHEN, OpEvalWhen);
-	CaseReturnEval(DummyType::DUMMY_UNLESS, OpEvalUnless);
 	CaseReturnEval(DummyType::DUMMY_APPLY, OpEvalApply);
 	CaseReturnEval(DummyType::DUMMY_DISPLAY, OpEvalDisplay);
 	CaseReturnEval(DummyType::DUMMY_LIST, OpEvalList);

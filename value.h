@@ -47,6 +47,8 @@ public:
 	
 	bool isSame(const std::string& sym) { return 0 == strOrSymOrBind[0].compare(sym); }
 	bool isNilValue() { return isNil() || isFalse(); }
+	bool isTrueValue() { return !isNilValue(); }
+	bool isFalseValue() { return isNilValue(); }
 	
 	DummyType getType() { return type; }
 	const char* getTypeStr() { return basic.typeStr; }

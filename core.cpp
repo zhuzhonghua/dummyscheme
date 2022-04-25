@@ -5,6 +5,114 @@
 
 using namespace DummyScheme;
 
+/*
+	Ö´ÐÐÒ»¸öAST
+ */
+DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
+{
+	while (true) {
+		DummyType astType = ast->getType();
+		switch (astType) {
+		case DummyType::DUMMY_LET:{
+			// (let ((c 2)) c)
+			// (let ((c 2) (d 3)) (+ c d) (- c d))
+			// let equals let*	
+			DummyEnvPtr letEnv(new DummyEnv(env));
+			DummyValueList letList = ast->getList();
+	
+			ConstructLetEnv(letList.front()->getList(), letEnv);
+
+			// tail call optimization
+			ast = DummyValuePtr(new DummyValue(DummyValueList(letList.begin() + 1, letList.end())));
+			env = letEnv;
+			continue;
+			break;
+		}
+		case DummyType::DUMMY_BEGIN:{
+			// tail call optimization
+			DummyValueList list = ast->getList();	
+			ast = DummyValuePtr(new DummyValue(list));	
+			// env = env
+			continue;
+			break;	
+		}
+		case DummyType::DUMMY_IF:{
+			DummyValueList list = ast->getList();
+	
+			DummyValueList::iterator itr = list.begin();		
+			DummyValuePtr condition = *itr;
+			// first check condition
+			if (condition->eval(env)->isTrueValue()) {
+				// TRUE != nil
+				if (itr + 1 != list.end()) {
+					ast = *(itr + 1);
+					// env = env;
+					continue;
+				} else {
+					return DummyValue::nil;
+				}
+			} else {
+				// if true body or if false body is the end
+				if (itr + 1 == list.end() || itr + 2 == list.end()) {
+					return DummyValue::nil;
+				} else {
+					// tail call optimization
+					ast = DummyValuePtr(new DummyValue(DummyValueList(itr+2, list.end())));	
+					// env = env;
+					continue;
+				}
+			}
+			break;
+		}
+		case DummyType::DUMMY_WHEN:
+		case DummyType::DUMMY_UNLESS: {
+			DummyValueList list = ast->getList();
+			DummyValueList::iterator itr = list.begin();
+			DummyValuePtr condition = *itr;	
+			// first check condition
+			bool flag = false;
+			if (astType == DummyType::DUMMY_WHEN) flag = condition->eval(env)->isTrueValue();
+			else if (astType == DummyType::DUMMY_UNLESS) flag = condition->eval(env)->isFalseValue();
+			
+			if (flag) {
+				if (itr + 1 == list.end()) {
+					return DummyValue::nil;
+				} else {
+					// tail call optimization
+					ast = DummyValuePtr(new DummyValue(DummyValueList(itr+1, list.end())));
+					// env = env;	
+					continue;
+				}
+			} else {
+				return DummyValue::nil;
+			}
+			break;
+		}
+		default:
+			return ast->eval(env);
+			break;
+		}
+	}
+
+	return DummyValue::nil;
+}
+
+/*
+	((a 2)
+	 (b 3))
+ */
+void DummyCore::ConstructLetEnv(DummyValueList varList, DummyEnvPtr letEnv)
+{
+	DummyValueList::iterator varItr = varList.begin();	
+	for (; varItr != varList.end(); ++varItr) {
+		DummyValueList varList = (*varItr)->getList();
+
+		DummyValuePtr symbol = varList[0];
+		DummyValuePtr value = varList[1];
+		letEnv->set(symbol->getSymbol(), value->eval(letEnv));
+	}	
+}
+
 bool DummyCore::isEqual(const std::string& first, const DummyValuePtr& second)
 {
 	AssertDummyValue(second->isSymbol(), "compare must be a symbol", second);
@@ -118,135 +226,6 @@ DummyValuePtr DummyCore::OpEvalDefine(DummyValuePtr value, DummyEnvPtr env)
 	env->set(symbol->getSymbol(), symbolValue);
 
 	return symbolValue;
-}
-
-/*
-	(let ((c 2)) c)
-	(let ((c 2) (d 3)) (+ c d))
-	let equals let*
- */
-DummyValuePtr DummyCore::OpEvalLet(DummyValuePtr value, DummyEnvPtr env)
-{
-	DummyEnvPtr letEnv(new DummyEnv(env));
-	
-	DummyValueList letList = value->getList(); 
-	
-	DummyValueList::iterator letItr = letList.begin();	
-	// first is the all the variables
-	// first is a list
-	DummyValuePtr vars = *letItr;
-
-	DummyValueList varList = vars->getList();
-	DummyValueList::iterator varItr = varList.begin();	
-	for (; varItr != varList.end(); ++varItr) {
-		DummyValuePtr var = *varItr;
-		DummyValueList varList = var->getList();
-
-		DummyValuePtr symbol = varList[0];
-		DummyValuePtr value = varList[1];
-		letEnv->set(symbol->getSymbol(), value->eval(letEnv));
-	}
-
-	// exec the let body
-	DummyValuePtr retValue = DummyValue::nil;
-	for (letItr++; letItr != letList.end(); letItr++) {
-		retValue = (*letItr)->eval(letEnv);
-	}
-
-	return retValue;
-}
-
-/*
-	(begin a b c)
- */
-DummyValuePtr DummyCore::OpEvalBegin(DummyValuePtr value, DummyEnvPtr env)
-{
-	DummyValueList list = value->getList();
-	
-	DummyValueList::iterator itr = list.begin();		
-	// exec the begin body
-	DummyValuePtr retValue = DummyValue::nil;
-	for (; itr != list.end(); itr++) {
-		retValue = (*itr)->eval(env);
-	}
-
-	return retValue;
-}
-
-/*
-	(if true 1 2)
-	(if true 1 2 3)
- */
-DummyValuePtr DummyCore::OpEvalIf(DummyValuePtr value, DummyEnvPtr env)
-{
-	DummyValueList list = value->getList();
-	
-	DummyValueList::iterator itr = list.begin();		
-	DummyValuePtr condition = *itr;
-	DummyValuePtr ifTrueBody = *(++itr);
-	
-	DummyValuePtr retValue = DummyValue::nil;
-
-	// first check condition
-	if (!condition->eval(env)->isNilValue()) {
-		// TRUE != nil
-		retValue = ifTrueBody->eval(env);
-	} else {
-		// Exec other values
-		for (itr++; itr != list.end(); itr++) {
-			retValue = (*itr)->eval(env);
-		}
-	}
-
-	return retValue;
-}
-
-/*
-	(when true 1 2)
-	(when nil 1 2 3)
- */
-DummyValuePtr DummyCore::OpEvalWhen(DummyValuePtr value, DummyEnvPtr env)
-{
-	DummyValueList list = value->getList();
-	
-	DummyValueList::iterator itr = list.begin();		
-	DummyValuePtr condition = *itr;
-	
-	DummyValuePtr retValue = DummyValue::nil;
-
-	// first check condition
-	if (!condition->eval(env)->isNilValue()) {
-		// Exec other values
-		for (itr++; itr != list.end(); itr++) {
-			retValue = (*itr)->eval(env);
-		}
-	}
-
-	return retValue;
-}
-
-/*
-	(unless true 1 2)
-	(unless nil 1 2 3)
- */
-DummyValuePtr DummyCore::OpEvalUnless(DummyValuePtr value, DummyEnvPtr env)
-{
-	DummyValueList list = value->getList();
-	
-	DummyValueList::iterator itr = list.begin();		
-	DummyValuePtr condition = *itr;
-	
-	DummyValuePtr retValue = DummyValue::nil;
-
-	// first check condition
-	if (condition->eval(env)->isNilValue()) {
-		// Exec other values
-		for (itr++; itr != list.end(); itr++) {
-			retValue = (*itr)->eval(env);
-		}
-	}
-
-	return retValue;
 }
 
 /*
