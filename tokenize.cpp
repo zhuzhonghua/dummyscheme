@@ -1,6 +1,7 @@
 #include "tokenize.h"
 #include "env.h"
 #include "value.h"
+#include "core.h"
 
 using namespace DummyScheme;
 
@@ -23,7 +24,7 @@ void Tokenize::run(DummyEnvPtr env)
 	DummyValuePtr val = readP();
 	Print("%s\n", val->toString().c_str());
 		
-	DummyValuePtr evalVal = val->eval(env);
+	DummyValuePtr evalVal = DummyCore::Eval(val, env);
 	Print("%s\n", evalVal->toString().c_str());
 }
 
