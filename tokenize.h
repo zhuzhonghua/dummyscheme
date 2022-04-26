@@ -25,7 +25,7 @@ protected:
 public:
 	Tokenize(const std::string &input);
 	void init(const std::string &input);
-	void run(DummyEnvPtr env);
+	DummyValuePtr run(DummyEnvPtr env);
 protected:
 	DummyValuePtr readP();
 	DummyValuePtr readList();

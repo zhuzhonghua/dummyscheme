@@ -153,13 +153,16 @@ std::string DummyValue::toString()
 /*
 	(equal? a b)
  */
-bool DummyValue::equal(DummyValuePtr other, DummyEnvPtr env)
+bool DummyValue::isEqualValue(DummyValuePtr other, DummyEnvPtr env)
 {
 	if (other == this) {
 		return true;
-	}	
+	}
 	
 	if(this->type != other->type) {
+		if ((this->isNil() || this->isFalse()) && (other->isNil() || other->isFalse())) {
+			return true;
+		}
 		return false;
 	}
 
@@ -181,7 +184,7 @@ bool DummyValue::equal(DummyValuePtr other, DummyEnvPtr env)
 		for (; aItr != a.end() && bItr != b.end(); ++aItr, ++bItr) {
 			DummyValuePtr aEvalValue = (*aItr)->eval(env);
 			DummyValuePtr bEvalValue = (*bItr)->eval(env);
-			if (!aEvalValue->equal(bEvalValue, env)) {
+			if (!aEvalValue->isEqualValue(bEvalValue, env)) {
 				return false;
 			}
 		}
@@ -223,6 +226,7 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	CaseReturnEval(DummyType::DUMMY_NULL_MARK, OpEvalNullMark);
 	CaseReturnEval(DummyType::DUMMY_EQUAL_MARK, OpEvalEqualMark);
 	CaseReturnEval(DummyType::DUMMY_EQUAL, OpEvalEqual);
+	CaseReturnEval(DummyType::DUMMY_NOT, OpEvalNot);
 	CaseReturnEval(DummyType::DUMMY_LESS, OpEvalLess);
 	CaseReturnEval(DummyType::DUMMY_LESS_EQUAL, OpEvalLessEqual);
 	CaseReturnEval(DummyType::DUMMY_BIG, OpEvalBig);
@@ -269,6 +273,7 @@ DummyValuePtr DummyValue::create(DummyValueList& list)
 		CompareReturn("equal?", DummyType::DUMMY_EQUAL_MARK, 2);
 		CompareReturn("length", DummyType::DUMMY_LENGTH, 1);
 		CompareReturn("=", DummyType::DUMMY_EQUAL, 2);
+		CompareReturn("not", DummyType::DUMMY_NOT, 1);
 		CompareReturn("<", DummyType::DUMMY_LESS, 2);
 		CompareReturn("<=", DummyType::DUMMY_LESS_EQUAL, 2);
 		CompareReturn(">", DummyType::DUMMY_BIG, 2);

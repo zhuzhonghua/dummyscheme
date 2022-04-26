@@ -23,7 +23,9 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 			ConstructLetEnv(letList.front()->getList(), letEnv);
 
 			// tail call optimization
-			ast = DummyValuePtr(new DummyValue(DummyValueList(letList.begin() + 1, letList.end())));
+			ast = DummyValuePtr(new DummyValue("begin",
+																				 DummyType::DUMMY_BEGIN,
+																				 DummyValueList(letList.begin() + 1, letList.end())));
 			env = letEnv;
 			continue;
 			break;
@@ -31,9 +33,16 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 		case DummyType::DUMMY_BEGIN:{
 			// tail call optimization
 			DummyValueList list = ast->getList();	
-			ast = DummyValuePtr(new DummyValue(list));	
-			// env = env
-			continue;
+			DummyValuePtr ret = list.front()->eval(env);
+			if (list.begin() + 1 == list.end()) {
+				return ret;
+			} else {
+				ast = DummyValuePtr(new DummyValue("begin",
+																					 DummyType::DUMMY_BEGIN,
+																					 DummyValueList(list.begin() + 1, list.end())));	
+				// env = env
+				continue;
+			}
 			break;	
 		}
 		case DummyType::DUMMY_IF:{
@@ -57,8 +66,10 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 					return DummyValue::nil;
 				} else {
 					// tail call optimization
-					ast = DummyValuePtr(new DummyValue(DummyValueList(itr+2, list.end())));	
-					// env = env;
+					ast = DummyValuePtr(new DummyValue("begin",
+																						 DummyType::DUMMY_BEGIN,
+																						 DummyValueList(itr+2, list.end())));	
+					// env = env
 					continue;
 				}
 			}
@@ -79,7 +90,9 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 					return DummyValue::nil;
 				} else {
 					// tail call optimization
-					ast = DummyValuePtr(new DummyValue(DummyValueList(itr+1, list.end())));
+					ast = DummyValuePtr(new DummyValue("begin",
+																						 DummyType::DUMMY_BEGIN,
+																						 DummyValueList(itr+1, list.end())));
 					// env = env;	
 					continue;
 				}
@@ -105,10 +118,10 @@ void DummyCore::ConstructLetEnv(DummyValueList varList, DummyEnvPtr letEnv)
 {
 	DummyValueList::iterator varItr = varList.begin();	
 	for (; varItr != varList.end(); ++varItr) {
-		DummyValueList varList = (*varItr)->getList();
+		DummyValueList symbolValue = (*varItr)->getList();
 
-		DummyValuePtr symbol = varList[0];
-		DummyValuePtr value = varList[1];
+		DummyValuePtr symbol = symbolValue[0];
+		DummyValuePtr value = symbolValue[1];
 		letEnv->set(symbol->getSymbol(), value->eval(letEnv));
 	}	
 }
@@ -359,7 +372,26 @@ DummyValuePtr DummyCore::OpEvalEqualMark(DummyValuePtr value, DummyEnvPtr env)
 	DummyValueList::iterator itr = list.begin();		
 	DummyValuePtr first = *itr;
 	for (++itr; itr != list.end(); itr++) {
-		if (!first->equal(*itr, env)) {
+		if (!first->isEqualValue(*itr, env)) {
+			return DummyValue::nil;
+		}
+	}
+	
+	return DummyValue::t;	
+}
+
+
+/*
+	(not nil #f)
+ */
+DummyValuePtr DummyCore::OpEvalNot(DummyValuePtr value, DummyEnvPtr env)
+{
+	DummyValueList list = value->getList();
+	
+	DummyValueList::iterator itr = list.begin();		
+	for (; itr != list.end(); itr++) {
+		DummyValuePtr eval = (*itr)->eval(env);
+		if (eval != DummyValue::nil && eval != DummyValue::f) {
 			return DummyValue::nil;
 		}
 	}
@@ -412,19 +444,21 @@ DummyValuePtr DummyCore::OpEvalLess(DummyValuePtr value, DummyEnvPtr env)
 
 /*
 	(<= 1 2 3 4 4)
+	(<= 1 2 5 4 4)
  */
 DummyValuePtr DummyCore::OpEvalLessEqual(DummyValuePtr value, DummyEnvPtr env)
 {
 	DummyValueList list = value->getList();
 	
 	DummyValueList::iterator itr = list.begin();		
-	DummyValuePtr first = *itr;
-	int firstInt = first->getInt(env);
+	int firstInt = (*itr)->getInt(env);
 	for (++itr; itr != list.end(); itr++) {
 		DummyValuePtr evalVal = (*itr)->eval(env);
 		int evalInt = evalVal->getInt(env);
 		if (firstInt > evalInt) {
 			return DummyValue::nil;
+		} else {
+			firstInt = evalInt;
 		}
 	}
 	
@@ -439,13 +473,14 @@ DummyValuePtr DummyCore::OpEvalBig(DummyValuePtr value, DummyEnvPtr env)
 	DummyValueList list = value->getList();
 	
 	DummyValueList::iterator itr = list.begin();		
-	DummyValuePtr first = *itr;
-	int firstInt = first->getInt(env);
+	int firstInt = (*itr)->getInt(env);
 	for (++itr; itr != list.end(); itr++) {
 		DummyValuePtr evalVal = (*itr)->eval(env);
 		int evalInt = evalVal->getInt(env);
 		if (firstInt <= evalInt) {
 			return DummyValue::nil;
+		} else {
+			firstInt = evalInt;
 		}
 	}
 	
@@ -460,13 +495,14 @@ DummyValuePtr DummyCore::OpEvalBigEqual(DummyValuePtr value, DummyEnvPtr env)
 	DummyValueList list = value->getList();
 	
 	DummyValueList::iterator itr = list.begin();		
-	DummyValuePtr first = *itr;
-	int firstInt = first->getInt(env);
+	int firstInt = (*itr)->getInt(env);
 	for (++itr; itr != list.end(); itr++) {
 		DummyValuePtr evalVal = (*itr)->eval(env);
 		int evalInt = evalVal->getInt(env);
 		if (firstInt < evalInt) {
 			return DummyValue::nil;
+		} else {
+			firstInt = evalInt;
 		}
 	}
 	

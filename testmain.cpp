@@ -5,6 +5,9 @@
 #include "dummyscheme.h"
 #include "tokenize.h"
 #include "env.h"
+#include "value.h"
+
+using namespace DummyScheme;
 
 typedef void (*TestFunc)();
 
@@ -16,93 +19,96 @@ void runtest(TestFunc testfunc, char* funcname)
 
 #define RUNTEST(func) runtest(func, #func)
 
+#define ISEQUAL(a, b, env) if (!a->isEqualValue(b, env)) throw "not equal";
+#define ISTOKENIZEEQUAL(t, env, b) ISEQUAL(t.run(env), b, env)
+
 void test1()
 {
 	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
 	DummyScheme::Tokenize tokenize("(define a 2)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(2)));
 	
 	tokenize.init("(+ a 3)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(5)));
 
 	tokenize.init("(+ 2 (- 3 2) 4)");
-	tokenize.run(env);	
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(7)));
 
 	tokenize.init("a");
-	tokenize.run(env);	
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(2)));
 
 	tokenize.init("(define b (+ a 2))");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(4)));
 	
 	tokenize.init("(* a b)");
-	tokenize.run(env);	
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(8)));
 }
 
 void test2()
 {
 	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
 	DummyScheme::Tokenize tokenize("(let ((c 2)) c)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(2)));
 	
 	tokenize.init("(let ((c 2) (d 3)) (* c d))");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(6)));	
 	
 	tokenize.init("(define a 4)");
-	tokenize.run(env);	
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(4)));		
 	
 	tokenize.init("(let ((c 2) (d 3)) (+ c d a))");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(9)));
 }
 
 void test3()
 {
 	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
 	DummyScheme::Tokenize tokenize("nil");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::nil);
 	
 	tokenize.init("#t");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::t);
 	
 	tokenize.init("#f");
-	tokenize.run(env);	
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::f);
 }
 
 void test4()
 {
 	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
 	DummyScheme::Tokenize tokenize("(begin (+ 2 3) (- 4 5))");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(-1)));
 }
 
 void test5()
 {
 	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
 	DummyScheme::Tokenize tokenize("(if nil 1 2)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(2)));
 	
 	tokenize.init("(if #t 1 2)");
-	tokenize.run(env);	
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(1)));
 
 	tokenize.init("(if nil 1 2 3)");
-	tokenize.run(env);		
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(3)));
 	
 	tokenize.init("(if nil 1)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::nil);
 	
 	tokenize.init("(when #t 1 2)");
-	tokenize.run(env);	
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(2)));
 	
 	tokenize.init("(when nil 1 2)");
-	tokenize.run(env);		
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::nil);
 	
 	tokenize.init("(when #f 1 2)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::nil);
 	
 	tokenize.init("(unless #f 1 2)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(2)));
 	
 	tokenize.init("(unless #t 1 2)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::nil);
 }
 
 void test6()
@@ -112,10 +118,10 @@ void test6()
 	tokenize.run(env);
 	
 	tokenize.init("((lambda (a) (+ a 2)) 4)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(6)));
 
 	tokenize.init("(apply (lambda (a) (+ a 2)) 4)");
-	tokenize.run(env);	
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(6)));
 }
 
 void test7()
@@ -138,81 +144,87 @@ void test8()
 	tokenize.run(env);
 	
 	tokenize.init("(define a 4)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(4)));
 
 	tokenize.init("(list a 3 4 5)");
 	tokenize.run(env);
 	
 	tokenize.init("(list? (list a 3 4 5))");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::t);
 
 	tokenize.init("(define b (list 4 5 6))");
 	tokenize.run(env);	
 
 	tokenize.init("(list? b (list a 3 4 5))");
-	tokenize.run(env);	
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::t);
 
 	tokenize.init("(list? nil b)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::f);
 
 	tokenize.init("(equal? 1 2)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::f);
 
 	tokenize.init("(equal? 1 1 1)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::t);
 	
 	tokenize.init("(equal? (list 1 2 3) (list 1 2 3))");
-	tokenize.run(env);	
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::t);
 
 	tokenize.init("(equal? (list 1 2 3) 1)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::f);
 }
 
 void test9()
 {
 	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
 	DummyScheme::Tokenize tokenize("(null? (list 1 2 3))");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::f);
 	
 	tokenize.init("(null? (list))");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::t);
 
 	tokenize.init("(length (list 1 2 3))");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValuePtr(new DummyValue(3)));
 }
 
 void test10()
 {
 	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
 	DummyScheme::Tokenize tokenize("(= 1 1)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::t);	
+	
+	tokenize.init("(not nil #f)");
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::t);		
+	
+	tokenize.init("(not #t)");
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::f);
 	
 	tokenize.init("(= 1 1 3)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::f);
 	
 	tokenize.init("(< 1 2 3 4 5)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::t);
 	
 	tokenize.init("(< 1 1 3 4 5)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::f);
 	
 	tokenize.init("(<= 1 2 3 4 4)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::t);
 	
 	tokenize.init("(<= 1 2 5 4 4)");
-	tokenize.run(env);		
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::f);
 
 	tokenize.init("(> 5 4 3 2 1)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::t);
 	
 	tokenize.init("(> 5 4 3 2 2)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::f);
 
 	tokenize.init("(>= 4 4 3 2 1)");
-	tokenize.run(env);
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::t);
 	
 	tokenize.init("(>= 4 4 3 2 4)");
-	tokenize.run(env);	
+	ISTOKENIZEEQUAL(tokenize, env, DummyValue::f);
 }
 
 int main()

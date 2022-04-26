@@ -19,13 +19,14 @@ void Tokenize::init(const std::string &input)
 	this->index = 0;
 }
 
-void Tokenize::run(DummyEnvPtr env)
+DummyValuePtr Tokenize::run(DummyEnvPtr env)
 {
 	DummyValuePtr val = readP();
 	Print("%s\n", val->toString().c_str());
 		
 	DummyValuePtr evalVal = DummyCore::Eval(val, env);
 	Print("%s\n", evalVal->toString().c_str());
+	return evalVal;
 }
 
 TokenType Tokenize::readToken()

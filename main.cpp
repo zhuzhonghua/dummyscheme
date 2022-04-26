@@ -5,6 +5,7 @@
 #include "dummyscheme.h"
 #include "tokenize.h"
 #include "env.h"
+#include "value.h"
 
 int read(std::string &input)
 {

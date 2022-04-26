@@ -33,7 +33,7 @@ public:
 public:
 	DummyValuePtr eval(DummyEnvPtr env);
 	std::string toString();
-	bool equal(DummyValuePtr other, DummyEnvPtr env);
+	bool isEqualValue(DummyValuePtr other, DummyEnvPtr env);
 public:
 	bool isInt() { return type == DUMMY_INT_NUM; }
 	bool isFloat() { return type == DUMMY_FLOAT_NUM; }
