@@ -32,7 +32,8 @@ DummyValuePtr Tokenize::run(DummyEnvPtr env)
 TokenType Tokenize::readToken()
 {
 	skipBlank();
-	switch(input[index])
+	char c = input[index];
+	switch(c)
 	{
 	CASE_NUM:
 		return TokenType::TOKEN_NUM;
@@ -45,12 +46,12 @@ TokenType Tokenize::readToken()
 	CASE_SYMBOL:
 		return TokenType::TOKEN_SYMBOL;
 	default:
-		if ('A' <= input[index] && input[index] <= 'Z') {
+		if ('A' <= c && c <= 'Z') {
 			return TokenType::TOKEN_SYMBOL;
-		}	else if ('a' <= input[index] && input[index] <= 'z') {
+		}	else if ('a' <= c && c <= 'z') {
 			return TokenType::TOKEN_SYMBOL;
 		} else {
-			Error("unexpected token=%c index=%d\n", input[index], index);
+			Error("unexpected token=%c index=%d\n", c, index);
 		}
 		break;
 	}
@@ -199,6 +200,7 @@ bool Tokenize::isBlank()
 	case '\t':
 	case '\n':
 	case '\r':
+	case '\0':
 		return true;
 	default:
 		return false;

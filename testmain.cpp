@@ -227,6 +227,13 @@ void test10()
 	ISTOKENIZEEQUAL(tokenize, env, DummyValue::f);
 }
 
+void test11()
+{
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
+	DummyScheme::Tokenize tokenize("(load \"testload.scm\")");
+	tokenize.run(env);
+}
+
 int main()
 {
 	try{
@@ -240,6 +247,7 @@ int main()
 		RUNTEST(test8);
 		RUNTEST(test9);
 		RUNTEST(test10);
+		RUNTEST(test11);
 
 		printf("test all success");
 	}

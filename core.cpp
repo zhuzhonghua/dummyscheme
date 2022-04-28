@@ -534,19 +534,19 @@ DummyValuePtr DummyCore::OpEvalLoad(DummyValuePtr value, DummyEnvPtr env)
 	DummyValueList::iterator itr = list.begin();	
 	for (; itr != list.end(); ++itr) {
 		DummyValuePtr fileValue = *itr;
-		FILE* file = fopen(fileValue->getStr().c_str(), "r");
+		FILE* file = fopen(fileValue->getStr().c_str(), "rb");
 		Assert(file != NULL, "file not found");
 		
 		fseek(file, 0, SEEK_END);
 		int size = ftell(file);
+		fseek(file, 0, SEEK_SET);
 		std::string content;
 		content.resize(size+1);
-		fseek(file, 0, SEEK_SET);
 		fread((void*)content.data(), 1, size, file);
-		
-		std::stringstream toEval;	
-		toEval << "(begin " << content << ")";
-		
+		content[size] =  '\0';
+
+		std::stringstream toEval;
+		toEval << "(begin " << content << "  )";
 		Tokenize tokenize(toEval.str());
 		tokenize.run(env);
 		// TODO: check exception
