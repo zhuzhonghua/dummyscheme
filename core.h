@@ -37,5 +37,6 @@ public:
 	static DummyValuePtr OpEvalBig(DummyValuePtr value, DummyEnvPtr env);
 	static DummyValuePtr OpEvalBigEqual(DummyValuePtr value, DummyEnvPtr env);
 	static DummyValuePtr OpEvalLength(DummyValuePtr value, DummyEnvPtr env);
+	static DummyValuePtr OpEvalLoad(DummyValuePtr value, DummyEnvPtr env);
 };
 };

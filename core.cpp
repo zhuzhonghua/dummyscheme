@@ -2,6 +2,7 @@
 #include "dummyscheme.h"
 #include "value.h"
 #include "env.h"
+#include "tokenize.h"
 
 using namespace DummyScheme;
 
@@ -521,6 +522,38 @@ DummyValuePtr DummyCore::OpEvalLength(DummyValuePtr value, DummyEnvPtr env)
 	} else {
 		return DummyValue::nil;
 	}
+}
+
+/*
+	(load "test.scm")
+ */
+DummyValuePtr DummyCore::OpEvalLoad(DummyValuePtr value, DummyEnvPtr env)
+{
+	DummyValueList list = value->getList();	
+	// TODO: use a filetype dummyvalue dynamicaly read file content
+	DummyValueList::iterator itr = list.begin();	
+	for (; itr != list.end(); ++itr) {
+		DummyValuePtr fileValue = *itr;
+		FILE* file = fopen(fileValue->getStr().c_str(), "r");
+		Assert(file != NULL, "file not found");
+		
+		fseek(file, 0, SEEK_END);
+		int size = ftell(file);
+		std::string content;
+		content.resize(size+1);
+		fseek(file, 0, SEEK_SET);
+		fread((void*)content.data(), 1, size, file);
+		
+		std::stringstream toEval;	
+		toEval << "(begin " << content << ")";
+		
+		Tokenize tokenize(toEval.str());
+		tokenize.run(env);
+		// TODO: check exception
+		// check re open same file
+		fclose(file);
+	}
+	return DummyValue::nil;
 }
 
 /*

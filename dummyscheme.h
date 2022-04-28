@@ -4,6 +4,7 @@
 #include <sstream>
 #include <vector>
 #include <map>
+#include <cstdio>
 
 #include "refcount.h"
 #include "util.h"
