@@ -214,6 +214,11 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	case DummyType::DUMMY_SYMBOL:{
 		return env->get(strOrSymOrBind[0]);
 	}
+	case DummyType::DUMMY_QUOTE:
+		// (quote abc)
+		// (quote (1 2 3))
+		return list.front();
+		
 	CaseReturnEval(DummyType::DUMMY_PLUS, OpEvalPlus);
 	CaseReturnEval(DummyType::DUMMY_MINUS, OpEvalMinus);
 	CaseReturnEval(DummyType::DUMMY_MUL, OpEvalMul);
@@ -280,6 +285,7 @@ DummyValuePtr DummyValue::create(DummyValueList& list)
 		CompareReturn(">", DummyType::DUMMY_BIG, 2);
 		CompareReturn(">=", DummyType::DUMMY_BIG_EQUAL, 2);
 		CompareReturn("load", DummyType::DUMMY_LOAD, 1);
+		CompareReturn("quote", DummyType::DUMMY_LOAD, 1);
 		
 		// (let ((c 2)) c)
 		//	Error("unexpected type %d", type);	
