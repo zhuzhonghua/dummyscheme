@@ -285,7 +285,7 @@ DummyValuePtr DummyValue::create(DummyValueList& list)
 		CompareReturn(">", DummyType::DUMMY_BIG, 2);
 		CompareReturn(">=", DummyType::DUMMY_BIG_EQUAL, 2);
 		CompareReturn("load", DummyType::DUMMY_LOAD, 1);
-		CompareReturn("quote", DummyType::DUMMY_LOAD, 1);
+		CompareReturn("quote", DummyType::DUMMY_QUOTE, 1);
 		
 		// (let ((c 2)) c)
 		//	Error("unexpected type %d", type);	

@@ -234,6 +234,22 @@ void test11()
 	tokenize.run(env);
 }
 
+void test12()
+{
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
+	DummyScheme::Tokenize tokenize("(quote abc)");
+	tokenize.run(env);
+
+	tokenize.init("(quote (1 2 3))");
+	tokenize.run(env);	
+
+	tokenize.init("'abc");
+	tokenize.run(env);	
+	
+	tokenize.init("'(1 2 3)");
+	tokenize.run(env);
+}
+
 int main()
 {
 	try{
@@ -248,6 +264,7 @@ int main()
 		RUNTEST(test9);
 		RUNTEST(test10);
 		RUNTEST(test11);
+		RUNTEST(test12);
 
 		printf("test all success");
 	}

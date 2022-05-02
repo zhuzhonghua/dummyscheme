@@ -6,7 +6,7 @@
 using namespace DummyScheme;
 
 #define CASE_NUM case '0':case '1':case '2':case '3':case '4':case '5':case '6':case '7':case '8':case '9'
-#define CASE_SYMBOL case '+':case '-':case '*':case '/':case '#':case '?':case '>':case '=':case '<':case '\''
+#define CASE_SYMBOL case '+':case '-':case '*':case '/':case '#':case '?':case '>':case '=':case '<'
 
 Tokenize::Tokenize(const std::string &input)
 {
@@ -44,6 +44,8 @@ TokenType Tokenize::readToken()
 		return TokenType::TOKEN_LEFT_PAREN;
 	case ')':
 		return TokenType::TOKEN_RIGHT_PAREN;	
+	case '\'':
+		return TokenType::TOKEN_QUOTE;
 	CASE_SYMBOL:
 		return TokenType::TOKEN_SYMBOL;
 	default:
@@ -78,7 +80,18 @@ DummyValuePtr Tokenize::readP()
 	case TokenType::TOKEN_SYMBOL:
 		return readSymbol();
 		break;	
-	case TokenType::TOKEN_LEFT_PAREN:{	
+	case TokenType::TOKEN_QUOTE:{
+		// TODO: how to detect this error ' abc	
+		DummyValueList list;
+		list.push_back(DummyValuePtr(new DummyValue(DummyType::DUMMY_SYMBOL, "quote")));
+		index++;
+		list.push_back(readP());
+		
+		// TODO: straightly create the dummyvalue with type
+		return DummyValue::create(list);	
+		break;
+	}
+	case TokenType::TOKEN_LEFT_PAREN:{
 		index++;
 		DummyValuePtr curValue(readList());
 		TokenType token = readToken();
@@ -222,38 +235,23 @@ void Tokenize::skipBlank()
 
 DummyValuePtr Tokenize::readSymbol()
 {
-	char c = input[index];
-	switch(c)
-	{
-	case '\'':{
-		// TODO: how to detect this error ' abc
-		DummyValueList list;
-		list.push_back(DummyValuePtr((new DummyValue(DummyType::DUMMY_STRING, "quote"))));
-		index++;
-		list.push_back(readP());
-		
-		return DummyValue::create(list);
+	std::stringstream symbol;
+	while(index < input.length() && !isBlank()) {
+		char c = input[index];
+		if (c == ')')
+			break;
+		// TODO: other wrong character
+		symbol << input[index++];	
 	}
-	default:{
-		std::stringstream symbol;
-		while(index < input.length() && !isBlank()) {
-			char c = input[index];
-			if (c == ')')
-				break;
-			// TODO: other wrong character
-			symbol << input[index++];	
-		}
 
-		std::string symStr = symbol.str();
-		if (DummyValue::nil->isSame(symStr)) {
-			return DummyValue::nil;
-		} else if (DummyValue::t->isSame(symStr)) {
-			return DummyValue::t;
-		} else if (DummyValue::f->isSame(symStr)) {
-			return DummyValue::f;
-		} else {
-			return DummyValuePtr(new DummyValue(DummyType::DUMMY_SYMBOL, symStr));
-		}	
+	std::string symStr = symbol.str();
+	if (DummyValue::nil->isSame(symStr)) {
+		return DummyValue::nil;
+	} else if (DummyValue::t->isSame(symStr)) {
+		return DummyValue::t;
+	} else if (DummyValue::f->isSame(symStr)) {
+		return DummyValue::f;
+	} else {
+		return DummyValuePtr(new DummyValue(DummyType::DUMMY_SYMBOL, symStr));
 	}	
-	}
 }

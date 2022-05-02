@@ -11,6 +11,7 @@ enum TokenType{
 	TOKEN_LEFT_PAREN,
 	TOKEN_RIGHT_PAREN,
 	TOKEN_SYMBOL,
+	TOKEN_QUOTE,
 };
 
 /*
