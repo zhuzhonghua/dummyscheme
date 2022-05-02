@@ -268,8 +268,8 @@ int main()
 
 		printf("test all success");
 	}
-	catch(const char* excep) {
-		printf(excep);
+	catch(std::string &excep) {
+		printf(excep.c_str());
 
 		printf("test failed");
 		char c;

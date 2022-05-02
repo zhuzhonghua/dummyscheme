@@ -2,11 +2,16 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 namespace DummyScheme {
 	
-#define Error(...) errorThrow("%s\n %s:%d Function: %s", ##__VA_ARGS__, __FILE__, __LINE__, __FUNCTION__)
+//#define STR(s) #s
+#define FILE_LINE_FUNCTION stringPrintf("[%s:%d:%s]", __FILE__, __LINE__, __FUNCTION__)
+
+//#define Error(...) errorThrow(FILE_LINE_FUNCTION, __VA_ARGS__)
+#define Error(...) throw "\nerror happended at" + FILE_LINE_FUNCTION + stringPrintf(__VA_ARGS__);
 
 #define Assert(condition, ...) do { if (!(condition)) { Error(__VA_ARGS__); } } while (0)
 
@@ -27,8 +32,10 @@ namespace DummyScheme {
 #define DummyValueCStr(ptr) ptr->toString().c_str()
 #define DummyValueSymbolCStr(ptr) ptr->getSymbol().c_str()
 
-extern void errorThrow(const char *fmt, ...);
-extern void Print(const char *fmt, ...);
+extern std::string stringPrintf(const char* fmt, ...);
+//extern void errorThrow(const char* fileLineFunc, const char *fmt, ...);
+//extern void Print(const char *fmt, ...);
+#define Print(...) printf(stringPrintf(__VA_ARGS__).c_str());
 extern bool isEqual(const std::string& first, const std::string& second);
 extern bool isFloatEqual(double a, double b);
 }

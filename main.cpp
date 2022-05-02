@@ -41,8 +41,8 @@ int main()
 				break;
 			std::string result = eval(input, env);	
 			print(result);
-		}	catch(const char* exception) {
-			printf("%s\n", exception);	
+		}	catch(std::string &exception) {
+			printf("%s\n", exception.c_str());	
 		}
 	}
 	

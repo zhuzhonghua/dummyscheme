@@ -5,30 +5,42 @@
 
 namespace DummyScheme {
 
-void errorThrow(const char *fmt, ...)
-{
-	//char buffer[512] = {0};
-	va_list args;
-	va_start(args, fmt);	
-	//vsnprintf(buffer, sizeof(buffer), fmt, args);
-	//perror(buffer);
-	vprintf(fmt, args);
-	va_end(args);
-
-	// don't throw buffer
-	throw "\nerror happended";
+// Adapted from: http://stackoverflow.com/questions/2342162
+std::string stringPrintf(const char* fmt, ...) {
+	int size = strlen(fmt); // make a guess
+	std::string str;
+	va_list ap;
+	while (1) {
+		str.resize(size);
+		va_start(ap, fmt);
+		int n = vsnprintf((char *)str.data(), size, fmt, ap);
+		va_end(ap);
+		if (n > -1 && n < size) {  // Everything worked
+			str.resize(n);
+			return str;
+		}
+		if (n > -1)  // Needed size returned
+			size = n + 1;   // For null char
+		else
+			size *= 2;      // Guess at a larger size (OS specific)
+	}
+	return str;
 }
 
-void Print(const char *fmt, ...)
-{
-	va_list args;
-	va_start(args, fmt);	
-	//vsnprintf(buffer, sizeof(buffer), fmt, args);
-	//perror(buffer);
-	vprintf(fmt, args);
-	va_end(args);	
-}
-
+//void errorThrow(const char* fileLineFunc, const char *fmt, ...)
+//{
+//	std::string error("\nerror happpended at ");
+//	error.append(fileLineFunc);
+//	error.append(stringPrintf(fmt, __VA_ARGS__));
+//
+//	throw error;
+//}
+//
+//void Print(const char *fmt, ...)
+//{
+//	printf(stringPrintf(fmt, __VA_ARGS__));
+//}
+//
 bool isEqual(const std::string& first, const std::string& second)
 {
 	return first.size() == second.size() && first.size() > 0 && 0 == first.compare(second);
