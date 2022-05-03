@@ -19,6 +19,9 @@ void Tokenize::init(const std::string &input)
 	this->index = 0;
 }
 
+/*
+	read dummyvalue and evaluate it
+ */
 DummyValuePtr Tokenize::run(DummyEnvPtr env)
 {
 	DummyValuePtr val = readP();
@@ -38,23 +41,27 @@ TokenType Tokenize::readToken()
 	{
 	CASE_NUM:
 		return TokenType::TOKEN_NUM;
+		break;
 	case '\"':
 		return TokenType::TOKEN_DOUBLE_QUOT;
+		break;
 	case '(':
 		return TokenType::TOKEN_LEFT_PAREN;
+		break;
 	case ')':
 		return TokenType::TOKEN_RIGHT_PAREN;	
+		break;
 	case '\'':
 		return TokenType::TOKEN_QUOTE;
+		break;
 	CASE_SYMBOL:
 		return TokenType::TOKEN_SYMBOL;
+		break;
 	default:
-		if ('A' <= c && c <= 'Z') {
+		if (('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z')) {
 			return TokenType::TOKEN_SYMBOL;
-		}	else if ('a' <= c && c <= 'z') {
-			return TokenType::TOKEN_SYMBOL;
-		} else {
-			Error("unexpected token=%c index=%d\n", c, index);
+		}	else {
+			return TokenType::TOKEN_UNKNOWN;	
 		}
 		break;
 	}
@@ -63,7 +70,24 @@ TokenType Tokenize::readToken()
 }
 
 /*
-	P = NUM | STRING | SYMBOL | LEFT_PAREN LIST RIGHT_PAREN
+	'(1 2 3)
+	'abc
+	TODO: support char like 'c'
+ */
+DummyValuePtr Tokenize::readQuote()
+{
+	// TODO: how to detect this error ' abc	
+	DummyValueList list;
+	list.push_back(DummyValuePtr(new DummyValue(DummyType::DUMMY_SYMBOL, "quote")));
+	index++;
+	list.push_back(readP());
+		
+	// TODO: straightly create the dummyvalue with type
+	return DummyValue::create(list);
+}
+
+/*
+	P = NUM | STRING | SYMBOL | QUOTE| LEFT_PAREN LIST RIGHT_PAREN
 	add check for p at the first pass
 */
 DummyValuePtr Tokenize::readP()
@@ -80,17 +104,9 @@ DummyValuePtr Tokenize::readP()
 	case TokenType::TOKEN_SYMBOL:
 		return readSymbol();
 		break;	
-	case TokenType::TOKEN_QUOTE:{
-		// TODO: how to detect this error ' abc	
-		DummyValueList list;
-		list.push_back(DummyValuePtr(new DummyValue(DummyType::DUMMY_SYMBOL, "quote")));
-		index++;
-		list.push_back(readP());
-		
-		// TODO: straightly create the dummyvalue with type
-		return DummyValue::create(list);	
+	case TokenType::TOKEN_QUOTE:
+		return readQuote();
 		break;
-	}
 	case TokenType::TOKEN_LEFT_PAREN:{
 		index++;
 		DummyValuePtr curValue(readList());
@@ -182,6 +198,9 @@ DummyValuePtr Tokenize::readStr()
 	return DummyValuePtr(new DummyValue(DummyType::DUMMY_STRING, str.str()));	
 }
 
+/*
+	TODO:	currently only support int
+ */
 DummyValuePtr Tokenize::readNum()
 {
 	char num[20] = {0};

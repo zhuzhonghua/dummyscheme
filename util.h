@@ -8,10 +8,10 @@
 namespace DummyScheme {
 	
 //#define STR(s) #s
-#define FILE_LINE_FUNCTION stringPrintf("[%s:%d:%s]", __FILE__, __LINE__, __FUNCTION__)
+#define FILE_LINE_FUNCTION stringPrintf("[%s:%d:%s]\n", __FILE__, __LINE__, __FUNCTION__)
 
 //#define Error(...) errorThrow(FILE_LINE_FUNCTION, __VA_ARGS__)
-#define Error(...) throw "\nerror happended at" + FILE_LINE_FUNCTION + stringPrintf(__VA_ARGS__);
+#define Error(...) throw stringPrintf(__VA_ARGS__) + "\nerror happended at" + FILE_LINE_FUNCTION;
 
 #define Assert(condition, ...) do { if (!(condition)) { Error(__VA_ARGS__); } } while (0)
 

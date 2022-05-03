@@ -15,12 +15,15 @@ enum TokenType{
 };
 
 /*
-	P = NUM | LEFT_PAREN LIST RIGHT_PAREN
-	LIST = SYMBOL LISTP
-	LISTP = P LISTP	
+	P = NUM | STRING | SYMBOL | QUOTE| LEFT_PAREN LIST RIGHT_PAREN	
+	LIST = P LISTP
+	LISTP = P LISTP
+
+	difference between LIST and LISTP is the return value
 */
 class Tokenize {
 protected:
+	int aheadToken;
 	int index;
 	std::string input;
 public:
@@ -33,6 +36,7 @@ protected:
 	DummyValueList readListP();
 	DummyValuePtr readNum();
 	DummyValuePtr readStr();
+	DummyValuePtr readQuote();
 	// read a word as symbol
 	DummyValuePtr readSymbol();
 protected:
