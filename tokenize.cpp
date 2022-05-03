@@ -43,7 +43,7 @@ TokenType Tokenize::readToken()
 		return TokenType::TOKEN_NUM;
 		break;
 	case '\"':
-		return TokenType::TOKEN_DOUBLE_QUOT;
+		return TokenType::TOKEN_DOUBLE_QUOTE;
 		break;
 	case '(':
 		return TokenType::TOKEN_LEFT_PAREN;
@@ -52,7 +52,7 @@ TokenType Tokenize::readToken()
 		return TokenType::TOKEN_RIGHT_PAREN;	
 		break;
 	case '\'':
-		return TokenType::TOKEN_QUOTE;
+		return TokenType::TOKEN_SINGLE_QUOTE;
 		break;
 	CASE_SYMBOL:
 		return TokenType::TOKEN_SYMBOL;
@@ -98,13 +98,13 @@ DummyValuePtr Tokenize::readP()
 	case TokenType::TOKEN_NUM:
 		return readNum();
 		break;
-	case TokenType::TOKEN_DOUBLE_QUOT:
+	case TokenType::TOKEN_DOUBLE_QUOTE:
 		return readStr();
 		break;
 	case TokenType::TOKEN_SYMBOL:
 		return readSymbol();
 		break;	
-	case TokenType::TOKEN_QUOTE:
+	case TokenType::TOKEN_SINGLE_QUOTE:
 		return readQuote();
 		break;
 	case TokenType::TOKEN_LEFT_PAREN:{
@@ -176,12 +176,16 @@ DummyValueList Tokenize::readListP()
 	return list;
 }
 
+/*
+	read a str
+	TODO: read doc
+ */
 DummyValuePtr Tokenize::readStr()
 {
-	if (input[index] != '\"') {
-		Error("begin expect token \" actually %c index %d", input[index], index);
-	}
-	
+//	if (input[index] != '\"') {
+//		Error("begin expect token \" actually %c index %d", input[index], index);
+//	}
+//	
 	index++;
 	
 	std::stringstream str;
