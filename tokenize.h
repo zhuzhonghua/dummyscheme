@@ -45,5 +45,6 @@ protected:
 	void skipBlank();
 	bool isBlank();
 	TokenType readToken();
+	TokenType look();
 };
 }

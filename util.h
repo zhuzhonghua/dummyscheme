@@ -13,7 +13,7 @@ namespace DummyScheme {
 //#define Error(...) errorThrow(FILE_LINE_FUNCTION, __VA_ARGS__)
 #define Error(...) throw stringPrintf(__VA_ARGS__) + "\nerror happended at" + FILE_LINE_FUNCTION;
 
-#define Assert(condition, ...) do { if (!(condition)) { Error(__VA_ARGS__); } } while (0)
+#define Assert(condition, ...) do { if (!(condition)) { Error(#condition "" __VA_ARGS__); } } while (0)
 
 #define AssertDummyValue(condition, fmt, ptr) \
 	do { if (!(condition)) { \

@@ -8,6 +8,9 @@ using namespace DummyScheme;
 #define CASE_NUM case '0':case '1':case '2':case '3':case '4':case '5':case '6':case '7':case '8':case '9'
 #define CASE_SYMBOL case '+':case '-':case '*':case '/':case '#':case '?':case '>':case '=':case '<'
 
+#define AssertToken(condition) \
+Assert(condition, "unexpected char=%c, index=%d", input[index], index)
+
 Tokenize::Tokenize(const std::string &input)
 {
 	init(input);
@@ -32,10 +35,11 @@ DummyValuePtr Tokenize::run(DummyEnvPtr env)
 	return evalVal;
 }
 
-TokenType Tokenize::readToken()
+/*
+	look at token type
+ */
+TokenType Tokenize::look()
 {
-	// TODO: call skip separately
-	skipBlank();
 	char c = input[index];
 	switch(c)
 	{
@@ -66,7 +70,17 @@ TokenType Tokenize::readToken()
 		break;
 	}
 
-	return TokenType::TOKEN_UNKNOWN;
+	return TokenType::TOKEN_UNKNOWN;	
+}
+
+/*
+	skip blank and look the next token
+ */
+TokenType Tokenize::readToken()
+{
+	// TODO: call skip separately
+	skipBlank();
+	return look();
 }
 
 /*
@@ -80,6 +94,9 @@ DummyValuePtr Tokenize::readQuote()
 	DummyValueList list;
 	list.push_back(DummyValuePtr(new DummyValue(DummyType::DUMMY_SYMBOL, "quote")));
 	index++;
+	TokenType token = look();
+	AssertToken(token == TokenType::TOKEN_LEFT_PAREN || token == TokenType::TOKEN_SYMBOL);
+
 	list.push_back(readP());
 		
 	// TODO: straightly create the dummyvalue with type
@@ -111,7 +128,7 @@ DummyValuePtr Tokenize::readP()
 		index++;
 		DummyValuePtr curValue(readList());
 		TokenType token = readToken();
-		Assert(token == TokenType::TOKEN_RIGHT_PAREN, "unexpected token=%d char=%c, index=%d expected \)", token, input[index], index);
+		AssertToken(token == TokenType::TOKEN_RIGHT_PAREN);
 		index++;
 		return curValue;
 		break;
