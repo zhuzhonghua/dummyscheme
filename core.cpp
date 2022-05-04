@@ -127,6 +127,92 @@ void DummyCore::ConstructLetEnv(DummyValueList varList, DummyEnvPtr letEnv)
 	}	
 }
 
+/*
+	for simple
+ */
+DummyValuePtr DummyCore::OpConstructTypeList(const char* typeStr, DummyType type, DummyValueList list, int paraLenMin)
+{
+	if (paraLenMin > 0) {
+		AssertDummyValueList(list.size() >= paraLenMin, "", list);	
+	}
+
+	return DummyValuePtr(new DummyValue(typeStr, type, list));
+}
+
+/*
+	construct define
+	(define a 2)
+	(define (square x) (* x x))
+ */
+DummyValuePtr DummyCore::OpConstructDefine(DummyValueList& list)
+{
+	AssertDummyValueList(list.size() >= 3, "parameter >= 3", list);
+	
+	DummyValuePtr second = *(list.begin() + 1);
+	AssertDummyValueList(second->isSymbol() || second->isList(), "second must be a symbol or list", list);
+
+	return DummyValuePtr(new DummyValue("define", DummyType::DUMMY_DEFINE, DummyValueList(list.begin()+1, list.end())));
+}
+
+/*
+	construct let
+ */
+DummyValuePtr DummyCore::OpConstructLet(DummyValueList& list)
+{
+	DummyValuePtr front = list.front();
+	AssertDummyValueList(list.size() >= 3, "parameter >= 3", list);
+	
+	DummyValuePtr var = *(list.begin() + 1);
+	AssertDummyValue(var->isList(), "var must be a list", var);
+	
+	DummyValueList symbolList = var->getList();
+	DummyValueList::iterator symbolItr = symbolList.begin();
+	for(; symbolItr != symbolList.end(); ++symbolItr) {
+		DummyValueList varList = (*symbolItr)->getListCheck();
+		AssertDummyValueList(varList.size() == 2, "varList list must =2", varList);
+		AssertDummyValueList(varList.front()->isSymbol(), "symbol first must be symbol", varList);
+	}
+
+	return DummyValuePtr(new DummyValue("let", DummyType::DUMMY_LET, DummyValueList(list.begin()+1, list.end())));
+}
+
+/*
+	construct lambda
+ */
+DummyValuePtr DummyCore::OpConstructLambda(DummyValueList& list)
+{
+	AssertDummyValueList(list.size() >= 3, "parameter >= 3", list);
+	
+	DummyValueList::iterator itr= list.begin();	
+	DummyValuePtr front = *itr;
+
+	DummyValuePtr binds = *++itr;
+	DummyValueList bindList = binds->getList();
+	DummyValueList::iterator bindItr = bindList.begin();
+	BindList symbols;
+	for (; bindItr != bindList.end(); ++bindItr) {
+		symbols.push_back((*bindItr)->getSymbol());
+	}
+	// rest is the body
+	return DummyValuePtr(new DummyValue(symbols, DummyValueList(++itr, list.end())));
+}
+
+/*
+	construct apply
+ */
+DummyValuePtr DummyCore::OpConstructApply(DummyValueList& list)
+{
+	DummyValueList::iterator itr = list.begin();
+	DummyValuePtr front = *itr;
+	if (!front->isLambda()) {
+		AssertDummyValueList(list.size() >= 2, "parameter >= 2", list);
+		++itr;
+	}
+	// first maybe the lambda
+
+	return DummyValuePtr(new DummyValue("apply", DummyType::DUMMY_APPLY, DummyValueList(itr, list.end())));
+}
+
 bool DummyCore::isEqual(const std::string& first, const DummyValuePtr& second)
 {
 	AssertDummyValue(second->isSymbol(), "compare must be a symbol", second);
@@ -557,87 +643,24 @@ DummyValuePtr DummyCore::OpEvalLoad(DummyValuePtr value, DummyEnvPtr env)
 }
 
 /*
-	for simple
+	(define lst (quote (b c)))	
+	(unquote lst) -> (b c)
+	(unquote (+ 3 3)) -> 6	
+	(unquote (+ 3 3) (* 3 3)) -> (6 9)	
  */
-DummyValuePtr DummyCore::OpConstructTypeList(const char* typeStr, DummyType type, DummyValueList list, int paraLenMin)
+DummyValuePtr DummyCore::OpEvalUnQuote(DummyValuePtr value, DummyEnvPtr env)
 {
-	if (paraLenMin > 0) {
-		AssertDummyValueList(list.size() >= paraLenMin, "", list);	
+	// TODO: all item->eval(env) change to DummyCore::Eval(item, env)
+	DummyValueList list = value->getList();
+	if (list.size() == 1) {
+		return Eval(list.front(), env);
+	} else {
+		DummyValueList retValue;	
+		DummyValueList::iterator itr = list.begin();
+		for (; itr != list.end(); itr++) {
+			retValue.push_back(Eval(*itr, env));
+		}
+
+		return DummyValuePtr(new DummyValue(retValue));
 	}
-
-	return DummyValuePtr(new DummyValue(typeStr, type, list));
-}
-
-/*
-	construct define
-	(define a 2)
-	(define (square x) (* x x))
- */
-DummyValuePtr DummyCore::OpConstructDefine(DummyValueList& list)
-{
-	AssertDummyValueList(list.size() >= 3, "parameter >= 3", list);
-	
-	DummyValuePtr second = *(list.begin() + 1);
-	AssertDummyValueList(second->isSymbol() || second->isList(), "second must be a symbol or list", list);
-
-	return DummyValuePtr(new DummyValue("define", DummyType::DUMMY_DEFINE, DummyValueList(list.begin()+1, list.end())));
-}
-
-/*
-	construct let
- */
-DummyValuePtr DummyCore::OpConstructLet(DummyValueList& list)
-{
-	DummyValuePtr front = list.front();
-	AssertDummyValueList(list.size() >= 3, "parameter >= 3", list);
-	
-	DummyValuePtr var = *(list.begin() + 1);
-	AssertDummyValue(var->isList(), "var must be a list", var);
-	
-	DummyValueList symbolList = var->getList();
-	DummyValueList::iterator symbolItr = symbolList.begin();
-	for(; symbolItr != symbolList.end(); ++symbolItr) {
-		DummyValueList varList = (*symbolItr)->getListCheck();
-		AssertDummyValueList(varList.size() == 2, "varList list must =2", varList);
-		AssertDummyValueList(varList.front()->isSymbol(), "symbol first must be symbol", varList);
-	}
-
-	return DummyValuePtr(new DummyValue("let", DummyType::DUMMY_LET, DummyValueList(list.begin()+1, list.end())));
-}
-
-/*
-	construct lambda
- */
-DummyValuePtr DummyCore::OpConstructLambda(DummyValueList& list)
-{
-	AssertDummyValueList(list.size() >= 3, "parameter >= 3", list);
-	
-	DummyValueList::iterator itr= list.begin();	
-	DummyValuePtr front = *itr;
-
-	DummyValuePtr binds = *++itr;
-	DummyValueList bindList = binds->getList();
-	DummyValueList::iterator bindItr = bindList.begin();
-	BindList symbols;
-	for (; bindItr != bindList.end(); ++bindItr) {
-		symbols.push_back((*bindItr)->getSymbol());
-	}
-	// rest is the body
-	return DummyValuePtr(new DummyValue(symbols, DummyValueList(++itr, list.end())));
-}
-
-/*
-	construct apply
- */
-DummyValuePtr DummyCore::OpConstructApply(DummyValueList& list)
-{
-	DummyValueList::iterator itr = list.begin();
-	DummyValuePtr front = *itr;
-	if (!front->isLambda()) {
-		AssertDummyValueList(list.size() >= 2, "parameter >= 2", list);
-		++itr;
-	}
-	// first maybe the lambda
-
-	return DummyValuePtr(new DummyValue("apply", DummyType::DUMMY_APPLY, DummyValueList(itr, list.end())));
 }

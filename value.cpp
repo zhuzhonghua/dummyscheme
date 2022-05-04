@@ -238,6 +238,7 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	CaseReturnEval(DummyType::DUMMY_BIG_EQUAL, OpEvalBigEqual);
 	CaseReturnEval(DummyType::DUMMY_LENGTH, OpEvalLength);
 	CaseReturnEval(DummyType::DUMMY_LOAD, OpEvalLoad);
+	CaseReturnEval(DummyType::DUMMY_UNQUOTE, OpEvalUnQuote);
 	}
 
 	Error("unexpected type %d", type);
@@ -286,6 +287,7 @@ DummyValuePtr DummyValue::create(DummyValueList& list)
 		CompareReturn(">=", DummyType::DUMMY_BIG_EQUAL, 2);
 		CompareReturn("load", DummyType::DUMMY_LOAD, 1);
 		CompareReturn("quote", DummyType::DUMMY_QUOTE, 1);
+		CompareReturn("unquote", DummyType::DUMMY_UNQUOTE, 1);
 		
 		// (let ((c 2)) c)
 		//	Error("unexpected type %d", type);	

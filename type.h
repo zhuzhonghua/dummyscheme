@@ -35,6 +35,7 @@ enum DummyType {
 	DUMMY_LENGTH,
 	DUMMY_LOAD,
 	DUMMY_QUOTE,
+	DUMMY_UNQUOTE,
 	DUMMY_MAX,
 };
 

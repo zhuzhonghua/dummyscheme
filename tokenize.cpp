@@ -58,6 +58,9 @@ TokenType Tokenize::look()
 	case '\'':
 		return TokenType::TOKEN_SINGLE_QUOTE;
 		break;
+	case '~':
+		return TokenType::TOKEN_UNQUOTE;
+		break;
 	CASE_SYMBOL:
 		return TokenType::TOKEN_SYMBOL;
 		break;
@@ -91,6 +94,7 @@ TokenType Tokenize::readToken()
 DummyValuePtr Tokenize::readQuote()
 {
 	// TODO: how to detect this error ' abc	
+	// DONE
 	DummyValueList list;
 	list.push_back(DummyValuePtr(new DummyValue(DummyType::DUMMY_SYMBOL, "quote")));
 	index++;
@@ -104,7 +108,26 @@ DummyValuePtr Tokenize::readQuote()
 }
 
 /*
-	P = NUM | STRING | SYMBOL | QUOTE| LEFT_PAREN LIST RIGHT_PAREN
+	~obj
+	~(+ 1 2)
+	~((+ 1 2) (+ 3 4))
+ */
+DummyValuePtr Tokenize::readUnQuote()
+{
+	DummyValueList list;
+	list.push_back(DummyValuePtr(new DummyValue(DummyType::DUMMY_SYMBOL, "unquote")));
+	index++;
+	TokenType token = look();
+	AssertToken(token == TokenType::TOKEN_LEFT_PAREN || token == TokenType::TOKEN_SYMBOL);
+
+	list.push_back(readP());
+		
+	// TODO: straightly create the dummyvalue with type
+	return DummyValue::create(list);
+}
+
+/*
+	P = NUM | STRING | SYMBOL | QUOTE | UNQUOTE | LEFT_PAREN LIST RIGHT_PAREN
 	add check for p at the first pass
 */
 DummyValuePtr Tokenize::readP()
@@ -114,16 +137,14 @@ DummyValuePtr Tokenize::readP()
 	{
 	case TokenType::TOKEN_NUM:
 		return readNum();
-		break;
 	case TokenType::TOKEN_DOUBLE_QUOTE:
 		return readStr();
-		break;
 	case TokenType::TOKEN_SYMBOL:
 		return readSymbol();
-		break;	
 	case TokenType::TOKEN_SINGLE_QUOTE:
 		return readQuote();
-		break;
+	case TokenType::TOKEN_UNQUOTE:
+		return readUnQuote();
 	case TokenType::TOKEN_LEFT_PAREN:{
 		index++;
 		DummyValuePtr curValue(readList());

@@ -248,6 +248,28 @@ void test12()
 	
 	tokenize.init("'(1 2 3)");
 	tokenize.run(env);
+
+	tokenize.init("(define lst (quote (1 2 3)))");
+	tokenize.run(env);
+
+	tokenize.init("(unquote lst)");
+	tokenize.run(env);
+	
+	tokenize.init("~lst");
+	tokenize.run(env);
+	
+	tokenize.init("(unquote (+ 1 2))");
+	tokenize.run(env);
+	
+	tokenize.init("~(+ 1 2)");
+	tokenize.run(env);
+
+	tokenize.init("(unquote (+ 3 3) (* 3 3 ))");
+	tokenize.run(env);
+	
+	// TODO: compare with racket scheme
+//	tokenize.init("~((+ 3 3) (* 3 3 ))");
+//	tokenize.run(env);
 }
 
 int main()
