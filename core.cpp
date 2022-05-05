@@ -102,6 +102,11 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 			}
 			break;
 		}
+		case DummyType::DUMMY_QUASIQUOTE:{
+			ast = OpEvalQuasiQuote(ast, env);
+			// this result need to be reevaluated
+			break;
+		}
 		default:
 			return ast->eval(env);
 			break;
@@ -677,5 +682,5 @@ DummyValuePtr DummyCore::OpEvalQuasiQuote(DummyValuePtr value, DummyEnvPtr env)
 		}
 	}
 
-	return DummyValuePtr(new DummyValue(retValue));
+	return DummyValue::create(retValue);
 }

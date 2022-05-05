@@ -246,7 +246,6 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	CaseReturnEval(DummyType::DUMMY_BIG_EQUAL, OpEvalBigEqual);
 	CaseReturnEval(DummyType::DUMMY_LENGTH, OpEvalLength);
 	CaseReturnEval(DummyType::DUMMY_LOAD, OpEvalLoad);
-	CaseReturnEval(DummyType::DUMMY_QUASIQUOTE, OpEvalQuasiQuote);
 	}
 
 	Error("unexpected type %d", type);
