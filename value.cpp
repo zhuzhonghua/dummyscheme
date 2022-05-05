@@ -218,6 +218,14 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 		// (quote abc)
 		// (quote (1 2 3))
 		return list.front();
+	case DummyType::DUMMY_UNQUOTE:{
+		Error("cannot eval unquote separately");
+		return DummyValue::nil;
+	}
+	case DummyType::DUMMY_UNQUOTE_SPLICING:{
+		Error("cannot eval unquote-splicing separately");
+		return DummyValue::nil;
+	}
 		
 	CaseReturnEval(DummyType::DUMMY_PLUS, OpEvalPlus);
 	CaseReturnEval(DummyType::DUMMY_MINUS, OpEvalMinus);
@@ -238,7 +246,7 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	CaseReturnEval(DummyType::DUMMY_BIG_EQUAL, OpEvalBigEqual);
 	CaseReturnEval(DummyType::DUMMY_LENGTH, OpEvalLength);
 	CaseReturnEval(DummyType::DUMMY_LOAD, OpEvalLoad);
-	CaseReturnEval(DummyType::DUMMY_UNQUOTE, OpEvalUnQuote);
+	CaseReturnEval(DummyType::DUMMY_QUASIQUOTE, OpEvalQuasiQuote);
 	}
 
 	Error("unexpected type %d", type);
@@ -288,6 +296,8 @@ DummyValuePtr DummyValue::create(DummyValueList& list)
 		CompareReturn("load", DummyType::DUMMY_LOAD, 1);
 		CompareReturn("quote", DummyType::DUMMY_QUOTE, 1);
 		CompareReturn("unquote", DummyType::DUMMY_UNQUOTE, 1);
+		CompareReturn("unquote-splicing", DummyType::DUMMY_UNQUOTE_SPLICING, 1);
+		CompareReturn("quasiquote", DummyType::DUMMY_QUASIQUOTE, 1);
 		
 		// (let ((c 2)) c)
 		//	Error("unexpected type %d", type);	

@@ -13,10 +13,12 @@ enum TokenType{
 	TOKEN_SYMBOL,
 	TOKEN_SINGLE_QUOTE,
 	TOKEN_UNQUOTE,
+	TOKEN_UNQUOTE_SPLICING,
+	TOKEN_QUASIQUOTE,
 };
 
 /*
-	P = NUM | STRING | SYMBOL | QUOTE | UNQUOTE | LEFT_PAREN LIST RIGHT_PAREN	
+	P = NUM | STRING | SYMBOL | QUOTE | UNQUOTE | UNQUOTE_SPLICING | LEFT_PAREN LIST RIGHT_PAREN	
 	LIST = P LISTP
 	LISTP = P LISTP
 
@@ -39,6 +41,8 @@ protected:
 	DummyValuePtr readStr();
 	DummyValuePtr readQuote();
 	DummyValuePtr readUnQuote();
+	DummyValuePtr readUnQuoteSplicing();
+	DummyValuePtr readQuasiQuote();
 	// read a word as symbol
 	DummyValuePtr readSymbol();
 protected:

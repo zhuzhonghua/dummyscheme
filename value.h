@@ -44,6 +44,8 @@ public:
 	bool isFalse() { return type == DUMMY_FALSE; }
 	bool isLambda() { return type == DUMMY_LAMBDA; }
 	bool isList() { return type == DUMMY_LIST; }
+	bool isUnQuote() { return type == DUMMY_UNQUOTE; }
+	bool isUnQuoteSplicing() { return type == DUMMY_UNQUOTE_SPLICING; }
 	
 	bool isSame(const std::string& sym) { return 0 == strOrSymOrBind[0].compare(sym); }
 	bool isNilValue() { return isNil() || isFalse(); }

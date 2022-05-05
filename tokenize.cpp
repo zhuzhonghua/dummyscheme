@@ -11,6 +11,9 @@ using namespace DummyScheme;
 #define AssertToken(condition) \
 Assert(condition, "unexpected char=%c, index=%d", input[index], index)
 
+#define AssertInputEnd(idx) \
+Assert(idx < input.size(), "reached end of input")
+
 Tokenize::Tokenize(const std::string &input)
 {
 	init(input);
@@ -40,6 +43,7 @@ DummyValuePtr Tokenize::run(DummyEnvPtr env)
  */
 TokenType Tokenize::look()
 {
+	AssertInputEnd(index);
 	char c = input[index];
 	switch(c)
 	{
@@ -58,9 +62,17 @@ TokenType Tokenize::look()
 	case '\'':
 		return TokenType::TOKEN_SINGLE_QUOTE;
 		break;
-	case '~':
-		return TokenType::TOKEN_UNQUOTE;
+	case '`':
+		return TokenType::TOKEN_QUASIQUOTE;
 		break;
+	case '~':{
+		AssertInputEnd(index + 1);
+		if ('@' == input[index + 1])
+			return TokenType::TOKEN_UNQUOTE_SPLICING;
+		else
+			return TokenType::TOKEN_UNQUOTE;
+		break;
+	}
 	CASE_SYMBOL:
 		return TokenType::TOKEN_SYMBOL;
 		break;
@@ -110,12 +122,45 @@ DummyValuePtr Tokenize::readQuote()
 /*
 	~obj
 	~(+ 1 2)
-	~((+ 1 2) (+ 3 4))
  */
 DummyValuePtr Tokenize::readUnQuote()
 {
 	DummyValueList list;
 	list.push_back(DummyValuePtr(new DummyValue(DummyType::DUMMY_SYMBOL, "unquote")));
+	index++;
+	TokenType token = look();
+	AssertToken(token == TokenType::TOKEN_LEFT_PAREN || token == TokenType::TOKEN_SYMBOL);
+
+	list.push_back(readP());
+		
+	// TODO: straightly create the dummyvalue with type
+	return DummyValue::create(list);
+}
+
+/*
+	~@lst
+ */
+DummyValuePtr Tokenize::readUnQuoteSplicing()
+{
+	DummyValueList list;
+	list.push_back(DummyValuePtr(new DummyValue(DummyType::DUMMY_SYMBOL, "unquote-splicing")));
+	index += 2;
+	TokenType token = look();
+	AssertToken(token == TokenType::TOKEN_LEFT_PAREN || token == TokenType::TOKEN_SYMBOL);
+
+	list.push_back(readP());
+		
+	// TODO: straightly create the dummyvalue with type
+	return DummyValue::create(list);
+}
+
+/*
+	`lst
+ */
+DummyValuePtr Tokenize::readQuasiQuote()
+{
+	DummyValueList list;
+	list.push_back(DummyValuePtr(new DummyValue(DummyType::DUMMY_SYMBOL, "quasiquote")));
 	index++;
 	TokenType token = look();
 	AssertToken(token == TokenType::TOKEN_LEFT_PAREN || token == TokenType::TOKEN_SYMBOL);
@@ -289,9 +334,7 @@ void Tokenize::skipBlank()
 	while(index < input.size() && isBlank())
 		index++;
 	
-	if(index >= input.size()) {
-		Error("something is error index outof range %d", input.size());
-	}
+	AssertInputEnd(index);
 }
 
 DummyValuePtr Tokenize::readSymbol()

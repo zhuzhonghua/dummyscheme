@@ -38,6 +38,6 @@ public:
 	static DummyValuePtr OpEvalBigEqual(DummyValuePtr value, DummyEnvPtr env);
 	static DummyValuePtr OpEvalLength(DummyValuePtr value, DummyEnvPtr env);
 	static DummyValuePtr OpEvalLoad(DummyValuePtr value, DummyEnvPtr env);
-	static DummyValuePtr OpEvalUnQuote(DummyValuePtr value, DummyEnvPtr env);
+	static DummyValuePtr OpEvalQuasiQuote(DummyValuePtr value, DummyEnvPtr env);
 };
 };

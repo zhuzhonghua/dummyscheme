@@ -643,24 +643,39 @@ DummyValuePtr DummyCore::OpEvalLoad(DummyValuePtr value, DummyEnvPtr env)
 }
 
 /*
-	(define lst (quote (b c)))	
-	(unquote lst) -> (b c)
-	(unquote (+ 3 3)) -> 6	
-	(unquote (+ 3 3) (* 3 3)) -> (6 9)	
+	(quasiquote lst)
+	`lst
  */
-DummyValuePtr DummyCore::OpEvalUnQuote(DummyValuePtr value, DummyEnvPtr env)
+DummyValuePtr DummyCore::OpEvalQuasiQuote(DummyValuePtr value, DummyEnvPtr env)
 {
-	// TODO: all item->eval(env) change to DummyCore::Eval(item, env)
-	DummyValueList list = value->getList();
-	if (list.size() == 1) {
-		return Eval(list.front(), env);
-	} else {
-		DummyValueList retValue;	
-		DummyValueList::iterator itr = list.begin();
-		for (; itr != list.end(); itr++) {
-			retValue.push_back(Eval(*itr, env));
-		}
-
-		return DummyValuePtr(new DummyValue(retValue));
+	DummyValuePtr item = value->getList().front();
+	// recursive call
+	if (!item->isList()) {
+		return item;
 	}
+
+	DummyValueList list = item->getList();
+	DummyValueList::iterator itr = list.begin();
+	DummyValueList retValue;
+	for (; itr != list.end(); itr++)
+	{
+		// eval and put
+		if ((*itr)->isUnQuote()) {
+			retValue.push_back(Eval((*itr)->getList().front(), env));
+		} else if ((*itr)->isUnQuoteSplicing()) {
+			// eval and splice put
+			DummyValuePtr evalItr = Eval((*itr)->getList().front(), env);
+			if (evalItr->isList()) {
+				DummyValueList evalItrList = evalItr->getList();
+				retValue.insert(retValue.end(), evalItrList.begin(), evalItrList.end());
+			} else {
+				retValue.push_back(evalItr);
+			}
+		} else {
+			// just put
+			retValue.push_back(OpEvalQuasiQuote(*itr, env));
+		}
+	}
+
+	return DummyValuePtr(new DummyValue(retValue));
 }
