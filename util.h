@@ -15,15 +15,19 @@ namespace DummyScheme {
 
 #define Assert(condition, ...) do { if (!(condition)) { Error(#condition "" __VA_ARGS__); } } while (0)
 
-#define AssertDummyValue(condition, fmt, ptr) \
-	do { if (!(condition)) { \
-			Error(fmt" type=%d, value=%s", ptr->getType(), DummyValueCStr(ptr)); \
+#define AssertDummyValue(condition, ptr, ...)				                                             \
+	do { if (!(condition)) {                                                                       \
+			std::string fmt = stringPrintf(__VA_ARGS__);											                         \
+			Error(#condition "%s type=%d value=%s", fmt.c_str(), ptr->getType(), DummyValueCStr(ptr)); \
 		} } while (0)
 
-#define AssertDummyValueList(condition, fmt, list) \
-	do { if (!(condition)) { \
-			Error(fmt" value=%s", DummyValueCStr(DummyValuePtr(new DummyValue(list)))); \
-		} } while (0)
+#define AssertDummyValueList(condition, list, ...)	                                     \
+	do {																							                                     \
+	  if (!(condition)) {			                 																						 \
+			std::string fmt = stringPrintf(__VA_ARGS__);											                 \
+			Error(#condition "%s listvalue=%s", fmt.c_str(), DummyValueCStr(listValue(list))); \
+		}																																		                 \
+	} while (0)
 
 //#define isSymEqual(first, second) \
 //	AssertDummyValue(second->isSymbol(), "compare must be a symbol", second); \

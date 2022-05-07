@@ -5,24 +5,26 @@
 
 namespace DummyScheme {
 
-// Adapted from: http://stackoverflow.com/questions/2342162
-std::string stringPrintf(const char* fmt, ...) {
-	int size = strlen(fmt); // make a guess
+std::string stringPrintf(const char* fmt, ...)
+{
+	int size = 128;
 	std::string str;
 	va_list ap;
-	while (1) {
+	while (true)
+	{
 		str.resize(size);
 		va_start(ap, fmt);
 		int n = vsnprintf((char *)str.data(), size, fmt, ap);
 		va_end(ap);
-		if (n > -1 && n < size) {  // Everything worked
+		if (n > -1 && n < size)
+		{
 			str.resize(n);
 			return str;
 		}
-		if (n > -1)  // Needed size returned
-			size = n + 1;   // For null char
+		if (n > -1)
+			size = n + 1;
 		else
-			size *= 2;      // Guess at a larger size (OS specific)
+			size *= 2;
 	}
 	return str;
 }
