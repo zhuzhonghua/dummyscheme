@@ -9,7 +9,7 @@ namespace DummyScheme {
  */
 DummyValuePtr opTypeValue(const char* const typeStr, int type, const DummyValueList& list)
 {
-	return new DummyValue(typeStr, type, list);
+	return new DummyOpTypeValue(typeStr, type, list);
 }
 
 DummyValuePtr opTypeValue(const char* const typeStr, int type, DummyValueList::iterator begin, DummyValueList::iterator end)
@@ -19,7 +19,7 @@ DummyValuePtr opTypeValue(const char* const typeStr, int type, DummyValueList::i
 
 DummyValuePtr listValue(const DummyValueList& list)
 {
-	return new DummyValue(list);
+	return new DummyListValue(list);
 }
 
 DummyValuePtr listValue(DummyValueList::iterator begin, DummyValueList::iterator end)
@@ -29,22 +29,22 @@ DummyValuePtr listValue(DummyValueList::iterator begin, DummyValueList::iterator
 
 DummyValuePtr strValue(const std::string &str)
 {
-	return new DummyValue(DUMMY_TYPE_STRING, str);
+	return new DummyStringValue(str);
 }
 
 DummyValuePtr numValue(int num)
 {
-	return new DummyValue(num);
+	return new DummyNumValue(num);
 }
 
 DummyValuePtr symbolValue(const std::string &symbol)
 {
-	return new DummyValue(DUMMY_TYPE_SYMBOL, symbol);
+	return new DummySymbolValue(symbol);
 }
 
 DummyValuePtr lambdaValue(const BindList& binds, const DummyValueList& list)
 {
-	return new DummyValue(binds, list);
+	return new DummyLambdaValue(binds, list);
 }
 
 DummyValuePtr lambdaValue(const BindList& binds, DummyValueList::iterator begin, DummyValueList::iterator end)
