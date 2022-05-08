@@ -10,7 +10,7 @@ typedef DummyValuePtr (*DummyOpCreate)(DummyValueList& list);
 
 class DummyBuiltInOp{
 public:
-	DummyBuiltInOp(DummyType type, DummyOpEval op);
+	DummyBuiltInOp(int type, DummyOpEval op);
 	DummyBuiltInOp(const std::string &typeStr, DummyOpCreate op);
 public:
 	static DummyOpEval builtInOps[];

@@ -12,29 +12,30 @@ using namespace DummyScheme;
 #define DUMMY_OPCREATENAME(uniq) DummyBuiltInOpCreate ## uniq
 #define DUMMY_OPCREATEHELP(uniq) DummyBuiltInOpCreateHelp ## uniq
 
-#define DUMMY_BUILTIN_OP(type, symbol) static DummyOpEval DUMMY_OPEVALNAME(type);	\
- static DummyBuiltInOp DUMMY_OPEVALHELP(type) (type, DUMMY_OPEVALNAME(type));	\
- DummyValuePtr DUMMY_OPEVALNAME(type) (DummyValuePtr ast, DummyEnvPtr env)
+#define DUMMY_BUILTIN_OP(type, symbol) \
+DummyValuePtr DUMMY_OPEVALNAME(type)(DummyValuePtr ast, DummyEnvPtr env); \
+ static DummyBuiltInOp DUMMY_OPEVALHELP(type) (type, DUMMY_OPEVALNAME(type));	    \
+ DummyValuePtr DUMMY_OPEVALNAME(type)(DummyValuePtr ast, DummyEnvPtr env)
 
+#define DUMMY_BUILTIN_OP_CREATE(type, symbol) \
+DummyValuePtr DUMMY_OPCREATENAME(type)(DummyValueList& list); \
+ static DummyBuiltInOp DUMMY_OPCREATEHELP(type) (symbol, DUMMY_OPCREATENAME(type));          \
+ DummyValuePtr DUMMY_OPCREATENAME(type)(DummyValueList& list)
 
-#define DUMMY_BUILTIN_OP_CREATE(type, symbol) static DummyOpCreate DUMMY_OPCREATENAME(type); \
- static DummyBuiltInOp DUMMY_OPCREATEHELP(type) (symbol, DUMMY_OPCREATENAME(type)); \
- DummyValuePtr DUMMY_OPCREATENAME(type) (DummyValueList& list)
-
-#define DUMMY_BUILTIN_OP_CREATE_NORMAL(type, symbol, num) \
-DUMMY_BUILTIN_OP_CREATE(type, symbol)																		\
-{																																				\
-	if (num > 0) AssertDummyValueList(list.size() >= num + 1, list, "need more parameters"); \
-	return opTypeValue(symbol, type, list.begin()+1, list.end);						\
+#define DUMMY_BUILTIN_OP_CREATE_NORMAL(type, symbol, num)                                    \
+DUMMY_BUILTIN_OP_CREATE(type, symbol)																		                     \
+{																																				                     \
+	if (num > 0) AssertDummyValueList(list.size() >= num + 1, list, "need more parameters");   \
+	return opTypeValue(symbol, type, list.begin()+1, list.end());					\
 }
 
-#define AssertArgBigEqual(num) AssertDummyValue(list.size() >= num, ast)
-#define AssertArgEqual(num) AssertDummyValue(list.size() == num, ast)
+#define AssertArgBigEqual(num) AssertDummyValue(list.size() >= num, ast, "parameter need more")
+#define AssertArgEqual(num) AssertDummyValue(list.size() == num, ast, "parameter must equal")
 
 DummyOpEval DummyBuiltInOp::builtInOps[DUMMY_TYPE_MAX] = {0};
 std::map<std::string, DummyOpCreate> DummyBuiltInOp::builtInOpsCreate;
 
-DummyBuiltInOp::DummyBuiltInOp(DummyType type, DummyOpEval op)
+DummyBuiltInOp::DummyBuiltInOp(int type, DummyOpEval op)
 {
 	builtInOps[type] = op;
 }
@@ -51,9 +52,9 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 {
 	while (true)
 	{
-		DummyType astType = ast->getType();
+		int astType = ast->getType();
 		switch (astType) {
-		case DummyType::DUMMY_LET:{
+		case DUMMY_TYPE_LET:{
 			// (let ((c 2)) c)
 			// (let ((c 2) (d 3)) (+ c d) (- c d))
 			// let equals let*	
@@ -63,12 +64,12 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 			ConstructLetEnv(letList.front()->getList(), letEnv);
 
 			// tail call optimization
-			ast = opTypeValue("begin", DummyType::DUMMY_BEGIN, letList.begin() + 1, letList.end());
+			ast = opTypeValue("begin", DUMMY_TYPE_BEGIN, letList.begin() + 1, letList.end());
 			env = letEnv;
 			continue;
 			break;
 		}
-		case DummyType::DUMMY_BEGIN:{
+		case DUMMY_TYPE_BEGIN:{
 			// tail call optimization
 			DummyValueList list = ast->getList();	
 			DummyValuePtr ret = list.front()->eval(env);
@@ -76,13 +77,13 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 				return ret;
 			else
 			{
-				ast = opTypeValue("begin", DummyType::DUMMY_BEGIN, list.begin() + 1, list.end());
+				ast = opTypeValue("begin", DUMMY_TYPE_BEGIN, list.begin() + 1, list.end());
 				// env = env
 				continue;
 			}
 			break;	
 		}
-		case DummyType::DUMMY_IF:{
+		case DUMMY_TYPE_IF:{
 			DummyValueList list = ast->getList();
 	
 			DummyValueList::iterator itr = list.begin();
@@ -108,22 +109,22 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 				else
 				{
 					// tail call optimization
-					ast = typeVlaue("begin", DummyType::DUMMY_BEGIN, DummyValueList(itr+2, list.end()));
+					ast = opTypeValue("begin", DUMMY_TYPE_BEGIN, DummyValueList(itr+2, list.end()));
 					// env = env
 					continue;
 				}
 			}
 			break;
 		}
-		case DummyType::DUMMY_WHEN:
-		case DummyType::DUMMY_UNLESS: {
+		case DUMMY_TYPE_WHEN:
+		case DUMMY_TYPE_UNLESS: {
 			DummyValueList list = ast->getList();
 			DummyValueList::iterator itr = list.begin();
 			DummyValuePtr condition = *itr;	
 			// first check condition
 			bool flag = false;
-			if (astType == DummyType::DUMMY_WHEN) flag = condition->eval(env)->isTrueValue();
-			else if (astType == DummyType::DUMMY_UNLESS) flag = condition->eval(env)->isFalseValue();
+			if (astType == DUMMY_TYPE_WHEN) flag = condition->eval(env)->isTrueValue();
+			else if (astType == DUMMY_TYPE_UNLESS) flag = condition->eval(env)->isFalseValue();
 			
 			if (flag)
 				if (itr + 1 == list.end())
@@ -131,7 +132,7 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 				else
 				{
 					// tail call optimization
-					ast = opTypeValue("begin", DummyType::DUMMY_BEGIN, DummyValueList(itr+1, list.end()));
+					ast = opTypeValue("begin", DUMMY_TYPE_BEGIN, DummyValueList(itr+1, list.end()));
 					// env = env;	
 					continue;
 				}
@@ -139,7 +140,7 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 				return DummyValue::nil;
 			break;
 		}
-		case DummyType::DUMMY_QUASIQUOTE:{
+		case DUMMY_TYPE_QUASIQUOTE:{
 			ast = OpEvalQuasiQuote(ast, env);
 			// this result need to be reevaluated
 			break;
@@ -172,11 +173,11 @@ DummyValuePtr DummyCore::OpEvalQuasiQuote(DummyValuePtr value, DummyEnvPtr env)
 	{
 		// eval and put
 		if ((*itr)->isUnQuote())
-			retValue.push_back(Eval((*itr)->getList().front(), env));
+			retValue.push_back(DummyCore::Eval((*itr)->getList().front(), env));
 		else if ((*itr)->isUnQuoteSplicing())
 		{
 			// eval and splice put
-			DummyValuePtr evalItr = Eval((*itr)->getList().front(), env);
+			DummyValuePtr evalItr = DummyCore::Eval((*itr)->getList().front(), env);
 			if (evalItr->isList())
 			{
 				DummyValueList evalItrList = evalItr->getList();
@@ -194,7 +195,7 @@ DummyValuePtr DummyCore::OpEvalQuasiQuote(DummyValuePtr value, DummyEnvPtr env)
 
 bool DummyCore::isEqual(const std::string& first, const DummyValuePtr& second)
 {
-	AssertDummyValue(second->isSymbol(), second);
+	AssertDummyValue(second->isSymbol(), second, "must be a symbol");
 	return first.size() > 0 && 0 == first.compare(second->getSymbol());
 }
 
@@ -233,13 +234,13 @@ DUMMY_BUILTIN_OP_CREATE(DUMMY_TYPE_LET, "let")
 	AssertDummyValueList(list.size() >= 3, list, "parameter >= 3");
 	
 	DummyValuePtr var = *(list.begin() + 1);
-	AssertDummyValue(var->isList(), var);
+	AssertDummyValue(var->isList(), var, "must be a list");
 	
 	DummyValueList symbolList = var->getList();
 	DummyValueList::iterator symbolItr = symbolList.begin();
 	for(; symbolItr != symbolList.end(); ++symbolItr)
 	{
-		DummyValueList varList = (*symbolItr)->getListCheck();
+		DummyValueList varList = (*symbolItr)->getList();
 		AssertDummyValueList(varList.size() == 2, varList, "varList list must =2");
 		AssertDummyValueList(varList.front()->isSymbol(), varList, "first must be symbol");
 		// TODO: store the info, symbol and value
@@ -328,7 +329,7 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_MUL, "*")
 		num *= item->getInt(env);
 	}
 	
-	return numValue(num));
+	return numValue(num);
 }
 
 DUMMY_BUILTIN_OP_CREATE_NORMAL(DUMMY_TYPE_DIVIDE, "/", 2)
@@ -381,11 +382,11 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_DEFINE, "define")
 	DummyValuePtr symbolValue	= DummyValue::nil;
 	
 	if (symbol->isSymbol())
-		symbolValue = Eval(*(list.begin()+1), env);
+		symbolValue = DummyCore::Eval(*(list.begin()+1), env);
 	else
 	{
 		// must be list
-		AssertDummyValue(symbol->isList(), ast);
+		AssertDummyValue(symbol->isList(), ast, "must be list");
 		// TODO: put some checkc on construct
 		DummyValueList symbolList = symbol->getList();
 		symbol = symbolList.front();
@@ -397,7 +398,7 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_DEFINE, "define")
 		for (; bindItr != bindList.end(); ++bindItr)
 		{
 			DummyValuePtr bindValue = *bindItr;
-			AssertDummyValue(bindValue->isSymbol(), ast);
+			AssertDummyValue(bindValue->isSymbol(), ast, "must be symbol");
 			binds.push_back(bindValue->getSymbol());
 		}
 		symbolValue = lambdaValue(binds, list.begin()+1, list.end());
@@ -439,7 +440,7 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_APPLY, "apply")
 	
 	if (!lambda->isLambda()) {
 		lambda = env->get(lambda->getSymbol());
-		AssertDummyValue(lambda->isLambda(), lambda);
+		AssertDummyValue(lambda->isLambda(), lambda, "must be a lambda");
 	}
 	
 	DummyEnvPtr applyEnv(new DummyEnv(env));
@@ -450,9 +451,9 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_APPLY, "apply")
 	for (; bindItr != binds.end(); ++bindItr)
 	{
 		++applyItr;	
-		AssertDummyValue(applyItr != list.end(), value);
+		AssertDummyValue(applyItr != list.end(), lambda, "need more items");
 			
-		applyEnv->set(*bindItr, Eval(*applyItr, env));
+		applyEnv->set(*bindItr, DummyCore::Eval(*applyItr, env));
 	}
 
 	// exec the body
@@ -461,7 +462,7 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_APPLY, "apply")
 	DummyValueList::iterator bodyItr = lambdaBody.begin();	
 	for (; bodyItr != lambdaBody.end(); ++bodyItr)
 	{
-		retValue = Eval(*bodyItr, applyEnv);
+		retValue = DummyCore::Eval(*bodyItr, applyEnv);
 	}
 
 	return retValue;
@@ -478,7 +479,7 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_DISPLAY, "display")
 	DummyValueList::iterator itr = list.begin();		
 	// exec the begin body
 	for (; itr != list.end(); itr++) {
-		std::string result = Eval(*itr, env)->toString();
+		std::string result = DummyCore::Eval(*itr, env)->toString();
 		Print(result.c_str());
 	}
 
@@ -499,7 +500,7 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_LIST, "list")
 	// exec the begin body
 	for (; itr != list.end(); itr++)
 	{
-		evalList.push_back(Eval(*itr, env));
+		evalList.push_back(DummyCore::Eval(*itr, env));
 	}
 	
 	return listValue(evalList);		
@@ -518,7 +519,7 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_LIST_MARK, "list?")
 	DummyValueList::iterator itr = list.begin();		
 	for (; itr != list.end(); itr++)
 	{
-		if(!Eval(*itr, env)->isList())
+		if(!DummyCore::Eval(*itr, env)->isList())
 			return DummyValue::nil;
 	}
 	
@@ -581,7 +582,7 @@ DUMMY_BUILTIN_OP_CREATE_NORMAL(DUMMY_TYPE_NOT, "not", 1);
  */
 DUMMY_BUILTIN_OP(DUMMY_TYPE_NOT, "not")
 {
-	DummyValueList list = value->getList();
+	DummyValueList list = ast->getList();
 	AssertArgBigEqual(1);
 	
 	DummyValueList::iterator itr = list.begin();		
@@ -602,7 +603,7 @@ DUMMY_BUILTIN_OP_CREATE_NORMAL(DUMMY_TYPE_EQUAL, "=", 2);
  */
 DUMMY_BUILTIN_OP(DUMMY_TYPE_EQUAL, "=")
 {
-	DummyValueList list = value->getList();
+	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
 	
 	DummyValueList::iterator itr = list.begin();		
@@ -610,8 +611,8 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_EQUAL, "=")
 	int firstInt = first->getInt(env);
 	for (++itr; itr != list.end(); itr++)
 	{
-		DummyValuePtr evalVal = Eval(*itr, env);
-		AssertDummyValue(evalVal->isInt(), ast);
+		DummyValuePtr evalVal = DummyCore::Eval(*itr, env);
+		AssertDummyValue(evalVal->isInt(), ast, "must be int");
 		
 		int evalInt = evalVal->getInt(env);
 		if (firstInt != evalInt)
@@ -627,7 +628,7 @@ DUMMY_BUILTIN_OP_CREATE_NORMAL(DUMMY_TYPE_LESS, "<", 2);
  */
 DUMMY_BUILTIN_OP(DUMMY_TYPE_LESS, "<")
 {
-	DummyValueList list = value->getList();
+	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
 	
 	DummyValueList::iterator itr = list.begin();		
@@ -635,8 +636,8 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_LESS, "<")
 	int firstInt = first->getInt(env);
 	for (++itr; itr != list.end(); itr++)
 	{
-		DummyValuePtr evalVal = Eval(*itr, env);
-		AssertDummyValue(evalVal->isInt(), ast);
+		DummyValuePtr evalVal = DummyCore::Eval(*itr, env);
+		AssertDummyValue(evalVal->isInt(), ast, "must be int");
 		
 		int evalInt = evalVal->getInt(env);
 		if (firstInt >= evalInt)
@@ -653,15 +654,15 @@ DUMMY_BUILTIN_OP_CREATE_NORMAL(DUMMY_TYPE_LESS_EQUAL, "<=", 2);
  */
 DUMMY_BUILTIN_OP(DUMMY_TYPE_LESS_EQUAL, "<=")
 {
-	DummyValueList list = value->getList();
+	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
 	
 	DummyValueList::iterator itr = list.begin();		
 	int firstInt = (*itr)->getInt(env);
 	for (++itr; itr != list.end(); itr++)
 	{
-		DummyValuePtr evalVal = Eval(*itr, env);
-		AssertDummyValue(evalVal->isInt(), ast);
+		DummyValuePtr evalVal = DummyCore::Eval(*itr, env);
+		AssertDummyValue(evalVal->isInt(), ast, "must be an integer");
 		
 		int evalInt = evalVal->getInt(env);
 		if (firstInt > evalInt)
@@ -679,17 +680,17 @@ DUMMY_BUILTIN_OP_CREATE_NORMAL(DUMMY_TYPE_BIG, ">", 2);
  */
 DUMMY_BUILTIN_OP(DUMMY_TYPE_BIG, ">")
 {
-	DummyValueList list = value->getList();
+	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
 	
 	DummyValueList::iterator itr = list.begin();		
-	AssertDummyValue((*itr)->isInt(), ast);
+	AssertDummyValue((*itr)->isInt(), ast, "must be an integer");
 	
 	int firstInt = (*itr)->getInt(env);
 	for (++itr; itr != list.end(); itr++)
 	{
-		DummyValuePtr evalVal = Eval(*itr, env);
-		AssertDummyValue(evalVal->isInt(), ast);
+		DummyValuePtr evalVal = DummyCore::Eval(*itr, env);
+		AssertDummyValue(evalVal->isInt(), ast, "must be int");
 		
 		int evalInt = evalVal->getInt(env);
 		if (firstInt <= evalInt)
@@ -707,17 +708,17 @@ DUMMY_BUILTIN_OP_CREATE_NORMAL(DUMMY_TYPE_BIG_EQUAL, ">=", 2);
  */
 DUMMY_BUILTIN_OP(DUMMY_TYPE_BIG_EQUAL, ">=")
 {
-	DummyValueList list = value->getList();
+	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
 	
 	DummyValueList::iterator itr = list.begin();		
-	AssertDummyValue((*itr)->isInt(), ast);
+	AssertDummyValue((*itr)->isInt(), ast, "must be int");
 	
 	int firstInt = (*itr)->getInt(env);
 	for (++itr; itr != list.end(); itr++)
 	{
-		DummyValuePtr evalVal = Eval(*itr, env);
-		AssertDummyValue(evalVal->isInt(), ast);
+		DummyValuePtr evalVal = DummyCore::Eval(*itr, env);
+		AssertDummyValue(evalVal->isInt(), ast, "must be int");
 		
 		int evalInt = evalVal->getInt(env);
 		if (firstInt < evalInt)
@@ -739,8 +740,8 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_LENGTH, "length")
 	DummyValueList list = ast->getList();
 	AssertArgEqual(1);
 	
-	DummyValuePtr evalVal = Eval(list.front(), env);
-	AssertDummyValue(evalVal->isList(), ast);
+	DummyValuePtr evalVal = DummyCore::Eval(list.front(), env);
+	AssertDummyValue(evalVal->isList(), ast, "must be list");
 
 	return numValue(evalVal->getList().size());
 }
@@ -751,15 +752,15 @@ DUMMY_BUILTIN_OP_CREATE_NORMAL(DUMMY_TYPE_LOAD, "load", 1);
  */
 DUMMY_BUILTIN_OP(DUMMY_TYPE_LOAD, "load")
 {
-	DummyValueList list = value->getList();	
+	DummyValueList list = ast->getList();	
 	AssertArgBigEqual(1);
 	
 	// TODO: use a filetype dummyvalue dynamicaly read file content
 	DummyValueList::iterator itr = list.begin();	
 	for (; itr != list.end(); ++itr)
 	{
-		DummyValuePtr fileValue = Eval(*itr, env);
-		AssertDummyValue(fileValue->isString(), ast);
+		DummyValuePtr fileValue = DummyCore::Eval(*itr, env);
+		AssertDummyValue(fileValue->isString(), ast, "must be string");
 
 		FILE* file = fopen(fileValue->getStr().c_str(), "rb");
 		Assert(file != NULL, "file not found");

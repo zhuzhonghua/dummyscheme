@@ -10,7 +10,6 @@
 
 namespace DummyScheme {
 class Tokenize;
-typedef std::vector<std::string> BindList;
 
 class DummyValue : public DummyRefCount {
 public:
@@ -23,7 +22,7 @@ protected:
 	union {
 		int intnum;
 		double floatnum;	
-		const char* const typeStr;
+		const char* typeStr;
 	} basic;
 	// TODO: all same symbols share one value
 	BindList strOrSymOrBind;

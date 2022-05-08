@@ -7,24 +7,26 @@
 
 namespace DummyScheme {
 	
+#define StringPrint stringPrintf
+
 //#define STR(s) #s
-#define FILE_LINE_FUNCTION stringPrintf("[%s:%d:%s]\n", __FILE__, __LINE__, __FUNCTION__)
+#define FILE_LINE_FUNCTION StringPrint("[%s:%d:%s]\n", __FILE__, __LINE__, __FUNCTION__)
 
 //#define Error(...) errorThrow(FILE_LINE_FUNCTION, __VA_ARGS__)
-#define Error(...) throw stringPrintf(__VA_ARGS__) + "\nerror happended at" + FILE_LINE_FUNCTION;
+#define Error(...) throw StringPrint(__VA_ARGS__) + "\nerror happended at" + FILE_LINE_FUNCTION;
 
 #define Assert(condition, ...) do { if (!(condition)) { Error(#condition "" __VA_ARGS__); } } while (0)
 
 #define AssertDummyValue(condition, ptr, ...)				                                             \
 	do { if (!(condition)) {                                                                       \
-			std::string fmt = stringPrintf(__VA_ARGS__);											                         \
+			std::string fmt = StringPrint(__VA_ARGS__);                         											 \
 			Error(#condition "%s type=%d value=%s", fmt.c_str(), ptr->getType(), DummyValueCStr(ptr)); \
 		} } while (0)
 
 #define AssertDummyValueList(condition, list, ...)	                                     \
 	do {																							                                     \
 	  if (!(condition)) {			                 																						 \
-			std::string fmt = stringPrintf(__VA_ARGS__);											                 \
+			std::string fmt = StringPrint(__VA_ARGS__);											                   \
 			Error(#condition "%s listvalue=%s", fmt.c_str(), DummyValueCStr(listValue(list))); \
 		}																																		                 \
 	} while (0)
@@ -39,7 +41,7 @@ namespace DummyScheme {
 extern std::string stringPrintf(const char* fmt, ...);
 //extern void errorThrow(const char* fileLineFunc, const char *fmt, ...);
 //extern void Print(const char *fmt, ...);
-#define Print(...) printf(stringPrintf(__VA_ARGS__).c_str());
+#define Print(...) printf(StringPrint(__VA_ARGS__).c_str());
 extern bool isEqual(const std::string& first, const std::string& second);
 extern bool isFloatEqual(double a, double b);
 }

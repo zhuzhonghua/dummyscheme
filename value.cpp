@@ -6,9 +6,9 @@
 
 using namespace DummyScheme;
 
-DummyValuePtr DummyValue::nil(new DummyValue(DummyType::DUMMY_NIL, "nil"));
-DummyValuePtr DummyValue::t(new DummyValue(DummyType::DUMMY_TRUE, "#t"));
-DummyValuePtr DummyValue::f(new DummyValue(DummyType::DUMMY_FALSE, "#f"));
+DummyValuePtr DummyValue::nil(new DummyValue(DUMMY_TYPE_NIL, "nil"));
+DummyValuePtr DummyValue::t(new DummyValue(DUMMY_TYPE_TRUE, "#t"));
+DummyValuePtr DummyValue::f(new DummyValue(DUMMY_TYPE_FALSE, "#f"));
 
 DummyValue::DummyValue(int num)
 	:type(DUMMY_TYPE_INT_NUM)
@@ -74,13 +74,13 @@ int DummyValue::getInt(DummyEnvPtr env)
 	else if (this->isSymbol())
 	{
 		DummyValuePtr symbolValue = env->get(this->getSymbol());
-		AssertDummyValue(symbolValue->isInt(), this);
+		AssertDummyValue(symbolValue->isInt(), this, "not int type");
 		return symbolValue->getInt();
 	}
 	else
 	{
 		DummyValuePtr realItem = DummyCore::Eval(this, env);
-		AssertDummyValue(realItem->isInt(), this);
+		AssertDummyValue(realItem->isInt(), this, "not int type");
 		return realItem->getInt();
 	}
 }
@@ -89,22 +89,22 @@ std::string DummyValue::toString()
 {
 	std::stringstream out;		
 	switch(type) {
-	case DUMMY_TYPE_TYPE_INT_NUM:
+	case DUMMY_TYPE_INT_NUM:
 		out << this->basic.intnum;
 		break;
-	case DUMMY_TYPE_TYPE_FLOAT_NUM:
+	case DUMMY_TYPE_FLOAT_NUM:
 		out << this->basic.floatnum;	
 		break;
-	case DUMMY_TYPE_TYPE_STRING:
+	case DUMMY_TYPE_STRING:
 		out << "\"" << strOrSymOrBind[0] << "\"";	
 		break;
-	case DUMMY_TYPE_TYPE_TRUE:	
-	case DUMMY_TYPE_TYPE_FALSE:
-	case DUMMY_TYPE_TYPE_NIL:
-	case DUMMY_TYPE_TYPE_SYMBOL:
+	case DUMMY_TYPE_TRUE:	
+	case DUMMY_TYPE_FALSE:
+	case DUMMY_TYPE_NIL:
+	case DUMMY_TYPE_SYMBOL:
 		out << strOrSymOrBind[0];
 		break;
-	case DUMMY_TYPE_TYPE_LAMBDA:{
+	case DUMMY_TYPE_LAMBDA:{
 		out << "#<function>";
 		out << " [";
 		BindList binds = getBind();
@@ -125,7 +125,7 @@ std::string DummyValue::toString()
 		}
 		break;
 	}
-	case DUMMY_TYPE_TYPE_LIST:{
+	case DUMMY_TYPE_LIST:{
 		out << "(";
 		DummyValueList::iterator itr = list.begin();
 		for (;itr != list.end(); itr++)
@@ -170,13 +170,13 @@ bool DummyValue::isEqualValue(DummyValuePtr other, DummyEnvPtr env)
 	}
 
 	switch(this->type) {
-	case DUMMY_TYPE_TYPE_INT_NUM:
+	case DUMMY_TYPE_INT_NUM:
 		return this->basic.intnum == other->basic.intnum;
-	case DUMMY_TYPE_TYPE_FLOAT_NUM:
+	case DUMMY_TYPE_FLOAT_NUM:
 		return isFloatEqual(this->basic.floatnum, other->basic.floatnum);
-	case DUMMY_TYPE_TYPE_STRING:
+	case DUMMY_TYPE_STRING:
 		return 0 == this->strOrSymOrBind[0].compare(other->strOrSymOrBind[0]);
-	case DUMMY_TYPE_TYPE_LIST:{
+	case DUMMY_TYPE_LIST:{
 		DummyValueList a = this->list;
 		DummyValueList b = other->list;
 		
@@ -204,33 +204,33 @@ bool DummyValue::isEqualValue(DummyValuePtr other, DummyEnvPtr env)
 DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 {	
 	switch(type) {
-	case DUMMY_TYPE_TYPE_INT_NUM:
-	case DUMMY_TYPE_TYPE_FLOAT_NUM:
-	case DUMMY_TYPE_TYPE_STRING:
-	case DUMMY_TYPE_TYPE_TRUE:
-	case DUMMY_TYPE_TYPE_FALSE:
-	case DUMMY_TYPE_TYPE_NIL:
+	case DUMMY_TYPE_INT_NUM:
+	case DUMMY_TYPE_FLOAT_NUM:
+	case DUMMY_TYPE_STRING:
+	case DUMMY_TYPE_TRUE:
+	case DUMMY_TYPE_FALSE:
+	case DUMMY_TYPE_NIL:
 	// the real lambda eval needs apply	
 	// may be a returnvalue
-	case DUMMY_TYPE_TYPE_LAMBDA: 
+	case DUMMY_TYPE_LAMBDA: 
 		return this;
-	case DUMMY_TYPE_TYPE_SYMBOL:
+	case DUMMY_TYPE_SYMBOL:
 		return env->get(strOrSymOrBind[0]);
-	case DUMMY_TYPE_TYPE_QUOTE:
+	case DUMMY_TYPE_QUOTE:
 		// (quote abc)
 		// (quote (1 2 3))
 		return list.front();
-	case DUMMY_TYPE_TYPE_UNQUOTE:{
+	case DUMMY_TYPE_UNQUOTE:{
 		Error("cannot eval unquote separately");
 		return DummyValue::nil;
 	}
-	case DUMMY_TYPE_TYPE_UNQUOTE_SPLICING:{
+	case DUMMY_TYPE_UNQUOTE_SPLICING:{
 		Error("cannot eval unquote-splicing separately");
 		return DummyValue::nil;
 	}
 	default:{
 		DummyOpEval op = DummyBuiltInOp::builtInOps[type];
-		Assert(op != null, "internal error of no opeval with type %d", type);
+		Assert(op != NULL, "internal error of no opeval with type %d", type);
 		return op(this, env);
 		break;
 	}
@@ -247,14 +247,14 @@ DummyValuePtr DummyValue::create(DummyValueList& list)
 	if (front->isSymbol())
 	{
 		std::string symbol = front->getSymbol();
-		DummyOpCreate::iterator opCreateItr = DummyBuiltInOp::builtInOpsCreate.find(symbol);	
+		std::map<std::string, DummyOpCreate>::iterator opCreateItr = DummyBuiltInOp::builtInOpsCreate.find(symbol);	
 		if (opCreateItr != DummyBuiltInOp::builtInOpsCreate.end())
-			return (*opCreateItr)(list);
+			return (opCreateItr->second)(list);
 		// (let ((c 2)) c)
 		//	Error("unexpected type %d", type);	
 	}
 	else if (front->isLambda()) // ((lambda (a) (+ a 2)) 2)
-		return DummyCore::OpConstructApply(list);
+		return opTypeValue("apply", DUMMY_TYPE_APPLY, list);
 
 	return listValue(list);
 }
