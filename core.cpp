@@ -12,7 +12,7 @@ using namespace DummyScheme;
 #define DUMMY_OPCREATENAME(uniq) DummyBuiltInOpCreate ## uniq
 #define DUMMY_OPCREATEHELP(uniq) DummyBuiltInOpCreateHelp ## uniq
 
-#define DUMMY_BUILTIN_OP(type, symbol) \
+#define DUMMY_BUILTIN_OP_DEF(type, symbol) \
 DummyValuePtr DUMMY_OPEVALNAME(type)(DummyValuePtr ast, DummyEnvPtr env); \
  static DummyBuiltInOp DUMMY_OPEVALHELP(type) (type, DUMMY_OPEVALNAME(type));	    \
  DummyValuePtr DUMMY_OPEVALNAME(type)(DummyValuePtr ast, DummyEnvPtr env)
@@ -31,7 +31,7 @@ DUMMY_BUILTIN_OP_CREATE(type, symbol)																		                     \
 
 #define DUMMY_BUILTIN_OP(type, symbol, num)				\
 DUMMY_BUILTIN_OP_CREATE_NORMAL(type, symbol, num)	\
-DUMMY_BUILTIN_OP(type, symbol)
+DUMMY_BUILTIN_OP_DEF(type, symbol)
 
 #define AssertArgBigEqual(num) AssertDummyValue(list.size() >= num, ast, "parameter need more")
 #define AssertArgEqual(num) AssertDummyValue(list.size() == num, ast, "parameter must equal")
@@ -365,8 +365,11 @@ DUMMY_BUILTIN_OP_CREATE(DUMMY_TYPE_DEFINE, "define")
 	(define b (+ a 3))
 	(define b (lambda (p) (+ p 3)))
 	(define (c p1 p2) (+ p1 p2))
+	
+	TODO:
+	(define a +)
  */
-DUMMY_BUILTIN_OP(DUMMY_TYPE_DEFINE, "define")
+DUMMY_BUILTIN_OP_DEF(DUMMY_TYPE_DEFINE, "define")
 {
 	DummyValueList list = ast->getList();
 	AssertArgEqual(2);
@@ -404,6 +407,11 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_DEFINE, "define")
 /*
 	(apply (lambda (a) (+ a 2)) 3)
 	(apply f 2 3)
+	
+	TODO:
+	(apply + 2 3)
+	(define a +)
+	(apply a 2 3)
  */
 DUMMY_BUILTIN_OP_CREATE(DUMMY_TYPE_APPLY, "apply")
 {
@@ -422,9 +430,11 @@ DUMMY_BUILTIN_OP_CREATE(DUMMY_TYPE_APPLY, "apply")
 /*
 	((lambda (a) (+ a 2)) 3)
 	(apply (lambda (a) (+ a 2)) 3)
+	(define f (lambda (a b) (+ a b)))
 	(apply f 2 3)
+	(apply + 2 3)
  */
-DUMMY_BUILTIN_OP(DUMMY_TYPE_APPLY, "apply")
+DUMMY_BUILTIN_OP_DEF(DUMMY_TYPE_APPLY, "apply")
 {
 	DummyValueList list = ast->getList(); 
 	DummyValueList::iterator applyItr = list.begin();	

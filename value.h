@@ -22,6 +22,7 @@ public:
 	static DummyValuePtr t;
 	static DummyValuePtr f;
 protected:
+	DummyValue() {}
 	int type;
 public:
 	static DummyValuePtr create(DummyValueList& list);
@@ -29,14 +30,15 @@ public:
 	virtual int getInt() { Error("error not a num value"); return 0; }
 	virtual double getDouble() { Error("error not a num value"); return 0; }
 	virtual std::string getStr() { Error("error not a string value"); return ""; }
-	virtual std::string getSymbol() { return Error("error not a symbol value"); return ""; }
+	virtual std::string getSymbol() { Error("error not a symbol value"); return ""; }
 	virtual BindList getBind() { Error("error not a lambda value"); return BindList(); }
-	virtual const char* const getTypeStr() { return Error("error not a op type value"); return ""; }
-	virtual DummyValueList getList() { return Error("error dont have list item"); return DummyValueList(); }
+	virtual const char* const getTypeStr() { Error("error not a op type value"); return ""; }
+	virtual DummyValueList getList() { Error("error dont have list item"); return DummyValueList(); }
 	virtual std::string toString();
 	virtual DummyValuePtr eval(DummyEnvPtr env);
 public:
 	bool isEqualValue(DummyValuePtr other, DummyEnvPtr env);
+	int getInt(DummyEnvPtr env);
 public:
 	bool isInt() { return type == DUMMY_TYPE_INT_NUM; }
 	bool isFloat() { return type == DUMMY_TYPE_FLOAT_NUM; }
@@ -57,7 +59,7 @@ public:
 	int getType() { return type; }
 public:
 	DummyValue(int type);
-//	~DummyValue();
+	virtual ~DummyValue() {}
 };
 
 /*
@@ -125,7 +127,7 @@ public:
 	virtual BindList getBind() { return binds; }
 	virtual DummyValueList getList() { return list; }
 	virtual std::string toString();
-protecte:
+protected:
 	BindList binds;
 	DummyValueList list;
 };

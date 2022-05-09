@@ -13,26 +13,12 @@ DummyValuePtr DummyValue::f(new DummyValue(DUMMY_TYPE_FALSE));
 DummyValue::DummyValue(int type)
 	:type(type)
 {
-	switch(type) {
-	case DUMMY_TYPE_NIL:
-	case DUMMY_TYPE_TRUE:
-	case DUMMY_TYPE_FALSE:
-		break;
-	default:
-		Error("wrong dummytype %d with %s", type);
-		break;
-	}
 }
 
-//
-//DummyValue::~DummyValue()
-//{
-//}
-//
 int DummyValue::getInt(DummyEnvPtr env)
 {
 	if (this->isInt())
-		return this->basic.intnum;
+		return this->getInt();
 	else if (this->isSymbol())
 	{
 		DummyValuePtr symbolValue = env->get(this->getSymbol());
@@ -85,10 +71,10 @@ bool DummyValue::isEqualValue(DummyValuePtr other, DummyEnvPtr env)
 	case DUMMY_TYPE_STRING:
 		return 0 == this->getStr().compare(other->getStr());
 	case DUMMY_TYPE_SYMBOL:
-		return env->get(this->getSymbol())->isEqualValue(env->get(other->getSymbol()));
+		return env->get(this->getSymbol())->isEqualValue(env->get(other->getSymbol()), env);
 	case DUMMY_TYPE_LIST:{
-		DummyValueList a = this->list;
-		DummyValueList b = other->list;
+		DummyValueList a = this->getList();
+		DummyValueList b = other->getList();
 		
 		if (a.size() != b.size())
 			return false;
@@ -152,13 +138,13 @@ DummyValuePtr DummyValue::create(DummyValueList& list)
 }
 
 DummyNumValue::DummyNumValue(int num)
-	:type(DUMMY_TYPE_INT_NUM)
+	:DummyValue(DUMMY_TYPE_INT_NUM)
 {
 	basic.intnum = num;
 }
 
 DummyNumValue::DummyNumValue(double num)
-	:type(DUMMY_TYPE_FLOAT_NUM)
+	:DummyValue(DUMMY_TYPE_FLOAT_NUM)
 {
 	basic.floatnum = num;
 }
@@ -178,18 +164,18 @@ std::string DummyNumValue::toString()
 }
 
 DummyStringValue::DummyStringValue(const std::string &val)
-	:type(DUMMY_TYPE_STRING),
+	:DummyValue(DUMMY_TYPE_STRING),
 	 str(val)
 {
 }
 
 std::string DummyStringValue::toString()
 {
-	return "\"" + str "\"";
+	return "\"" + str + "\"";
 }
 
-DummySymbolValue::DummySymbolValue(const std::string &value)
-	:type(DUMMY_TYPE_SYMBOL),
+DummySymbolValue::DummySymbolValue(const std::string &val)
+	:DummyValue(DUMMY_TYPE_SYMBOL),
 	 symbol(val)
 {
 }
@@ -205,7 +191,7 @@ DummyValuePtr DummySymbolValue::eval(DummyEnvPtr env)
 }
 
 DummyListValue::DummyListValue(DummyValueList list)
-	:type(DUMMY_TYPE_LIST),
+	:DummyValue(DUMMY_TYPE_LIST),
 	 list(list)
 {
 }
@@ -227,7 +213,7 @@ std::string DummyListValue::toString()
 }
 
 DummyLambdaValue::DummyLambdaValue(BindList binds, DummyValueList list)
-	:type(DUMMY_TYPE_LAMBDA),
+	:DummyValue(DUMMY_TYPE_LAMBDA),
 	 list(list),
 	 binds(binds)
 {
@@ -259,7 +245,7 @@ std::string DummyLambdaValue::toString()
 }
 
 DummyOpTypeValue::DummyOpTypeValue(const char* const typeStr, int type, DummyValueList list)
-	:type(type),
+	:DummyValue(type),
 	 list(list),
 	 typeStr(typeStr)
 {
@@ -268,7 +254,7 @@ DummyOpTypeValue::DummyOpTypeValue(const char* const typeStr, int type, DummyVal
 std::string DummyOpTypeValue::toString()
 {
 	std::stringstream out;
-	out << "(" << basic.typeStr << " ";	
+	out << "(" << typeStr << " ";	
 	DummyValueList::iterator itr = list.begin();	
 	for (;itr != list.end(); itr++)
 	{

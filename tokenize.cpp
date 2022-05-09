@@ -354,5 +354,5 @@ DummyValuePtr Tokenize::readSymbol()
 	else if (0 == symStr.compare(STR_FALSE))
 		return DummyValue::f;
 	else
-		return symbolValue(symStr);	
+		return symbolValue(symStr);
 }
