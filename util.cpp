@@ -29,25 +29,6 @@ std::string stringPrintf(const char* fmt, ...)
 	return str;
 }
 
-//void errorThrow(const char* fileLineFunc, const char *fmt, ...)
-//{
-//	std::string error("\nerror happpended at ");
-//	error.append(fileLineFunc);
-//	error.append(stringPrintf(fmt, __VA_ARGS__));
-//
-//	throw error;
-//}
-//
-//void Print(const char *fmt, ...)
-//{
-//	printf(stringPrintf(fmt, __VA_ARGS__));
-//}
-//
-bool isEqual(const std::string& first, const std::string& second)
-{
-	return first.size() == second.size() && first.size() > 0 && 0 == first.compare(second);
-}
-
 bool isFloatEqual(double a, double b)
 {
 	return std::abs(a - b) <= DBL_EPSILON;

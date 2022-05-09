@@ -23,8 +23,6 @@ public:
 private:
 	static void ConstructLetEnv(DummyValueList varList, DummyEnvPtr letEnv);
 public:
-	static bool isEqual(const std::string& first, const DummyValuePtr& second);
-
 	static DummyValuePtr OpEvalQuasiQuote(DummyValuePtr value, DummyEnvPtr env);
 };
 };
