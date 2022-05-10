@@ -6,9 +6,9 @@
 
 using namespace DummyScheme;
 
-DummyValuePtr DummyValue::nil(new DummyValue(DUMMY_TYPE_NIL, STR_NIL));
-DummyValuePtr DummyValue::t(new DummyValue(DUMMY_TYPE_TRUE, STR_TRUE));
-DummyValuePtr DummyValue::f(new DummyValue(DUMMY_TYPE_FALSE, STR_FALSE));
+const DummyValuePtr DummyValue::nil(new DummyValue(DUMMY_TYPE_NIL, STR_NIL));
+const DummyValuePtr DummyValue::t(new DummyValue(DUMMY_TYPE_TRUE, STR_TRUE));
+const DummyValuePtr DummyValue::f(new DummyValue(DUMMY_TYPE_FALSE, STR_FALSE));
 
 DummyValue::DummyValue(int type, const String& val)
 	:DummyValue(type)

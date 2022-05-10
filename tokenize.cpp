@@ -116,7 +116,7 @@ DummyValuePtr Tokenize::readQuote()
 	list.push_back(readP());
 		
 	// TODO: straightly create the dummyvalue with type
-	return DummyValue::create(list);
+	return DummyCore::Compile(list);
 }
 
 /*
@@ -134,7 +134,7 @@ DummyValuePtr Tokenize::readUnQuote()
 	list.push_back(readP());
 		
 	// TODO: straightly create the dummyvalue with type
-	return DummyValue::create(list);
+	return DummyCore::Compile(list);
 }
 
 /*
@@ -151,7 +151,7 @@ DummyValuePtr Tokenize::readUnQuoteSplicing()
 	list.push_back(readP());
 		
 	// TODO: straightly create the dummyvalue with type
-	return DummyValue::create(list);
+	return DummyCore::Compile(list);
 }
 
 /*
@@ -169,7 +169,7 @@ DummyValuePtr Tokenize::readQuasiQuote()
 	list.push_back(readP());
 		
 	// TODO: straightly create the dummyvalue with type
-	return DummyValue::create(list);
+	return DummyCore::Compile(list);
 }
 
 /*
@@ -232,7 +232,7 @@ DummyValuePtr Tokenize::readList()
 		if (listP.size() > 0)
 			list.insert(list.end(), listP.begin(), listP.end());
 		
-		return DummyValue::create(list);
+		return DummyCore::Compile(list);
 		break;
 	}
 	}

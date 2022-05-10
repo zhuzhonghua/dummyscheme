@@ -14,6 +14,10 @@ public:
 	DummyBuiltInHelper(int type, const String& op);
 	DummyBuiltInHelper(const String& op, DummyOpCompile opCompile);
 };
+	
+typedef std::map<String, DummyOpCompile> MapOpCompile;
+typedef std::map<String, int> MapOpType;
+typedef std::map<String, int> MapOpNum;
 
 class DummyCore{
 public:
@@ -24,10 +28,6 @@ public:
 	static String GetTypeStr(int type);
 private:
 	friend class DummyBuiltInHelper;
-	
-	typedef std::map<String, DummyOpCompile> MapOpCompile;
-	typedef std::map<String, int> MapOpType;
-	typedef std::map<String, int> MapOpNum;
 	
 	static DummyOpEval builtInOpEval[];
 	static MapOpCompile builtInOpCompile;
