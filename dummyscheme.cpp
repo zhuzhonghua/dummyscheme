@@ -7,14 +7,14 @@ namespace DummyScheme {
 /*
 	for convenience
  */
-DummyValuePtr opTypeValue(const char* const typeStr, int type, const DummyValueList& list)
+DummyValuePtr opTypeValue(int type, const DummyValueList& list)
 {
-	return new DummyOpTypeValue(typeStr, type, list);
+	return new DummyOpTypeValue(type, list);
 }
 
-DummyValuePtr opTypeValue(const char* const typeStr, int type, DummyValueList::iterator begin, DummyValueList::iterator end)
+DummyValuePtr opTypeValue(int type, DummyValueList::iterator begin, DummyValueList::iterator end)
 {
-	return opTypeValue(typeStr, type, DummyValueList(begin, end));	
+	return opTypeValue(type, DummyValueList(begin, end));	
 }
 
 DummyValuePtr listValue(const DummyValueList& list)

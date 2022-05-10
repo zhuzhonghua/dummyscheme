@@ -20,9 +20,11 @@ class DummyEnv;
 typedef DummyRefCountPtr<DummyEnv>  DummyEnvPtr;
 
 typedef std::vector<std::string> BindList;
+typedef std::string String;
+typedef std::stringstream StringStream;
 
-DummyValuePtr opTypeValue(const char* const typeStr, int type, const DummyValueList& list);
-DummyValuePtr opTypeValue(const char* const typeStr, int type, DummyValueList::iterator begin, DummyValueList::iterator end);
+DummyValuePtr opTypeValue(int type, const DummyValueList& list);
+DummyValuePtr opTypeValue(int type, DummyValueList::iterator begin, DummyValueList::iterator end);
 DummyValuePtr listValue(const DummyValueList& list);
 DummyValuePtr listValue(DummyValueList::iterator begin, DummyValueList::iterator end);
 DummyValuePtr strValue(const std::string &str);

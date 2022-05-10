@@ -18,27 +18,24 @@ class Tokenize;
 
 class DummyValue : public DummyRefCount {
 public:
-	static DummyValuePtr nil;
-	static DummyValuePtr t;
-	static DummyValuePtr f;
+	static const DummyValuePtr nil;
+	static const DummyValuePtr t;
+	static const DummyValuePtr f;
 protected:
-	DummyValue() {}
+	DummyValue(int type);
 	int type;
-public:
-	static DummyValuePtr create(DummyValueList& list);
 public:
 	virtual int getInt() { Error("error not a num value"); return 0; }
 	virtual double getDouble() { Error("error not a num value"); return 0; }
 	virtual std::string getStr() { Error("error not a string value"); return ""; }
 	virtual std::string getSymbol() { Error("error not a symbol value"); return ""; }
 	virtual BindList getBind() { Error("error not a lambda value"); return BindList(); }
-	virtual const char* const getTypeStr() { Error("error not a op type value"); return ""; }
 	virtual DummyValueList getList() { Error("error dont have list item"); return DummyValueList(); }
 	virtual std::string toString();
 	virtual DummyValuePtr eval(DummyEnvPtr env);
 public:
 	bool isEqualValue(DummyValuePtr other, DummyEnvPtr env);
-	int getInt(DummyEnvPtr env);
+	bool isEqualString(const String str);
 public:
 	bool isInt() { return type == DUMMY_TYPE_INT_NUM; }
 	bool isFloat() { return type == DUMMY_TYPE_FLOAT_NUM; }
@@ -58,7 +55,7 @@ public:
 	
 	int getType() { return type; }
 public:
-	DummyValue(int type);
+	DummyValue(int type, const String& val);
 	virtual ~DummyValue() {}
 };
 
@@ -137,13 +134,11 @@ protected:
  */
 class DummyOpTypeValue : public DummyValue {
 public:
-	DummyOpTypeValue(const char* const typeStr, int type, DummyValueList list);
-	virtual const char* const getTypeStr() { return typeStr; }
+	DummyOpTypeValue(int type, DummyValueList list);
 	virtual DummyValueList getList() { return list; }
 	virtual std::string toString();
 	virtual DummyValuePtr eval(DummyEnvPtr env);
 protected:
-	const char* const typeStr;
 	DummyValueList list;
 };
 

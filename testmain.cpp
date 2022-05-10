@@ -19,7 +19,7 @@ void runtest(TestFunc testfunc, char* funcname)
 
 #define RUNTEST(func) runtest(func, #func)
 
-#define ISEQUAL(a, b, env) if (!a->isEqualValue(b, env)) throw "not equal";
+#define ISEQUAL(a, b, env) if (!a->isEqualValue(b, env)) throw a->toString() + "not equal" + b->toString();
 #define ISTOKENIZEEQUAL(t, env, b) ISEQUAL(t.run(env), b, env)
 
 void test1()

@@ -9,7 +9,6 @@ namespace DummyScheme {
 	
 #define StringPrint stringPrintf
 
-//#define STR(s) #s
 #define FILE_LINE_FUNCTION StringPrint("[%s:%d:%s]\n", __FILE__, __LINE__, __FUNCTION__)
 
 #define Error(...) throw StringPrint(__VA_ARGS__) + "\nerror happended at" + FILE_LINE_FUNCTION;

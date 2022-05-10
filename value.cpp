@@ -6,29 +6,29 @@
 
 using namespace DummyScheme;
 
-DummyValuePtr DummyValue::nil(new DummyValue(DUMMY_TYPE_NIL));
-DummyValuePtr DummyValue::t(new DummyValue(DUMMY_TYPE_TRUE));
-DummyValuePtr DummyValue::f(new DummyValue(DUMMY_TYPE_FALSE));
+DummyValuePtr DummyValue::nil(new DummyValue(DUMMY_TYPE_NIL, STR_NIL));
+DummyValuePtr DummyValue::t(new DummyValue(DUMMY_TYPE_TRUE, STR_TRUE));
+DummyValuePtr DummyValue::f(new DummyValue(DUMMY_TYPE_FALSE, STR_FALSE));
+
+DummyValue::DummyValue(int type, const String& val)
+	:DummyValue(type)
+{
+	switch(type) {
+	case DUMMY_TYPE_TRUE:
+	case DUMMY_TYPE_FALSE:
+	case DUMMY_TYPE_NIL:
+		// do nothing
+		break;
+	default:{
+		Error("unknown type of value %d", type);
+		break;
+	}
+	}
+}
 
 DummyValue::DummyValue(int type)
 	:type(type)
 {
-}
-
-int DummyValue::getInt(DummyEnvPtr env)
-{
-	if (this->isInt())
-		return this->getInt();
-	else if (this->isSymbol())
-	{
-		DummyValuePtr symbolValue = env->get(this->getSymbol());
-		return symbolValue->getInt();
-	}
-	else
-	{
-		DummyValuePtr realItem = DummyCore::Eval(this, env);
-		return realItem->getInt();
-	}
 }
 
 std::string DummyValue::toString()
@@ -48,6 +48,22 @@ std::string DummyValue::toString()
 	return "";
 }
 
+bool DummyValue::isEqualString(const String str)
+{
+	switch(type) {
+	case DUMMY_TYPE_TRUE:
+		return 0 == str.compare(STR_TRUE);
+	case DUMMY_TYPE_FALSE:
+		return 0 == str.compare(STR_FALSE);
+	case DUMMY_TYPE_NIL:
+		return 0 == str.compare(STR_NIL);
+	default:{
+		Error("unknown type of value %d", type);
+		break;
+	}
+	}
+	return false;
+}
 /*
 	(equal? a b)
  */
@@ -117,24 +133,6 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	}
 	
 	return DummyValue::nil;
-}
-
-DummyValuePtr DummyValue::create(DummyValueList& list)
-{
-	DummyValuePtr front = list.front();
-	if (front->isSymbol())
-	{
-		std::string symbol = front->getSymbol();
-		std::map<std::string, DummyOpCreate>::iterator opCreateItr = DummyBuiltInOp::builtInOpsCreate.find(symbol);	
-		if (opCreateItr != DummyBuiltInOp::builtInOpsCreate.end())
-			return (opCreateItr->second)(list);
-		// (let ((c 2)) c)
-		//	Error("unexpected type %d", type);	
-	}
-	else if (front->isLambda()) // ((lambda (a) (+ a 2)) 2)
-		return opTypeValue("apply", DUMMY_TYPE_APPLY, list);
-
-	return listValue(list);
 }
 
 DummyNumValue::DummyNumValue(int num)
@@ -244,17 +242,16 @@ std::string DummyLambdaValue::toString()
 	return out.str();
 }
 
-DummyOpTypeValue::DummyOpTypeValue(const char* const typeStr, int type, DummyValueList list)
+DummyOpTypeValue::DummyOpTypeValue(int type, DummyValueList list)
 	:DummyValue(type),
-	 list(list),
-	 typeStr(typeStr)
+	 list(list)
 {
 }
 
 std::string DummyOpTypeValue::toString()
 {
 	std::stringstream out;
-	out << "(" << typeStr << " ";	
+	out << "(" << DummyCore::GetTypeStr(type) << " ";	
 	DummyValueList::iterator itr = list.begin();	
 	for (;itr != list.end(); itr++)
 	{
@@ -282,9 +279,7 @@ DummyValuePtr DummyOpTypeValue::eval(DummyEnvPtr env)
 		return DummyValue::nil;
 	}
 	default:{
-		DummyOpEval op = DummyBuiltInOp::builtInOps[type];
-		Assert(op != NULL, "internal error of no opeval with type %d", type);
-		return op(this, env);
+		return DummyCore::EvalOpType(this, env);
 		break;
 	}
 	}

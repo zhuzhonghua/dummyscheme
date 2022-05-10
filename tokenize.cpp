@@ -347,11 +347,11 @@ DummyValuePtr Tokenize::readSymbol()
 	}
 
 	std::string symStr = symbol.str();
-	if (0 == symStr.compare(STR_NIL))
+	if (DummyValue::nil->isEqualString(symStr))
 		return DummyValue::nil;
-	else if (0 == symStr.compare(STR_TRUE))
+	else if (DummyValue::t->isEqualString(symStr))
 		return DummyValue::t;
-	else if (0 == symStr.compare(STR_FALSE))
+	else if (DummyValue::f->isEqualString(symStr))
 		return DummyValue::f;
 	else
 		return symbolValue(symStr);

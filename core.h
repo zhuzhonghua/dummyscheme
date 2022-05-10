@@ -5,24 +5,34 @@
 namespace DummyScheme{
 
 typedef DummyValuePtr (*DummyOpEval)(DummyValuePtr value, DummyEnvPtr env);
+typedef DummyValuePtr (*DummyOpCompile)(DummyValueList& list);
 
-typedef DummyValuePtr (*DummyOpCreate)(DummyValueList& list);
-
-class DummyBuiltInOp{
+class DummyBuiltInHelper{
 public:
-	DummyBuiltInOp(int type, DummyOpEval op);
-	DummyBuiltInOp(const std::string &typeStr, DummyOpCreate op);
-public:
-	static DummyOpEval builtInOps[];
-	static std::map<std::string, DummyOpCreate> builtInOpsCreate;
+	DummyBuiltInHelper(int type, const String& op, int num, DummyOpEval opEval);
+	DummyBuiltInHelper(int type, const String& op, int num);
+	DummyBuiltInHelper(int type, const String& op);
+	DummyBuiltInHelper(const String& op, DummyOpCompile opCompile);
 };
 
 class DummyCore{
 public:
-	static DummyValuePtr Eval(DummyValuePtr ast, DummyEnvPtr env);	
-private:
-	static void ConstructLetEnv(DummyValueList varList, DummyEnvPtr letEnv);
+	static DummyValuePtr Eval(DummyValuePtr ast, DummyEnvPtr env);
+	static DummyValuePtr EvalOpType(DummyValuePtr ast, DummyEnvPtr env);
+	static DummyValuePtr Compile(DummyValueList& list);
 public:
-	static DummyValuePtr OpEvalQuasiQuote(DummyValuePtr value, DummyEnvPtr env);
+	static String GetTypeStr(int type);
+private:
+	friend class DummyBuiltInHelper;
+	
+	typedef std::map<String, DummyOpCompile> MapOpCompile;
+	typedef std::map<String, int> MapOpType;
+	typedef std::map<String, int> MapOpNum;
+	
+	static DummyOpEval builtInOpEval[];
+	static MapOpCompile builtInOpCompile;
+	static MapOpType builtInOpToType;
+	static MapOpNum builtInOpNum;
+	static String builtInTypeToOp[];
 };
 };
