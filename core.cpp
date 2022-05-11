@@ -266,6 +266,8 @@ DummyValuePtr DummyCore::Compile(DummyValueList& list)
 		if (opCompileItr != builtInOpCompile.end())
 			return (opCompileItr->second)(list);
 
+		MapOpType tempMap = builtInOpToType;
+		
 		// default constructor
 		MapOpType::iterator opTypeItr = builtInOpToType.find(symbol);
 		if (opTypeItr != builtInOpToType.end())
@@ -287,14 +289,14 @@ DummyValuePtr DummyCore::Compile(DummyValueList& list)
 	return listValue(list);
 }
 
-DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_BEGIN, "begin", 1);
-DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_IF, "if", 2);
-DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_WHEN, "when", 2);
-DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_UNLESS, "unless", 2);
-DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_QUOTE, "quote", 1);
-DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_UNQUOTE, "unquote", 1);
-DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_UNQUOTE_SPLICING, "unquote-splicing", 1);
-DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_QUASIQUOTE, "quasiquote", 1);
+DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_BEGIN, begin, 1);
+DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_IF, if, 2);
+DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_WHEN, when, 2);
+DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_UNLESS, unless, 2);
+DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_QUOTE, quote, 1);
+DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_UNQUOTE, unquote, 1);
+DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_UNQUOTE_SPLICING, unquote-splicing, 1);
+DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_QUASIQUOTE, quasiquote, 1);
 
 /*
 	construct let
