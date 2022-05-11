@@ -19,6 +19,9 @@ typedef std::vector<DummyValuePtr> DummyValueList;
 class DummyEnv;
 typedef DummyRefCountPtr<DummyEnv>  DummyEnvPtr;
 
+class DummyShareEnv;
+typedef DummyRefCountPtr<DummyShareEnv> DummyShareEnvPtr;
+
 typedef std::vector<std::string> BindList;
 typedef std::string String;
 typedef std::stringstream StringStream;

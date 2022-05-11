@@ -47,3 +47,31 @@ DummyValuePtr DummyEnv::set(const std::string& symbol, DummyValuePtr value)
 	symbols[symbol] = value;
 	return value;
 }
+
+DummyValuePtr DummyShareEnv::get(const String& symbol)
+{
+	MapSymbolValue::iterator itr = shareSymbols.find(symbol);
+	if (itr != shareSymbols.end())
+		return itr->second;
+
+	return DummyValue::nil;
+}
+
+DummyValuePtr DummyShareEnv::get(int val)
+{
+	MapIntValue::iterator itr = shareIntegers.find(val);
+	if (itr != shareIntegers.end())
+		return itr->second;
+
+	return DummyValue::nil;
+}
+
+void DummyShareEnv::add(const String& symbol, DummyValuePtr ptr)
+{
+	shareSymbols[symbol] = ptr;
+}
+
+void DummyShareEnv::add(int val, DummyValuePtr ptr)
+{
+	shareIntegers[val] = ptr;
+}

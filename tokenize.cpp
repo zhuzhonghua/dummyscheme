@@ -15,6 +15,7 @@ Assert(condition, "unexpected char=%c, index=%d", input[index], index)
 Assert(idx < input.size(), "reached end of input")
 
 Tokenize::Tokenize(const std::string &input)
+	:shareEnv(new DummyShareEnv())
 {
 	init(input);
 }
@@ -41,57 +42,57 @@ DummyValuePtr Tokenize::run(DummyEnvPtr env)
 /*
 	look at token type
  */
-TokenType Tokenize::look()
+int Tokenize::look()
 {
 	AssertInputEnd(index);
 	char c = input[index];
 	switch(c)
 	{
 	CASE_NUM:
-		return TokenType::TOKEN_NUM;
+		return TOKEN_NUM;
 		break;
 	case '\"':
-		return TokenType::TOKEN_DOUBLE_QUOTE;
+		return TOKEN_DOUBLE_QUOTE;
 		break;
 	case '(':
-		return TokenType::TOKEN_LEFT_PAREN;
+		return TOKEN_LEFT_PAREN;
 		break;
 	case ')':
-		return TokenType::TOKEN_RIGHT_PAREN;	
+		return TOKEN_RIGHT_PAREN;	
 		break;
 	case '\'':
-		return TokenType::TOKEN_SINGLE_QUOTE;
+		return TOKEN_SINGLE_QUOTE;
 		break;
 	case '`':
-		return TokenType::TOKEN_QUASIQUOTE;
+		return TOKEN_QUASIQUOTE;
 		break;
 	case '~':{
 		AssertInputEnd(index + 1);
 		if ('@' == input[index + 1])
-			return TokenType::TOKEN_UNQUOTE_SPLICING;
+			return TOKEN_UNQUOTE_SPLICING;
 		else
-			return TokenType::TOKEN_UNQUOTE;
+			return TOKEN_UNQUOTE;
 		break;
 	}
 	CASE_SYMBOL:
-		return TokenType::TOKEN_SYMBOL;
+		return TOKEN_SYMBOL;
 		break;
 	default:
 		if (('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z')) {
-			return TokenType::TOKEN_SYMBOL;
+			return TOKEN_SYMBOL;
 		}	else {
-			return TokenType::TOKEN_UNKNOWN;	
+			return TOKEN_UNKNOWN;	
 		}
 		break;
 	}
 
-	return TokenType::TOKEN_UNKNOWN;	
+	return TOKEN_UNKNOWN;	
 }
 
 /*
 	skip blank and look the next token
  */
-TokenType Tokenize::readToken()
+int Tokenize::readToken()
 {
 	// TODO: call skip separately
 	skipBlank();
@@ -110,8 +111,8 @@ DummyValuePtr Tokenize::readQuote()
 	DummyValueList list;
 	list.push_back(symbolValue("quote"));
 	index++;
-	TokenType token = look();
-	AssertToken(token == TokenType::TOKEN_LEFT_PAREN || token == TokenType::TOKEN_SYMBOL);
+	int token = look();
+	AssertToken(token == TOKEN_LEFT_PAREN || token == TOKEN_SYMBOL);
 
 	list.push_back(readP());
 		
@@ -128,8 +129,8 @@ DummyValuePtr Tokenize::readUnQuote()
 	DummyValueList list;
 	list.push_back(symbolValue("unquote"));
 	index++;
-	TokenType token = look();
-	AssertToken(token == TokenType::TOKEN_LEFT_PAREN || token == TokenType::TOKEN_SYMBOL);
+	int token = look();
+	AssertToken(token == TOKEN_LEFT_PAREN || token == TOKEN_SYMBOL);
 
 	list.push_back(readP());
 		
@@ -145,8 +146,8 @@ DummyValuePtr Tokenize::readUnQuoteSplicing()
 	DummyValueList list;
 	list.push_back(symbolValue("unquote-splicing"));
 	index += 2;
-	TokenType token = look();
-	AssertToken(token == TokenType::TOKEN_LEFT_PAREN || token == TokenType::TOKEN_SYMBOL);
+	int token = look();
+	AssertToken(token == TOKEN_LEFT_PAREN || token == TOKEN_SYMBOL);
 
 	list.push_back(readP());
 		
@@ -163,8 +164,8 @@ DummyValuePtr Tokenize::readQuasiQuote()
 	DummyValueList list;
 	list.push_back(symbolValue("quasiquote"));
 	index++;
-	TokenType token = look();
-	AssertToken(token == TokenType::TOKEN_LEFT_PAREN || token == TokenType::TOKEN_SYMBOL);
+	int token = look();
+	AssertToken(token == TOKEN_LEFT_PAREN || token == TOKEN_SYMBOL);
 
 	list.push_back(readP());
 		
@@ -178,28 +179,28 @@ DummyValuePtr Tokenize::readQuasiQuote()
 */
 DummyValuePtr Tokenize::readP()
 {
-	TokenType headType = readToken();
+	int headType = readToken();
 	switch(headType)
 	{
-	case TokenType::TOKEN_NUM:
+	case TOKEN_NUM:
 		return readNum();
-	case TokenType::TOKEN_DOUBLE_QUOTE:
+	case TOKEN_DOUBLE_QUOTE:
 		return readStr();
-	case TokenType::TOKEN_SYMBOL:
+	case TOKEN_SYMBOL:
 		return readSymbol();
-	case TokenType::TOKEN_SINGLE_QUOTE:
+	case TOKEN_SINGLE_QUOTE:
 		return readQuote();
-	case TokenType::TOKEN_UNQUOTE:
+	case TOKEN_UNQUOTE:
 		return readUnQuote();
-	case TokenType::TOKEN_QUASIQUOTE:
+	case TOKEN_QUASIQUOTE:
 		return readQuasiQuote();
-	case TokenType::TOKEN_UNQUOTE_SPLICING:
+	case TOKEN_UNQUOTE_SPLICING:
 		return readUnQuoteSplicing();
-	case TokenType::TOKEN_LEFT_PAREN:{
+	case TOKEN_LEFT_PAREN:{
 		index++;
 		DummyValuePtr curValue(readList());
-		TokenType token = readToken();
-		AssertToken(token == TokenType::TOKEN_RIGHT_PAREN);
+		int token = readToken();
+		AssertToken(token == TOKEN_RIGHT_PAREN);
 		index++;
 		return curValue;
 		break;
@@ -218,9 +219,9 @@ DummyValuePtr Tokenize::readP()
 */
 DummyValuePtr Tokenize::readList()
 {
-	TokenType headType = readToken();
+	int headType = readToken();
 	switch(headType){
-	case TokenType::TOKEN_RIGHT_PAREN:
+	case TOKEN_RIGHT_PAREN:
 		// )
 		// do nothing
 		break;
@@ -244,9 +245,9 @@ DummyValuePtr Tokenize::readList()
 DummyValueList Tokenize::readListP()
 {
 	DummyValueList list;	
-	TokenType headType = readToken();
+	int headType = readToken();
 	switch(headType){
-	case TokenType::TOKEN_RIGHT_PAREN:
+	case TOKEN_RIGHT_PAREN:
 		// )
 		// DO nothing
 		break;	
@@ -305,10 +306,16 @@ DummyValuePtr Tokenize::readNum()
 			break;
 		}
 	}
-	int val = 0;
-	sscanf(num, "%d", &val);
+	int numVal = 0;
+	sscanf(num, "%d", &numVal);
 
-	return numValue(val);
+	DummyValuePtr val = shareEnv->get(numVal);
+	if (val != DummyValue::nil)
+		return val;
+		
+	val = numValue(numVal);
+	shareEnv->add(numVal, val);
+	return val;
 }
 
 bool Tokenize::isBlank()
@@ -354,5 +361,13 @@ DummyValuePtr Tokenize::readSymbol()
 	else if (DummyValue::f->isEqualString(symStr))
 		return DummyValue::f;
 	else
-		return symbolValue(symStr);
+	{
+		DummyValuePtr val = shareEnv->get(symStr);
+		if (val != DummyValue::nil)
+			return val;
+		
+		val = symbolValue(symStr);
+		shareEnv->add(symStr, val);
+		return val;
+	}
 }

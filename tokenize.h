@@ -4,7 +4,7 @@
 
 namespace DummyScheme {	
 	
-enum TokenType{
+enum {
 	TOKEN_UNKNOWN,
 	TOKEN_NUM,
 	TOKEN_DOUBLE_QUOTE,
@@ -25,6 +25,8 @@ enum TokenType{
 	difference between LIST and LISTP is the return value
 */
 class Tokenize {
+protected:
+	DummyShareEnvPtr shareEnv;
 protected:
 	int aheadToken;
 	int index;
@@ -50,7 +52,7 @@ protected:
 	// TODO: comment
 	void skipBlank();
 	bool isBlank();
-	TokenType readToken();
-	TokenType look();
+	int readToken();
+	int look();
 };
 }
