@@ -9,9 +9,9 @@ namespace DummyScheme {
 	
 #define StringPrint stringPrintf
 
-#define FILE_LINE_FUNCTION StringPrint("[%s:%d:%s]\n", __FILE__, __LINE__, __FUNCTION__)
+#define FILE_LINE_FUNCTION StringPrint("%s:%d:%s \t", __FILE__, __LINE__, __FUNCTION__)
 
-#define Error(...) throw StringPrint(__VA_ARGS__) + "\nerror happended at" + FILE_LINE_FUNCTION;
+#define Error(...) throw FILE_LINE_FUNCTION + StringPrint(__VA_ARGS__) + "\nerror happended\n";
 
 #define Assert(condition, ...) do { if (!(condition)) { Error(#condition "" __VA_ARGS__); } } while (0)
 

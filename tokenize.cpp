@@ -130,6 +130,7 @@ DummyValuePtr Tokenize::readUnQuote()
 	list.push_back(symbolValue("unquote"));
 	index++;
 	int token = look();
+	// TODO: other type may be correct, like nested quote unquote quasiquote unquote-splicing
 	AssertToken(token == TOKEN_LEFT_PAREN || token == TOKEN_SYMBOL);
 
 	list.push_back(readP());

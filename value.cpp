@@ -269,7 +269,7 @@ DummyValuePtr DummyOpTypeValue::eval(DummyEnvPtr env)
 	case DUMMY_TYPE_QUOTE:
 		// (quote abc)
 		// (quote (1 2 3))
-		return list.front();
+		return this;
 	case DUMMY_TYPE_UNQUOTE:{
 		Error("cannot eval unquote separately");
 		return DummyValue::nil;

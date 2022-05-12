@@ -13,6 +13,7 @@ public:
 	DummyBuiltInHelper(int type, const String& op, int num);
 	DummyBuiltInHelper(int type, const String& op);
 	DummyBuiltInHelper(const String& op, DummyOpCompile opCompile);
+	DummyBuiltInHelper(int type, const String& op, DummyOpCompile opCompile);
 };
 	
 typedef std::map<String, DummyOpCompile> MapOpCompile;

@@ -46,6 +46,7 @@ public:
 	bool isFalse() { return type == DUMMY_TYPE_FALSE; }
 	bool isLambda() { return type == DUMMY_TYPE_LAMBDA; }
 	bool isList() { return type == DUMMY_TYPE_LIST; }
+	bool isQuote() { return type == DUMMY_TYPE_QUOTE; }
 	bool isUnQuote() { return type == DUMMY_TYPE_UNQUOTE; }
 	bool isUnQuoteSplicing() { return type == DUMMY_TYPE_UNQUOTE_SPLICING; }
 	

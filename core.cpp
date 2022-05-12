@@ -31,11 +31,16 @@ DummyBuiltInHelper::DummyBuiltInHelper(int type, const String& op, int num)
 	DummyCore::builtInOpNum[op] = num;
 }
 
-DummyBuiltInHelper::DummyBuiltInHelper(const String& op, DummyOpCompile opCompile)
+DummyBuiltInHelper::DummyBuiltInHelper(int type, const String& op, DummyOpCompile opCompile)
+	:DummyBuiltInHelper(type, op)
 {
 	DummyCore::builtInOpCompile[op] = opCompile;
 }
 
+DummyBuiltInHelper::DummyBuiltInHelper(const String& op, DummyOpCompile opCompile)
+{
+	DummyCore::builtInOpCompile[op] = opCompile;
+}
 
 #define STR(s) #s
 
@@ -60,6 +65,11 @@ DummyValuePtr DUMMY_OPCOMPILENAME(key)(DummyValueList& list);						\
 #define DUMMY_BUILTIN_OP_COMPILE_NUM(type, symbol, num)									\
 static DummyBuiltInHelper DUMMY_OPCOMPILEHELP(type) (type, STR(symbol), num);
 
+#define DUMMY_BUILTIN_OP_COMPILE_TYPE(type, symbol)											\
+DummyValuePtr DUMMY_OPCOMPILENAME(type)(DummyValueList& list);					\
+ static DummyBuiltInHelper DUMMY_OPCOMPILEHELP(type) (type, STR(symbol), DUMMY_OPCOMPILENAME(type)); \
+ DummyValuePtr DUMMY_OPCOMPILENAME(type)(DummyValueList& list)
+
 #define DUMMY_BUILTIN_OP(type, symbol) DUMMY_BUILTIN_OP_NUM(type, symbol, 0)
 
 #define AssertArgBigEqual(num) AssertDummyValue(list.size() >= num, ast, "parameter need more")
@@ -81,37 +91,65 @@ void ConstructLetEnv(DummyValueList varList, DummyEnvPtr letEnv)
 	}
 }
 
+DummyValuePtr OpEvalUnQuote(DummyValuePtr value, DummyEnvPtr env)
+{
+	AssertDummyValue(value->isUnQuote(), value, "internal error");
+	DummyValuePtr quoteItem = DummyCore::Eval(value->getList().front(), env);
+	AssertDummyValue(quoteItem->isQuote(), value, "unquote can only eval on quote item");
+	return quoteItem->getList().front();
+}
+
 /*
 	(quasiquote lst)
 	`lst
 */
 DummyValuePtr OpEvalQuasiQuote(DummyValuePtr value, DummyEnvPtr env)
 {
-	DummyValuePtr item = value->getList().front();
 	// recursive call
-	if (!item->isList())
-		return item;
-	
+	// or only have one item
+	if (!value->isList() && !value->isUnQuote() && !value->isUnQuoteSplicing()) 
+		return value;// don't eval at this place
 
-	DummyValueList list = item->getList();
+	// because unquote and unquote-splicing can only eval in quasiquote
+	if (value->isUnQuote() || value->isUnQuoteSplicing())
+	{
+		// (define lst (quote b c))
+		// (quasiquote ((unquote lst) d)
+		// (quasiquote (a (unquote-splicing lst)))
+		DummyValuePtr quoteItem = DummyCore::Eval(value->getList().front(), env);
+		
+		// looks like (unquote 1) and (unquote-splicing lst) is correct too
+		// AssertDummyValue(quoteItem->isQuote(), value, "unquote can only eval on quote item");
+		if (quoteItem->isQuote())
+			return quoteItem->getList().front();
+		else
+			return quoteItem;
+	}
+	
+	DummyValueList list = value->getList();
 	DummyValueList::iterator itr = list.begin();
 	DummyValueList retValue;
 	for (; itr != list.end(); itr++)
 	{
+		DummyValuePtr item = *itr;
 		// eval and put
-		if ((*itr)->isUnQuote())
-			retValue.push_back(DummyCore::Eval((*itr)->getList().front(), env));
-		else if ((*itr)->isUnQuoteSplicing())
+		if (item->isUnQuote())
 		{
+			retValue.push_back(OpEvalQuasiQuote(item, env));
+		}
+		else if (item->isUnQuoteSplicing())
+		{
+			// (define lst (quote b c))
+			// (quasiquote (a (unquote-splicing lst)))
+			DummyValuePtr evalUnQuoteItem = OpEvalQuasiQuote(item, env);
 			// eval and splice put
-			DummyValuePtr evalItr = DummyCore::Eval((*itr)->getList().front(), env);
-			if (evalItr->isList())
+			if (evalUnQuoteItem->isList())
 			{
-				DummyValueList evalItrList = evalItr->getList();
+				DummyValueList evalItrList = evalUnQuoteItem->getList();
 				retValue.insert(retValue.end(), evalItrList.begin(), evalItrList.end());
 			}
 			else
-				retValue.push_back(evalItr);
+				retValue.push_back(evalUnQuoteItem);
 		}
 		else			// just put
 			retValue.push_back(OpEvalQuasiQuote(*itr, env));
@@ -227,8 +265,8 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 			break;
 		}
 		case DUMMY_TYPE_QUASIQUOTE:{
-			ast = OpEvalQuasiQuote(ast, env);
-			// this result need to be reevaluated
+			// TODO: this result need to be reevaluated
+			return OpEvalQuasiQuote(ast->getList().front(), env);
 			break;
 		}
 		default:
@@ -293,10 +331,30 @@ DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_BEGIN, begin, 1);
 DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_IF, if, 2);
 DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_WHEN, when, 2);
 DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_UNLESS, unless, 2);
-DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_QUOTE, quote, 1);
-DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_UNQUOTE, unquote, 1);
-DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_UNQUOTE_SPLICING, unquote-splicing, 1);
-DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_QUASIQUOTE, quasiquote, 1);
+
+DUMMY_BUILTIN_OP_COMPILE_TYPE(DUMMY_TYPE_QUOTE, quote)
+{
+	AssertDummyValueList(list.size() == 2, list, "quote can only have on item");
+	return opTypeValue(DUMMY_TYPE_QUOTE, list.begin()+1, list.end());
+}
+
+DUMMY_BUILTIN_OP_COMPILE_TYPE(DUMMY_TYPE_UNQUOTE, unquote)
+{
+	AssertDummyValueList(list.size() == 2, list, "unquote can only have on item");
+	return opTypeValue(DUMMY_TYPE_UNQUOTE, list.begin()+1, list.end());
+}
+
+DUMMY_BUILTIN_OP_COMPILE_TYPE(DUMMY_TYPE_UNQUOTE_SPLICING, unquote-splicing)
+{
+	AssertDummyValueList(list.size() == 2, list, "unquote-splicing can only have on item");
+	return opTypeValue(DUMMY_TYPE_UNQUOTE_SPLICING, list.begin()+1, list.end());
+}
+
+DUMMY_BUILTIN_OP_COMPILE_TYPE(DUMMY_TYPE_QUASIQUOTE, quasiquote)
+{
+	AssertDummyValueList(list.size() == 2, list, "quasiquote can only have on item");
+	return opTypeValue(DUMMY_TYPE_QUASIQUOTE, list.begin()+1, list.end());
+}
 
 /*
 	construct let
