@@ -7,6 +7,13 @@ namespace DummyScheme {
 /*
 	for convenience
  */
+DummyValuePtr opTypeValue(int type, const DummyValuePtr &value)
+{
+	DummyValueList list;
+	list.push_back(value);
+	return new DummyOpTypeValue(type, list);
+}
+
 DummyValuePtr opTypeValue(int type, const DummyValueList& list)
 {
 	return new DummyOpTypeValue(type, list);

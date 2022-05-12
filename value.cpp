@@ -263,6 +263,66 @@ std::string DummyOpTypeValue::toString()
 	return out.str();
 }
 
+
+/*
+	(quasiquote lst)
+	`lst
+*/
+DummyValuePtr OpEvalQuasiQuote(DummyValuePtr value, DummyEnvPtr env)
+{
+	// because unquote and unquote-splicing can only eval in quasiquote
+	if (value->isUnQuote() || value->isUnQuoteSplicing())
+	{
+		// (define lst (quote b c))
+		// (quasiquote ((unquote lst) d)
+		// (quasiquote (a (unquote-splicing lst)))
+		DummyValuePtr quoteItem = DummyCore::Eval(value->getList().front(), env);
+		
+		// looks like (unquote 1) and (unquote-splicing ) is correct too
+		// AssertDummyValue(quoteItem->isQuote(), value, "unquote can only eval on quote item");
+		if (quoteItem->isQuote())
+			return quoteItem->getList().front();
+		else
+			return quoteItem;
+	}
+	
+	// recursive call
+	// or only have one item
+	if (!value->isList())
+		return value;// don't eval at this place
+	
+	DummyValueList list = value->getList();
+	DummyValueList::iterator itr = list.begin();
+	DummyValueList retValue;
+	for (; itr != list.end(); itr++)
+	{
+		DummyValuePtr item = *itr;
+		// eval and put
+		if (item->isUnQuote())
+		{
+			retValue.push_back(OpEvalQuasiQuote(item, env));
+		}
+		else if (item->isUnQuoteSplicing())
+		{
+			// (define lst (quote b c))
+			// (quasiquote (a (unquote-splicing lst)))
+			DummyValuePtr evalUnQuoteItem = OpEvalQuasiQuote(item, env);
+			// eval and splice put
+			if (evalUnQuoteItem->isList())
+			{
+				DummyValueList evalItrList = evalUnQuoteItem->getList();
+				retValue.insert(retValue.end(), evalItrList.begin(), evalItrList.end());
+			}
+			else
+				retValue.push_back(evalUnQuoteItem);
+		}
+		else			// just put
+			retValue.push_back(OpEvalQuasiQuote(*itr, env));
+	}
+
+	return DummyCore::Compile(retValue);
+}
+
 DummyValuePtr DummyOpTypeValue::eval(DummyEnvPtr env)
 {
 	switch(type) {
@@ -277,6 +337,10 @@ DummyValuePtr DummyOpTypeValue::eval(DummyEnvPtr env)
 	case DUMMY_TYPE_UNQUOTE_SPLICING:{
 		Error("cannot eval unquote-splicing separately");
 		return DummyValue::nil;
+	}
+	case DUMMY_TYPE_QUASIQUOTE:{
+		return opTypeValue(DUMMY_TYPE_QUOTE, OpEvalQuasiQuote(this->getList().front(), env));
+		break;
 	}
 	default:{
 		return DummyCore::EvalOpType(this, env);

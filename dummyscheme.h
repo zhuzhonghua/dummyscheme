@@ -26,6 +26,7 @@ typedef std::vector<std::string> BindList;
 typedef std::string String;
 typedef std::stringstream StringStream;
 
+DummyValuePtr opTypeValue(int type, const DummyValuePtr &value);
 DummyValuePtr opTypeValue(int type, const DummyValueList& list);
 DummyValuePtr opTypeValue(int type, DummyValueList::iterator begin, DummyValueList::iterator end);
 DummyValuePtr listValue(const DummyValueList& list);

@@ -91,73 +91,6 @@ void ConstructLetEnv(DummyValueList varList, DummyEnvPtr letEnv)
 	}
 }
 
-DummyValuePtr OpEvalUnQuote(DummyValuePtr value, DummyEnvPtr env)
-{
-	AssertDummyValue(value->isUnQuote(), value, "internal error");
-	DummyValuePtr quoteItem = DummyCore::Eval(value->getList().front(), env);
-	AssertDummyValue(quoteItem->isQuote(), value, "unquote can only eval on quote item");
-	return quoteItem->getList().front();
-}
-
-/*
-	(quasiquote lst)
-	`lst
-*/
-DummyValuePtr OpEvalQuasiQuote(DummyValuePtr value, DummyEnvPtr env)
-{
-	// recursive call
-	// or only have one item
-	if (!value->isList() && !value->isUnQuote() && !value->isUnQuoteSplicing()) 
-		return value;// don't eval at this place
-
-	// because unquote and unquote-splicing can only eval in quasiquote
-	if (value->isUnQuote() || value->isUnQuoteSplicing())
-	{
-		// (define lst (quote b c))
-		// (quasiquote ((unquote lst) d)
-		// (quasiquote (a (unquote-splicing lst)))
-		DummyValuePtr quoteItem = DummyCore::Eval(value->getList().front(), env);
-		
-		// looks like (unquote 1) and (unquote-splicing lst) is correct too
-		// AssertDummyValue(quoteItem->isQuote(), value, "unquote can only eval on quote item");
-		if (quoteItem->isQuote())
-			return quoteItem->getList().front();
-		else
-			return quoteItem;
-	}
-	
-	DummyValueList list = value->getList();
-	DummyValueList::iterator itr = list.begin();
-	DummyValueList retValue;
-	for (; itr != list.end(); itr++)
-	{
-		DummyValuePtr item = *itr;
-		// eval and put
-		if (item->isUnQuote())
-		{
-			retValue.push_back(OpEvalQuasiQuote(item, env));
-		}
-		else if (item->isUnQuoteSplicing())
-		{
-			// (define lst (quote b c))
-			// (quasiquote (a (unquote-splicing lst)))
-			DummyValuePtr evalUnQuoteItem = OpEvalQuasiQuote(item, env);
-			// eval and splice put
-			if (evalUnQuoteItem->isList())
-			{
-				DummyValueList evalItrList = evalUnQuoteItem->getList();
-				retValue.insert(retValue.end(), evalItrList.begin(), evalItrList.end());
-			}
-			else
-				retValue.push_back(evalUnQuoteItem);
-		}
-		else			// just put
-			retValue.push_back(OpEvalQuasiQuote(*itr, env));
-	}
-
-	return DummyCore::Compile(retValue);
-}
-
 /*
 	get type string
 */
@@ -264,11 +197,6 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 				return DummyValue::nil;
 			break;
 		}
-		case DUMMY_TYPE_QUASIQUOTE:{
-			// TODO: this result need to be reevaluated
-			return OpEvalQuasiQuote(ast->getList().front(), env);
-			break;
-		}
 		default:
 			return ast->eval(env);
 			break;
@@ -304,8 +232,6 @@ DummyValuePtr DummyCore::Compile(DummyValueList& list)
 		if (opCompileItr != builtInOpCompile.end())
 			return (opCompileItr->second)(list);
 
-		MapOpType tempMap = builtInOpToType;
-		
 		// default constructor
 		MapOpType::iterator opTypeItr = builtInOpToType.find(symbol);
 		if (opTypeItr != builtInOpToType.end())
