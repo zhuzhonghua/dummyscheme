@@ -274,14 +274,15 @@ DummyValuePtr OpEvalQuasiQuote(DummyValuePtr value, DummyEnvPtr env)
 	if (value->isUnQuote() || value->isUnQuoteSplicing())
 	{
 		// (define lst (quote b c))
-		// (quasiquote ((unquote lst) d)
+		// (quasiquote ((unquote lst) d))
+		// (quasiquote ((unquote (quote b c)) d))
 		// (quasiquote (a (unquote-splicing lst)))
 		DummyValuePtr quoteItem = DummyCore::Eval(value->getList().front(), env);
 		
 		// looks like (unquote 1) and (unquote-splicing ) is correct too
 		// AssertDummyValue(quoteItem->isQuote(), value, "unquote can only eval on quote item");
 		if (quoteItem->isQuote())
-			return quoteItem->getList().front();
+			return quoteItem->eval(env);
 		else
 			return quoteItem;
 	}
@@ -329,7 +330,7 @@ DummyValuePtr DummyOpTypeValue::eval(DummyEnvPtr env)
 	case DUMMY_TYPE_QUOTE:
 		// (quote abc)
 		// (quote (1 2 3))
-		return this;
+		return this->getList().front();
 	case DUMMY_TYPE_UNQUOTE:{
 		Error("cannot eval unquote separately");
 		return DummyValue::nil;
@@ -339,7 +340,7 @@ DummyValuePtr DummyOpTypeValue::eval(DummyEnvPtr env)
 		return DummyValue::nil;
 	}
 	case DUMMY_TYPE_QUASIQUOTE:{
-		return opTypeValue(DUMMY_TYPE_QUOTE, OpEvalQuasiQuote(this->getList().front(), env));
+		return OpEvalQuasiQuote(this->getList().front(), env);
 		break;
 	}
 	default:{
