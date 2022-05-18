@@ -124,9 +124,6 @@ DummyValuePtr DummyValue::eval(DummyEnvPtr env)
 	case DUMMY_TYPE_NIL:
 	case DUMMY_TYPE_LAMBDA:// the real lambda eval needs apply, may be a returnvalue
 		return this;
-	case DUMMY_TYPE_LIST:
-		Error("cannot eval a list");
-		return DummyValue::nil;
 	default:
 		Error("unknown type to eval %d", type);
 		break;
@@ -210,10 +207,29 @@ std::string DummyListValue::toString()
 	return out.str();
 }
 
-DummyLambdaValue::DummyLambdaValue(BindList binds, DummyValueList list)
+DummyValuePtr DummyListValue::eval(DummyEnvPtr env)
+{
+	if (list.size() <= 0)
+		return DummyValue::nil;
+
+	DummyValuePtr lambda = list.front();
+	
+	if (!lambda->isLambda())
+	{
+		// then must be symbol
+		lambda = env->get(lambda->getSymbol());
+		// TODO: builtin types
+//		AssertDummyValue(lambda->isLambda(), lambda, "must be a lambda");
+	}
+
+	return lambda->apply(list.begin() + 1, list.end(), env);
+}
+
+DummyLambdaValue::DummyLambdaValue(BindList binds, DummyValueList list, bool isMacro)
 	:DummyValue(DUMMY_TYPE_LAMBDA),
 	 list(list),
-	 binds(binds)
+	 binds(binds),
+	 macro(isMacro)
 {
 }
 
@@ -240,6 +256,23 @@ std::string DummyLambdaValue::toString()
 	}
 
 	return out.str();
+}
+
+DummyValuePtr DummyLambdaValue::apply(DummyValueItr begin, DummyValueItr end, DummyEnvPtr env)
+{
+	DummyEnvPtr applyEnv(new DummyEnv(env));
+		
+	// set parameter binds
+	BindList::iterator bindItr = binds.begin();
+	for (; bindItr != binds.end(); ++bindItr, ++begin)
+	{
+		AssertDummyValue(begin != end, this, "need more items");
+			
+		applyEnv->set(*bindItr, DummyCore::Eval(*begin, applyEnv));
+	}
+
+	// exec the body
+	return DummyCore::Eval(list, applyEnv);
 }
 
 DummyOpTypeValue::DummyOpTypeValue(int type, DummyValueList list)

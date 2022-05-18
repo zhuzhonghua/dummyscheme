@@ -31,8 +31,13 @@ public:
 	virtual std::string getSymbol() { Error("error not a symbol value"); return ""; }
 	virtual BindList getBind() { Error("error not a lambda value"); return BindList(); }
 	virtual DummyValueList getList() { Error("error dont have list item"); return DummyValueList(); }
+	virtual bool isMacro() { Error("error not a macro"); return false; }
 	virtual std::string toString();
 	virtual DummyValuePtr eval(DummyEnvPtr env);
+	virtual DummyValuePtr apply(DummyValueItr begin, DummyValueItr end, DummyEnvPtr env) {
+		Error("error not a lambda");
+		return DummyValue::nil;
+	}
 public:
 	bool isEqualValue(DummyValuePtr other, DummyEnvPtr env);
 	bool isEqualString(const String str);
@@ -112,6 +117,7 @@ public:
 	DummyListValue(DummyValueList list);
 	virtual DummyValueList getList() { return list; }
 	virtual std::string toString();
+	virtual DummyValuePtr eval(DummyEnvPtr env);
 protected:
 	DummyValueList list;
 };
@@ -121,13 +127,16 @@ protected:
  */
 class DummyLambdaValue : public DummyValue {
 public:
-	DummyLambdaValue(BindList binds, DummyValueList list);
+	DummyLambdaValue(BindList binds, DummyValueList list, bool macro);
 	virtual BindList getBind() { return binds; }
 	virtual DummyValueList getList() { return list; }
 	virtual std::string toString();
+	virtual bool isMacro() { return macro; }
+	virtual DummyValuePtr apply(DummyValueItr begin, DummyValueItr end, DummyEnvPtr env);
 protected:
 	BindList binds;
 	DummyValueList list;
+	bool macro;
 };
 
 /*

@@ -23,6 +23,8 @@ typedef std::map<String, int> MapOpNum;
 class DummyCore{
 public:
 	static DummyValuePtr Eval(DummyValuePtr ast, DummyEnvPtr env);
+	static DummyValuePtr Eval(DummyValueList list, DummyEnvPtr env);
+	static DummyValuePtr Eval(DummyValueItr begin, DummyValueItr end, DummyEnvPtr env);
 	static DummyValuePtr EvalOpType(DummyValuePtr ast, DummyEnvPtr env);
 	static DummyValuePtr Compile(DummyValueList& list);
 public:

@@ -102,8 +102,25 @@ String DummyCore::GetTypeStr(int type)
 	return "unknown";
 }
 
+DummyValuePtr DummyCore::Eval(DummyValueItr begin, DummyValueItr end, DummyEnvPtr env)
+{
+	DummyValuePtr retValue = DummyValue::nil;
+	for (; begin != end; begin++)
+		retValue = Eval(*begin, env);
+	return retValue;
+}
+
 /*
-	Ö´ÐÐÒ»¸öAST
+	eval list of values
+	TODO: check if front is a lambda or lambda symbol
+ */
+DummyValuePtr DummyCore::Eval(DummyValueList list, DummyEnvPtr env)
+{
+	return Eval(list.begin(), list.end(), env);
+}
+
+/*
+	eval one AST
 */
 DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 {
@@ -120,24 +137,27 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 	
 			ConstructLetEnv(letList.front()->getList(), letEnv);
 
-			// tail call optimization
-			ast = opTypeValue(DUMMY_TYPE_BEGIN, letList.begin() + 1, letList.end());
-			env = letEnv;
-			continue;
+//			// tail call optimization
+//			ast = opTypeValue(DUMMY_TYPE_BEGIN, letList.begin() + 1, letList.end());
+//			env = letEnv;
+//			continue;
+			
+			return Eval(letList.begin() + 1, letList.end(), letEnv);
 			break;
 		}
 		case DUMMY_TYPE_BEGIN:{
 			// tail call optimization
-			DummyValueList list = ast->getList();	
-			DummyValuePtr ret = list.front()->eval(env);
-			if (list.begin() + 1 == list.end())
-				return ret;
-			else
-			{
-				ast = opTypeValue(DUMMY_TYPE_BEGIN, list.begin() + 1, list.end());
-				// env = env
-				continue;
-			}
+//			DummyValueList list = ast->getList();	
+//			DummyValuePtr ret = list.front()->eval(env);
+//			if (list.begin() + 1 == list.end())
+//				return ret;
+//			else
+//			{
+//				ast = opTypeValue(DUMMY_TYPE_BEGIN, list.begin() + 1, list.end());
+//				// env = env
+//				continue;
+//			}
+			return Eval(ast->getList(), env);
 			break;	
 		}
 		case DUMMY_TYPE_IF:{
@@ -166,7 +186,8 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 				else
 				{
 					// tail call optimization
-					ast = opTypeValue(DUMMY_TYPE_BEGIN, DummyValueList(itr+2, list.end()));
+//					ast = opTypeValue(DUMMY_TYPE_BEGIN, DummyValueList(itr+2, list.end()));
+					return Eval(itr+2, list.end(), env);
 					// env = env
 					continue;
 				}
@@ -189,7 +210,8 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 				else
 				{
 					// tail call optimization
-					ast = opTypeValue(DUMMY_TYPE_BEGIN, DummyValueList(itr+1, list.end()));
+//					ast = opTypeValue(DUMMY_TYPE_BEGIN, DummyValueList(itr+1, list.end()));
+					return Eval(itr+1, list.end(), env);
 					// env = env;	
 					continue;
 				}
@@ -494,32 +516,10 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_APPLY, apply)
 	{
 		lambda = env->get(lambda->getSymbol());
 		// TODO: builtin types
-		AssertDummyValue(lambda->isLambda(), lambda, "must be a lambda");
-	}
-	
-	DummyEnvPtr applyEnv(new DummyEnv(env));
-		
-	// set parameter binds
-	BindList binds = lambda->getBind();
-	BindList::iterator bindItr = binds.begin();
-	for (; bindItr != binds.end(); ++bindItr)
-	{
-		++applyItr;	
-		AssertDummyValue(applyItr != list.end(), lambda, "need more items");
-			
-		applyEnv->set(*bindItr, DummyCore::Eval(*applyItr, env));
+//		AssertDummyValue(lambda->isLambda(), lambda, "must be a lambda");
 	}
 
-	// exec the body
-	DummyValuePtr retValue = DummyValue::nil;
-	DummyValueList lambdaBody = lambda->getList();
-	DummyValueList::iterator bodyItr = lambdaBody.begin();	
-	for (; bodyItr != lambdaBody.end(); ++bodyItr)
-	{
-		retValue = DummyCore::Eval(*bodyItr, applyEnv);
-	}
-
-	return retValue;
+	return lambda->apply(++applyItr, list.end(), env);
 }
 
 /*
@@ -809,3 +809,40 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_LOAD, load, 1)
 	return DummyValue::nil;
 }
 
+/*
+	(define-macro (f b) `(+ 2 b))
+ */
+DUMMY_BUILTIN_OP_COMPILE_TYPE(DUMMY_TYPE_DEFINE_MACRO, define-macro)
+{
+	AssertDummyValueList(list.size() == 3, list, "parameter >= 3");
+	
+	DummyValuePtr second = *(list.begin() + 1);
+	AssertDummyValueList(second->isList(), list, "second must be a list");
+	AssertDummyValueList(second->getList().front()->isSymbol(), list, "the first of second must be a symbol");
+
+	return opTypeValue(DUMMY_TYPE_DEFINE_MACRO, list.begin()+1, list.end());
+}
+DUMMY_BUILTIN_OP(DUMMY_TYPE_DEFINE_MACRO, define-macro)
+{
+	DummyValueList list = ast->getList();
+	AssertArgEqual(2);
+	
+	DummyValuePtr symbol = list.front();
+	
+	DummyValueList symbolList = symbol->getList();
+	symbol = symbolList.front();
+		
+	// lambda
+	DummyValueList bindList(symbolList.begin()+1, symbolList.end());
+	DummyValueList::iterator bindItr = bindList.begin();
+	BindList binds;
+	for (; bindItr != bindList.end(); ++bindItr)
+	{
+		DummyValuePtr bindValue = *bindItr;
+		binds.push_back(bindValue->getSymbol());
+	}
+	DummyValuePtr symbolValue = macroValue(binds, list.begin()+1, list.end());
+	
+	env->set(symbol->getSymbol(), symbolValue);
+	return symbolValue;
+}

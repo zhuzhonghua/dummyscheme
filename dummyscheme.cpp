@@ -51,12 +51,24 @@ DummyValuePtr symbolValue(const std::string &symbol)
 
 DummyValuePtr lambdaValue(const BindList& binds, const DummyValueList& list)
 {
-	return new DummyLambdaValue(binds, list);
+	return new DummyLambdaValue(binds, list, false);
 }
 
 DummyValuePtr lambdaValue(const BindList& binds, DummyValueList::iterator begin, DummyValueList::iterator end)
 {
 	return lambdaValue(binds, DummyValueList(begin, end));
+}
+
+DummyValuePtr macroValue(const BindList& binds, const DummyValuePtr &item)
+{
+	DummyValueList list;
+	list.push_back(item);
+	return new DummyLambdaValue(binds, list, true);
+}
+
+DummyValuePtr macroValue(const BindList& binds, DummyValueItr begin, DummyValueItr end)
+{
+	return new DummyLambdaValue(binds, DummyValueList(begin, end), true);
 }
 
 }
