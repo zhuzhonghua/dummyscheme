@@ -139,6 +139,15 @@ void test6()
 
 	tokenize.init("(apply (lambda (a) (+ a 2)) 4)");
 	ISTOKENIZEEQUAL(tokenize, env, numValue(6));
+
+	tokenize.init("(define (b a) (+ 2 a))");
+	tokenize.run(env);
+	
+	tokenize.init("(b 3)");
+	ISTOKENIZEEQUAL(tokenize, env, numValue(5));
+
+	tokenize.init("(apply b 4)");
+	ISTOKENIZEEQUAL(tokenize, env, numValue(6));
 }
 
 void test7()
@@ -276,6 +285,13 @@ void test12()
 	tokenize.run(env);
 	
 	tokenize.init("(quasiquote (a (unquote-splicing lst) d))");
+	tokenize.run(env);
+}
+
+void testmacro()
+{
+	DummyScheme::DummyEnvPtr env(new DummyScheme::DummyEnv(NULL));	
+	DummyScheme::Tokenize tokenize("(define-macro ())");
 	tokenize.run(env);
 }
 

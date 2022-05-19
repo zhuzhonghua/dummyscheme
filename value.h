@@ -34,7 +34,7 @@ public:
 	virtual bool isMacro() { Error("error not a macro"); return false; }
 	virtual std::string toString();
 	virtual DummyValuePtr eval(DummyEnvPtr env);
-	virtual DummyValuePtr apply(DummyValueItr begin, DummyValueItr end, DummyEnvPtr env) {
+	virtual DummyValuePtr apply(DummyValueListItr begin, DummyValueListItr end, DummyEnvPtr env) {
 		Error("error not a lambda");
 		return DummyValue::nil;
 	}
@@ -132,7 +132,7 @@ public:
 	virtual DummyValueList getList() { return list; }
 	virtual std::string toString();
 	virtual bool isMacro() { return macro; }
-	virtual DummyValuePtr apply(DummyValueItr begin, DummyValueItr end, DummyEnvPtr env);
+	virtual DummyValuePtr apply(DummyValueListItr begin, DummyValueListItr end, DummyEnvPtr env);
 protected:
 	BindList binds;
 	DummyValueList list;

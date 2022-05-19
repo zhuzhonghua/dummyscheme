@@ -19,7 +19,7 @@ DummyValuePtr opTypeValue(int type, const DummyValueList& list)
 	return new DummyOpTypeValue(type, list);
 }
 
-DummyValuePtr opTypeValue(int type, DummyValueList::iterator begin, DummyValueList::iterator end)
+DummyValuePtr opTypeValue(int type, DummyValueListItr begin, DummyValueListItr end)
 {
 	return opTypeValue(type, DummyValueList(begin, end));	
 }
@@ -29,7 +29,7 @@ DummyValuePtr listValue(const DummyValueList& list)
 	return new DummyListValue(list);
 }
 
-DummyValuePtr listValue(DummyValueList::iterator begin, DummyValueList::iterator end)
+DummyValuePtr listValue(DummyValueListItr begin, DummyValueListItr end)
 {
 	return listValue(DummyValueList(begin, end));
 }
@@ -54,7 +54,7 @@ DummyValuePtr lambdaValue(const BindList& binds, const DummyValueList& list)
 	return new DummyLambdaValue(binds, list, false);
 }
 
-DummyValuePtr lambdaValue(const BindList& binds, DummyValueList::iterator begin, DummyValueList::iterator end)
+DummyValuePtr lambdaValue(const BindList& binds, DummyValueListItr begin, DummyValueListItr end)
 {
 	return lambdaValue(binds, DummyValueList(begin, end));
 }
@@ -66,7 +66,7 @@ DummyValuePtr macroValue(const BindList& binds, const DummyValuePtr &item)
 	return new DummyLambdaValue(binds, list, true);
 }
 
-DummyValuePtr macroValue(const BindList& binds, DummyValueItr begin, DummyValueItr end)
+DummyValuePtr macroValue(const BindList& binds, DummyValueListItr begin, DummyValueListItr end)
 {
 	return new DummyLambdaValue(binds, DummyValueList(begin, end), true);
 }

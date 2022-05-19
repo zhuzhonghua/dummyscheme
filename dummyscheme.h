@@ -15,7 +15,7 @@ namespace DummyScheme{
 class DummyValue;
 typedef DummyRefCountPtr<DummyValue>  DummyValuePtr;
 typedef std::vector<DummyValuePtr> DummyValueList;
-typedef std::vector<DummyValuePtr>::iterator DummyValueItr;
+typedef std::vector<DummyValuePtr>::iterator DummyValueListItr;
 
 class DummyEnv;
 typedef DummyRefCountPtr<DummyEnv>  DummyEnvPtr;
@@ -29,15 +29,15 @@ typedef std::stringstream StringStream;
 
 DummyValuePtr opTypeValue(int type, const DummyValuePtr &value);
 DummyValuePtr opTypeValue(int type, const DummyValueList& list);
-DummyValuePtr opTypeValue(int type, DummyValueItr begin, DummyValueItr end);
+DummyValuePtr opTypeValue(int type, DummyValueListItr begin, DummyValueListItr end);
 DummyValuePtr listValue(const DummyValueList& list);
-DummyValuePtr listValue(DummyValueItr begin, DummyValueItr end);
+DummyValuePtr listValue(DummyValueListItr begin, DummyValueListItr end);
 DummyValuePtr strValue(const std::string &str);
 DummyValuePtr numValue(int num);
 DummyValuePtr symbolValue(const std::string &symbol);
 DummyValuePtr lambdaValue(const BindList& binds, const DummyValueList& list);
-DummyValuePtr lambdaValue(const BindList& binds, DummyValueList::iterator begin, DummyValueList::iterator end);
+DummyValuePtr lambdaValue(const BindList& binds, DummyValueListItr begin, DummyValueListItr end);
 DummyValuePtr macroValue(const BindList& binds, const DummyValuePtr item);
-DummyValuePtr macroValue(const BindList& binds, DummyValueItr begin, DummyValueItr end);
+DummyValuePtr macroValue(const BindList& binds, DummyValueListItr begin, DummyValueListItr end);
 }
 

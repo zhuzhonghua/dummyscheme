@@ -10,7 +10,8 @@ std::string stringPrintf(const char* fmt, ...)
 	int size = 128;
 	std::string str;
 	va_list ap;
-	while (true)
+	int times = 5;
+	while (true && times-- > 0)
 	{
 		str.resize(size);
 		va_start(ap, fmt);
@@ -21,11 +22,11 @@ std::string stringPrintf(const char* fmt, ...)
 			str.resize(n);
 			return str;
 		}
-		if (n > -1)
-			size = n + 1;
-		else
-			size *= 2;
+		
+		size *= 2;
 	}
+	Assert(times >= 0, "internal error");
+	
 	return str;
 }
 

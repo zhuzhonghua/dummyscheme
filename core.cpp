@@ -81,7 +81,7 @@ DummyValuePtr DUMMY_OPCOMPILENAME(type)(DummyValueList& list);					\
 */
 void ConstructLetEnv(DummyValueList varList, DummyEnvPtr letEnv)
 {
-	DummyValueList::iterator varItr = varList.begin();	
+	DummyValueListItr varItr = varList.begin();	
 	for (; varItr != varList.end(); ++varItr) {
 		DummyValueList symbolValue = (*varItr)->getList();
 
@@ -102,7 +102,7 @@ String DummyCore::GetTypeStr(int type)
 	return "unknown";
 }
 
-DummyValuePtr DummyCore::Eval(DummyValueItr begin, DummyValueItr end, DummyEnvPtr env)
+DummyValuePtr DummyCore::Eval(DummyValueListItr begin, DummyValueListItr end, DummyEnvPtr env)
 {
 	DummyValuePtr retValue = DummyValue::nil;
 	for (; begin != end; begin++)
@@ -163,7 +163,7 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 		case DUMMY_TYPE_IF:{
 			DummyValueList list = ast->getList();
 	
-			DummyValueList::iterator itr = list.begin();
+			DummyValueListItr itr = list.begin();
 			DummyValuePtr condition = *itr;
 			// first check condition
 			if (condition->eval(env)->isTrueValue())
@@ -197,7 +197,7 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 		case DUMMY_TYPE_WHEN:
 		case DUMMY_TYPE_UNLESS: {
 			DummyValueList list = ast->getList();
-			DummyValueList::iterator itr = list.begin();
+			DummyValueListItr itr = list.begin();
 			DummyValuePtr condition = *itr;	
 			// first check condition
 			bool flag = false;
@@ -316,7 +316,7 @@ DUMMY_BUILTIN_OP_COMPILE(let)
 	DummyValuePtr var = *(list.begin() + 1);
 	
 	DummyValueList symbolList = var->getList();
-	DummyValueList::iterator symbolItr = symbolList.begin();
+	DummyValueListItr symbolItr = symbolList.begin();
 	for(; symbolItr != symbolList.end(); ++symbolItr)
 	{
 		DummyValueList varList = (*symbolItr)->getList();
@@ -336,12 +336,12 @@ DUMMY_BUILTIN_OP_COMPILE(lambda)
 {
 	AssertDummyValueList(list.size() >= 3, list, "parameter >= 3");
 	
-	DummyValueList::iterator itr= list.begin();	
+	DummyValueListItr itr= list.begin();	
 	DummyValuePtr front = *itr;
 
 	DummyValuePtr binds = *++itr;
 	DummyValueList bindList = binds->getList();
-	DummyValueList::iterator bindItr = bindList.begin();
+	DummyValueListItr bindItr = bindList.begin();
 	BindList symbols;
 	for (; bindItr != bindList.end(); ++bindItr) {
 		symbols.push_back((*bindItr)->getSymbol());
@@ -359,7 +359,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_PLUS, +, 2)
 	AssertArgBigEqual(2);
 	
 	int num = 0;
-	DummyValueList::iterator itr = list.begin();	
+	DummyValueListItr itr = list.begin();	
 	for (; itr != list.end(); ++itr)
 		num += DummyCore::Eval(*itr, env)->getInt();
 	
@@ -374,7 +374,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_MINUS, -, 2)
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
 	
-	DummyValueList::iterator itr = list.begin();
+	DummyValueListItr itr = list.begin();
 	int num = DummyCore::Eval(*itr, env)->getInt();
 	
 	for (++itr; itr != list.end(); ++itr)
@@ -392,7 +392,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_MUL, *, 2)
 	AssertArgBigEqual(2);
 
 	int num = 1;
-	DummyValueList::iterator itr = list.begin();	
+	DummyValueListItr itr = list.begin();	
 	
 	for (; itr != list.end(); ++itr)
 		num *= DummyCore::Eval(*itr, env)->getInt();
@@ -408,7 +408,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_DIVIDE, /, 2)
 	DummyValueList list = ast->getList(); 
 	AssertArgBigEqual(2);
 	
-	DummyValueList::iterator itr = list.begin();	
+	DummyValueListItr itr = list.begin();	
 	// second is the eeeee
 	int num = DummyCore::Eval(*itr, env)->getInt();
 	
@@ -461,7 +461,7 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_DEFINE, define)
 		
 		// lambda
 		DummyValueList bindList(symbolList.begin()+1, symbolList.end());
-		DummyValueList::iterator bindItr = bindList.begin();
+		DummyValueListItr bindItr = bindList.begin();
 		BindList binds;
 		for (; bindItr != bindList.end(); ++bindItr)
 		{
@@ -487,7 +487,7 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_DEFINE, define)
 */
 DUMMY_BUILTIN_OP_COMPILE(apply)
 {
-	DummyValueList::iterator itr = list.begin();
+	DummyValueListItr itr = list.begin();
 	DummyValuePtr front = *itr;
 	if (!front->isLambda())
 	{
@@ -509,7 +509,7 @@ DUMMY_BUILTIN_OP_COMPILE(apply)
 DUMMY_BUILTIN_OP(DUMMY_TYPE_APPLY, apply)
 {
 	DummyValueList list = ast->getList(); 
-	DummyValueList::iterator applyItr = list.begin();	
+	DummyValueListItr applyItr = list.begin();	
 	DummyValuePtr lambda = *applyItr;
 	
 	if (!lambda->isLambda())
@@ -529,7 +529,7 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_DISPLAY, display)
 {
 	DummyValueList list = ast->getList();
 	
-	DummyValueList::iterator itr = list.begin();		
+	DummyValueListItr itr = list.begin();		
 	// exec the begin body
 	for (; itr != list.end(); itr++)
 	{
@@ -549,7 +549,7 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_LIST, list)
 	DummyValueList list = ast->getList();
 	DummyValueList evalList;
 	
-	DummyValueList::iterator itr = list.begin();		
+	DummyValueListItr itr = list.begin();		
 	// exec the begin body
 	for (; itr != list.end(); itr++)
 	{
@@ -568,7 +568,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_LIST_MARK, list?, 1)
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(1);
 	
-	DummyValueList::iterator itr = list.begin();		
+	DummyValueListItr itr = list.begin();		
 	for (; itr != list.end(); itr++)
 	{
 		if(!DummyCore::Eval(*itr, env)->isList())
@@ -586,7 +586,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_NULL_MARK, null?, 1)
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(1);
 	
-	DummyValueList::iterator itr = list.begin();
+	DummyValueListItr itr = list.begin();
 	for (; itr != list.end(); itr++)
 	{
 		DummyValuePtr evalVal = DummyCore::Eval(*itr, env);
@@ -615,7 +615,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_EQUAL_MARK, equal?, 1)
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(1);
 	
-	DummyValueList::iterator itr = list.begin();		
+	DummyValueListItr itr = list.begin();		
 	DummyValuePtr first = *itr;
 	for (++itr; itr != list.end(); itr++)
 	{
@@ -634,7 +634,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_NOT, not, 1)
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(1);
 	
-	DummyValueList::iterator itr = list.begin();		
+	DummyValueListItr itr = list.begin();		
 	for (; itr != list.end(); itr++)
 	{
 		DummyValuePtr eval = DummyCore::Eval(*itr, env);
@@ -654,7 +654,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_EQUAL, =, 2)
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
 	
-	DummyValueList::iterator itr = list.begin();		
+	DummyValueListItr itr = list.begin();		
 	DummyValuePtr first = *itr;
 	int firstInt = DummyCore::Eval(first, env)->getInt();
 	for (++itr; itr != list.end(); itr++)
@@ -674,7 +674,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_LESS, <, 2)
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
 	
-	DummyValueList::iterator itr = list.begin();		
+	DummyValueListItr itr = list.begin();		
 	DummyValuePtr first = *itr;
 	int firstInt = DummyCore::Eval(first, env)->getInt();
 	for (++itr; itr != list.end(); itr++)
@@ -695,7 +695,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_LESS_EQUAL, <=, 2)
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
 	
-	DummyValueList::iterator itr = list.begin();		
+	DummyValueListItr itr = list.begin();		
 	int firstInt = DummyCore::Eval(*itr, env)->getInt();
 	for (++itr; itr != list.end(); itr++)
 	{
@@ -717,7 +717,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_BIG, >, 2)
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
 	
-	DummyValueList::iterator itr = list.begin();		
+	DummyValueListItr itr = list.begin();		
 	
 	int firstInt = DummyCore::Eval(*itr, env)->getInt();
 	for (++itr; itr != list.end(); itr++)
@@ -740,7 +740,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_BIG_EQUAL, >=, 2)
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
 	
-	DummyValueList::iterator itr = list.begin();		
+	DummyValueListItr itr = list.begin();		
 	
 	int firstInt = DummyCore::Eval(*itr, env)->getInt();
 	for (++itr; itr != list.end(); itr++)
@@ -781,7 +781,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_LOAD, load, 1)
 	AssertArgBigEqual(1);
 	
 	// TODO: use a filetype dummyvalue dynamicaly read file content
-	DummyValueList::iterator itr = list.begin();	
+	DummyValueListItr itr = list.begin();	
 	for (; itr != list.end(); ++itr)
 	{
 		String fileName = DummyCore::Eval(*itr, env)->getStr();
@@ -834,7 +834,7 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_DEFINE_MACRO, define-macro)
 		
 	// lambda
 	DummyValueList bindList(symbolList.begin()+1, symbolList.end());
-	DummyValueList::iterator bindItr = bindList.begin();
+	DummyValueListItr bindItr = bindList.begin();
 	BindList binds;
 	for (; bindItr != bindList.end(); ++bindItr)
 	{

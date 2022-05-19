@@ -95,8 +95,8 @@ bool DummyValue::isEqualValue(DummyValuePtr other, DummyEnvPtr env)
 		if (a.size() != b.size())
 			return false;
 		
-		DummyValueList::iterator aItr = a.begin();
-		DummyValueList::iterator bItr = b.begin();
+		DummyValueListItr aItr = a.begin();
+		DummyValueListItr bItr = b.begin();
 		for (; aItr != a.end() && bItr != b.end(); ++aItr, ++bItr)
 		{
 			DummyValuePtr aEvalValue = DummyCore::Eval(*aItr, env);
@@ -195,7 +195,7 @@ std::string DummyListValue::toString()
 {
 	std::stringstream out;
 	out << "(";
-	DummyValueList::iterator itr = list.begin();
+	DummyValueListItr itr = list.begin();
 	for (;itr != list.end(); itr++)
 	{
 		out << (*itr)->toString();
@@ -247,7 +247,7 @@ std::string DummyLambdaValue::toString()
 			out << " ";	
 	}
 	out << "] ";
-	DummyValueList::iterator itr = list.begin();	
+	DummyValueListItr itr = list.begin();	
 	for (;itr != list.end(); itr++)
 	{
 		out << (*itr)->toString();
@@ -258,7 +258,7 @@ std::string DummyLambdaValue::toString()
 	return out.str();
 }
 
-DummyValuePtr DummyLambdaValue::apply(DummyValueItr begin, DummyValueItr end, DummyEnvPtr env)
+DummyValuePtr DummyLambdaValue::apply(DummyValueListItr begin, DummyValueListItr end, DummyEnvPtr env)
 {
 	DummyEnvPtr applyEnv(new DummyEnv(env));
 		
@@ -272,7 +272,11 @@ DummyValuePtr DummyLambdaValue::apply(DummyValueItr begin, DummyValueItr end, Du
 	}
 
 	// exec the body
-	return DummyCore::Eval(list, applyEnv);
+	DummyValuePtr result = DummyCore::Eval(list, applyEnv);
+	if (macro) // macro needs to be re-eval
+		return DummyCore::Eval(result, env);
+	else
+		return result;
 }
 
 DummyOpTypeValue::DummyOpTypeValue(int type, DummyValueList list)
@@ -285,7 +289,7 @@ std::string DummyOpTypeValue::toString()
 {
 	std::stringstream out;
 	out << "(" << DummyCore::GetTypeStr(type) << " ";	
-	DummyValueList::iterator itr = list.begin();	
+	DummyValueListItr itr = list.begin();	
 	for (;itr != list.end(); itr++)
 	{
 		out << (*itr)->toString();
@@ -326,7 +330,7 @@ DummyValuePtr OpEvalQuasiQuote(DummyValuePtr value, DummyEnvPtr env)
 		return value;// don't eval at this place
 	
 	DummyValueList list = value->getList();
-	DummyValueList::iterator itr = list.begin();
+	DummyValueListItr itr = list.begin();
 	DummyValueList retValue;
 	for (; itr != list.end(); itr++)
 	{
