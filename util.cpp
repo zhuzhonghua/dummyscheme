@@ -17,12 +17,14 @@ std::string stringPrintf(const char* fmt, ...)
 		va_start(ap, fmt);
 		int n = vsnprintf((char *)str.data(), size, fmt, ap);
 		va_end(ap);
+
+		// n might be bigger than size
 		if (n > -1 && n < size)
 		{
 			str.resize(n);
 			return str;
 		}
-		
+
 		size *= 2;
 	}
 	Assert(times >= 0, "internal error");

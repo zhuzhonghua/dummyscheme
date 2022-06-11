@@ -6,7 +6,9 @@ namespace DummyScheme {
 	
 enum {
 	TOKEN_UNKNOWN,
+	TOKEN_END,
 	TOKEN_NUM,
+	TOKEN_STRING,
 	TOKEN_DOUBLE_QUOTE,
 	TOKEN_LEFT_PAREN,
 	TOKEN_RIGHT_PAREN,
@@ -18,7 +20,7 @@ enum {
 };
 
 /*
-	P = NUM | STRING | SYMBOL | QUOTE | UNQUOTE | UNQUOTE_SPLICING | QUASIQUOTE | LEFT_PAREN LIST RIGHT_PAREN	
+	P = NUM | STRING | SYMBOL | QUOTE | UNQUOTE | UNQUOTE_SPLICING | QUASIQUOTE | LEFT_PAREN LIST RIGHT_PAREN
 	LIST = P LISTP
 	LISTP = P LISTP
 
@@ -29,30 +31,33 @@ protected:
 	DummyShareEnvPtr shareEnv;
 protected:
 	int aheadToken;
+	int numLexVal;
+	String strLexVal;
+protected:
 	int index;
-	std::string input;
+	String input;
 public:
-	Tokenize(const std::string &input);
-	void init(const std::string &input);
+	Tokenize(const String &input);
+	void init(const String &input);
 	DummyValuePtr run(DummyEnvPtr env);
 protected:
 	DummyValuePtr readP();
 	DummyValuePtr readList();
 	DummyValueList readListP();
-	DummyValuePtr readNum();
-	DummyValuePtr readStr();
-	DummyValuePtr readQuote();
-	DummyValuePtr readUnQuote();
-	DummyValuePtr readUnQuoteSplicing();
-	DummyValuePtr readQuasiQuote();
-	// read a word as symbol
-	DummyValuePtr readSymbol();
+	
+	DummyValuePtr readQuoteRelate(int type, const char* typeStr);
+
+protected:
+	DummyValuePtr getShareSymbol(const String &symbol);
+protected:
+	int readNum();
+	int readStr();
+	int readSymbol();
 protected:
 	// space and tab
 	// TODO: comment
-	void skipBlank();
 	bool isBlank();
-	int readToken();
-	int look();
+	int dLex();
+	void match(int type);
 };
 }
