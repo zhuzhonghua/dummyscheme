@@ -1,76 +1,48 @@
 #include "core.h"
-#include "dummyscheme.h"
 #include "value.h"
 #include "env.h"
 #include "tokenize.h"
 
 using namespace DummyScheme;
 
-DummyOpEval DummyCore::builtInOpEval[DUMMY_TYPE_MAX] = {0};
-MapOpCompile DummyCore::builtInOpCompile;
-MapOpNum DummyCore::builtInOpNum;
+DummyOpEval DummyCore::opEval[DUMMY_TYPE_MAX] = {0};
+MapOpCompile DummyCore::opCompile;
+MapOpNum DummyCore::opNum;
 
-MapOpType DummyCore::builtInOpToType;
-String DummyCore::builtInTypeToOp[DUMMY_TYPE_MAX];
+MapOpType DummyCore::opToType;
+String DummyCore::typeToOp[DUMMY_TYPE_MAX];
 
-DummyBuiltInHelper::DummyBuiltInHelper(int type, const String& op)
+DummyTypeOpHelper::DummyTypeOpHelper(int type, const String op)
 {
-	DummyCore::builtInTypeToOp[type] = op;
-	DummyCore::builtInOpToType[op] = type;	
+	DummyCore::typeToOp[type] = op;
+	DummyCore::opToType[op] = type;	
 }
 
-DummyBuiltInHelper::DummyBuiltInHelper(int type, const String& op, int num, DummyOpEval opEval)
-	:DummyBuiltInHelper(type, op, num)
+DummyTypeOpHelper::DummyTypeOpHelper(int type, const String op, int num)
+	:DummyTypeOpHelper(type, op)
 {
-	DummyCore::builtInOpEval[type] = opEval;
+	DummyCore::opNum[op] = num;
 }
 
-DummyBuiltInHelper::DummyBuiltInHelper(int type, const String& op, int num)
-	:DummyBuiltInHelper(type, op)
+DummyTypeOpHelper::DummyTypeOpHelper(int type, const String op, DummyOpCompile opCompile)
+	:DummyTypeOpHelper(type, op)
 {
-	DummyCore::builtInOpNum[op] = num;
+	DummyCore::opCompile[type] = opCompile;
 }
 
-DummyBuiltInHelper::DummyBuiltInHelper(int type, const String& op, DummyOpCompile opCompile)
-	:DummyBuiltInHelper(type, op)
+DummyTypeOpHelper::DummyTypeOpHelper(int type, const String op, DummyOpEval eval)
+	:DummyTypeOpHelper(type, op)
 {
-	DummyCore::builtInOpCompile[op] = opCompile;
+	DummyCore::opEval[type] = eval;
 }
 
-DummyBuiltInHelper::DummyBuiltInHelper(const String& op, DummyOpCompile opCompile)
-{
-	DummyCore::builtInOpCompile[op] = opCompile;
-}
+#define DUMMY_OP_EVAL_NAME(uniq) DummyOpEval ## uniq
+#define DUMMY_OP_EVAL_HELP(uniq) DummyOpEvalHelp ## uniq
 
-#define STR(s) #s
-
-#define DUMMY_OPEVALNAME(uniq) DummyBuiltInEval ## uniq
-#define DUMMY_OPEVALHELP(uniq) DummyBuiltInEvalHelp ## uniq
-
-#define DUMMY_OPCOMPILENAME(uniq) DummyBuiltInCompile ## uniq
-#define DUMMY_OPCOMPILEHELP(uniq) DummyBuiltInCompileHelp ## uniq
-
-#define DUMMY_BUILTIN_OP_NUM(type, symbol, num)													\
-DummyValuePtr DUMMY_OPEVALNAME(type)(DummyValuePtr ast, DummyEnvPtr env); \
- static DummyBuiltInHelper DUMMY_OPEVALHELP(type) (type, STR(symbol), num, DUMMY_OPEVALNAME(type)); \
- DummyValuePtr DUMMY_OPEVALNAME(type)(DummyValuePtr ast, DummyEnvPtr env)
-
-#define DUMMY_BUILTIN_OP_COMPILE_DEF(symbol, key)												\
-DummyValuePtr DUMMY_OPCOMPILENAME(key)(DummyValueList& list);						\
- static DummyBuiltInHelper DUMMY_OPCOMPILEHELP(key) (STR(symbol), DUMMY_OPCOMPILENAME(key)); \
- DummyValuePtr DUMMY_OPCOMPILENAME(key)(DummyValueList& list)
-
-#define DUMMY_BUILTIN_OP_COMPILE(symbol) DUMMY_BUILTIN_OP_COMPILE_DEF(symbol, symbol)
-
-#define DUMMY_BUILTIN_OP_COMPILE_NUM(type, symbol, num)									\
-static DummyBuiltInHelper DUMMY_OPCOMPILEHELP(type) (type, STR(symbol), num);
-
-#define DUMMY_BUILTIN_OP_COMPILE_TYPE(type, symbol)											\
-DummyValuePtr DUMMY_OPCOMPILENAME(type)(DummyValueList& list);					\
- static DummyBuiltInHelper DUMMY_OPCOMPILEHELP(type) (type, STR(symbol), DUMMY_OPCOMPILENAME(type)); \
- DummyValuePtr DUMMY_OPCOMPILENAME(type)(DummyValueList& list)
-
-#define DUMMY_BUILTIN_OP(type, symbol) DUMMY_BUILTIN_OP_NUM(type, symbol, 0)
+#define DUMMY_OP_EVAL(type, symbol)																			\
+DummyValuePtr DUMMY_OP_EVAL_NAME(type)(DummyValuePtr ast, DummyEnvPtr env); \
+ static DummyTypeOpHelper DUMMY_OP_EVAL_HELP(type) (type, STR(symbol), DUMMY_OP_EVAL_NAME(type)); \
+ DummyValuePtr DUMMY_OP_EVAL_NAME(type)(DummyValuePtr ast, DummyEnvPtr env)
 
 #define AssertArgBigEqual(num) AssertDummyValue(list.size() >= num, ast, "parameter need more")
 #define AssertArgEqual(num) AssertDummyValue(list.size() == num, ast, "parameter must equal")
@@ -81,9 +53,9 @@ DummyValuePtr DUMMY_OPCOMPILENAME(type)(DummyValueList& list);					\
 */
 void ConstructLetEnv(DummyValueList varList, DummyEnvPtr letEnv)
 {
-	DummyValueListItr varItr = varList.begin();	
-	for (; varItr != varList.end(); ++varItr) {
-		DummyValueList symbolValue = (*varItr)->getList();
+	DUMMY_VALUE_LIST_FOR(varList)
+	{
+		DummyValueList symbolValue = (*itr)->getList();
 
 		DummyValuePtr symbol = symbolValue[0];
 		DummyValuePtr value = symbolValue[1];
@@ -97,7 +69,7 @@ void ConstructLetEnv(DummyValueList varList, DummyEnvPtr letEnv)
 String DummyCore::GetTypeStr(int type)
 {
 	if (type >= 0 && type <= DUMMY_TYPE_MAX)
-		return builtInTypeToOp[type];
+		return typeToOp[type];
 
 	return "unknown";
 }
@@ -166,7 +138,7 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 			DummyValueListItr itr = list.begin();
 			DummyValuePtr condition = *itr;
 			// first check condition
-			if (condition->eval(env)->isTrueValue())
+			if (Eval(condition, env)->isTrueValue())
 			{
 				// TRUE != nil
 				if (itr + 1 != list.end())
@@ -201,10 +173,11 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 			DummyValuePtr condition = *itr;	
 			// first check condition
 			bool flag = false;
-			if (astType == DUMMY_TYPE_WHEN) flag = condition->eval(env)->isTrueValue();
-			else if (astType == DUMMY_TYPE_UNLESS) flag = condition->eval(env)->isFalseValue();
+			if (astType == DUMMY_TYPE_WHEN) flag = Eval(condition, env)->isTrueValue();
+			else if (astType == DUMMY_TYPE_UNLESS) flag = Eval(condition, env)->isFalseValue();
 			
 			if (flag)
+			{
 				if (itr + 1 == list.end())
 					return DummyValue::nil;
 				else
@@ -215,6 +188,7 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 					// env = env;	
 					continue;
 				}
+			}
 			else
 				return DummyValue::nil;
 			break;
@@ -234,126 +208,17 @@ DummyValuePtr DummyCore::Eval(DummyValuePtr ast, DummyEnvPtr env)
 DummyValuePtr DummyCore::EvalOpType(DummyValuePtr ast, DummyEnvPtr env)
 {
 	int type = ast->getType();
-	DummyOpEval op = builtInOpEval[type];
+	Assert(type >= 0 && type < DUMMY_TYPE_MAX, "internal type opeval out of range %d", type);
+	
+	DummyOpEval op = opEval[type];
 	Assert(op != NULL, "internal error of no opeval with type %d", type);
 	return op(ast, env);
 }
 
 /*
-	create optype or normal list type
-*/
-DummyValuePtr DummyCore::Compile(DummyValueList& list)
-{
-	DummyValuePtr front = list.front();
-	if (front->isSymbol())
-	{
-		// specified constructor
-		String symbol = front->getSymbol();
-		MapOpCompile::iterator opCompileItr = builtInOpCompile.find(symbol);
-		// attention here is the full list
-		if (opCompileItr != builtInOpCompile.end())
-			return (opCompileItr->second)(list);
-
-		// default constructor
-		MapOpType::iterator opTypeItr = builtInOpToType.find(symbol);
-		if (opTypeItr != builtInOpToType.end())
-		{
-			MapOpNum::iterator opNumItr = builtInOpNum.find(symbol);
-			if (opNumItr != builtInOpNum.end() && opNumItr->second > 0)
-				AssertDummyValueList(list.size() >= opNumItr->second + 1, list, "need more parameters");
-			
-			// attention: here is the begin + 1
-			return opTypeValue(opTypeItr->second, list.begin()+1, list.end());
-		}
-		
-		// (let ((c 2)) c)
-		//	Error("unexpected type %d", type);	
-	}
-	else if (front->isLambda()) // ((lambda (a) (+ a 2)) 2)
-		return opTypeValue(DUMMY_TYPE_APPLY, list);
-
-	return listValue(list);
-}
-
-DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_BEGIN, begin, 1);
-DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_IF, if, 2);
-DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_WHEN, when, 2);
-DUMMY_BUILTIN_OP_COMPILE_NUM(DUMMY_TYPE_UNLESS, unless, 2);
-
-DUMMY_BUILTIN_OP_COMPILE_TYPE(DUMMY_TYPE_QUOTE, quote)
-{
-	AssertDummyValueList(list.size() == 2, list, "quote can only have on item");
-	return opTypeValue(DUMMY_TYPE_QUOTE, list.begin()+1, list.end());
-}
-
-DUMMY_BUILTIN_OP_COMPILE_TYPE(DUMMY_TYPE_UNQUOTE, unquote)
-{
-	AssertDummyValueList(list.size() == 2, list, "unquote can only have on item");
-	return opTypeValue(DUMMY_TYPE_UNQUOTE, list.begin()+1, list.end());
-}
-
-DUMMY_BUILTIN_OP_COMPILE_TYPE(DUMMY_TYPE_UNQUOTE_SPLICING, unquote-splicing)
-{
-	AssertDummyValueList(list.size() == 2, list, "unquote-splicing can only have on item");
-	return opTypeValue(DUMMY_TYPE_UNQUOTE_SPLICING, list.begin()+1, list.end());
-}
-
-DUMMY_BUILTIN_OP_COMPILE_TYPE(DUMMY_TYPE_QUASIQUOTE, quasiquote)
-{
-	AssertDummyValueList(list.size() == 2, list, "quasiquote can only have on item");
-	return opTypeValue(DUMMY_TYPE_QUASIQUOTE, list.begin()+1, list.end());
-}
-
-/*
-	construct let
-	(let ((c 2)) (+ c 2))
-*/
-DUMMY_BUILTIN_OP_COMPILE(let)
-{
-	DummyValuePtr front = list.front();
-	AssertDummyValueList(list.size() >= 3, list, "parameter >= 3");
-	
-	DummyValuePtr var = *(list.begin() + 1);
-	
-	DummyValueList symbolList = var->getList();
-	DummyValueListItr symbolItr = symbolList.begin();
-	for(; symbolItr != symbolList.end(); ++symbolItr)
-	{
-		DummyValueList varList = (*symbolItr)->getList();
-		AssertDummyValueList(varList.size() == 2, varList, "varList list must =2");
-		AssertDummyValueList(varList.front()->isSymbol(), varList, "first must be symbol");
-		// TODO: store the info, symbol and value
-	}
-
-	return opTypeValue(DUMMY_TYPE_LET, list.begin()+1, list.end());
-}
-
-/*
-	construct lambda
-	(lambda (p1 p2) (+ p1 p2))
-*/
-DUMMY_BUILTIN_OP_COMPILE(lambda)
-{
-	AssertDummyValueList(list.size() >= 3, list, "parameter >= 3");
-	
-	DummyValueListItr itr= list.begin();	
-	DummyValuePtr front = *itr;
-
-	DummyValuePtr binds = *++itr;
-	DummyValueList bindList = binds->getList();
-	DummyValueListItr bindItr = bindList.begin();
-	BindList symbols;
-	for (; bindItr != bindList.end(); ++bindItr) {
-		symbols.push_back((*bindItr)->getSymbol());
-	}
-	// rest is the body
-	return lambdaValue(symbols, ++itr, list.end());
-}
-
-/*
 	(+ 1 2 3)
 */
-DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_PLUS, +, 2)
+DUMMY_OP_EVAL(DUMMY_TYPE_PLUS, +)
 {
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
@@ -369,7 +234,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_PLUS, +, 2)
 /*
 	(- 1 2 3)
 */
-DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_MINUS, -, 2)
+DUMMY_OP_EVAL(DUMMY_TYPE_MINUS, -)
 {
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
@@ -386,7 +251,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_MINUS, -, 2)
 /*
 	(* 1 2 3)
 */
-DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_MUL, *, 2)
+DUMMY_OP_EVAL(DUMMY_TYPE_MUL, *)
 {
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
@@ -403,7 +268,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_MUL, *, 2)
 /*
 	(/ 1 2 3)
 */
-DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_DIVIDE, /, 2)
+DUMMY_OP_EVAL(DUMMY_TYPE_DIVIDE, /)
 {
 	DummyValueList list = ast->getList(); 
 	AssertArgBigEqual(2);
@@ -418,19 +283,6 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_DIVIDE, /, 2)
 	return numValue(num);
 }
 
-/*
-	(define a 2)
-	(define (square x) (* x x))
-*/
-DUMMY_BUILTIN_OP_COMPILE(define)
-{
-	AssertDummyValueList(list.size() >= 3, list, "parameter >= 3");
-	
-	DummyValuePtr second = *(list.begin() + 1);
-	AssertDummyValueList(second->isSymbol() || second->isList(), list, "second must be a symbol or list");
-
-	return opTypeValue(DUMMY_TYPE_DEFINE, list.begin()+1, list.end());
-}
 
 /*
 	(define a 2)
@@ -441,7 +293,7 @@ DUMMY_BUILTIN_OP_COMPILE(define)
 	TODO:
 	(define a +)
 */
-DUMMY_BUILTIN_OP(DUMMY_TYPE_DEFINE, define)
+DUMMY_OP_EVAL(DUMMY_TYPE_DEFINE, define)
 {
 	DummyValueList list = ast->getList();
 	AssertArgEqual(2);
@@ -476,28 +328,6 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_DEFINE, define)
 	return symbolValue;
 }
 
-/*
-	(apply (lambda (a) (+ a 2)) 3)
-	(apply f 2 3)
-	
-	TODO:
-	(apply + 2 3)
-	(define a +)
-	(apply a 2 3)
-*/
-DUMMY_BUILTIN_OP_COMPILE(apply)
-{
-	DummyValueListItr itr = list.begin();
-	DummyValuePtr front = *itr;
-	if (!front->isLambda())
-	{
-		AssertDummyValueList(list.size() >= 2, list, "parameter >= 2");
-		++itr;
-	}
-	// first maybe the lambda
-
-	return opTypeValue(DUMMY_TYPE_APPLY, itr, list.end());
-}
 
 /*
 	((lambda (a) (+ a 2)) 3)
@@ -506,7 +336,7 @@ DUMMY_BUILTIN_OP_COMPILE(apply)
 	(apply f 2 3)
 	(apply + 2 3)
 */
-DUMMY_BUILTIN_OP(DUMMY_TYPE_APPLY, apply)
+DUMMY_OP_EVAL(DUMMY_TYPE_APPLY, apply)
 {
 	DummyValueList list = ast->getList(); 
 	DummyValueListItr applyItr = list.begin();	
@@ -525,7 +355,7 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_APPLY, apply)
 /*
 	(display a b c)
 */
-DUMMY_BUILTIN_OP(DUMMY_TYPE_DISPLAY, display)
+DUMMY_OP_EVAL(DUMMY_TYPE_DISPLAY, display)
 {
 	DummyValueList list = ast->getList();
 	
@@ -544,7 +374,7 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_DISPLAY, display)
 /*
 	(list 1 a b)
 */
-DUMMY_BUILTIN_OP(DUMMY_TYPE_LIST, list)
+DUMMY_OP_EVAL(DUMMY_TYPE_LIST, list)
 {
 	DummyValueList list = ast->getList();
 	DummyValueList evalList;
@@ -563,7 +393,7 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_LIST, list)
 	(list? (list 1 2 3))
 	support multi item
 */
-DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_LIST_MARK, list?, 1)
+DUMMY_OP_EVAL(DUMMY_TYPE_LIST_MARK, list?)
 {
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(1);
@@ -581,7 +411,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_LIST_MARK, list?, 1)
 /*
 	(null? (list 1 2 3))
 */
-DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_NULL_MARK, null?, 1)
+DUMMY_OP_EVAL(DUMMY_TYPE_NULL_MARK, null?)
 {
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(1);
@@ -610,7 +440,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_NULL_MARK, null?, 1)
 	(equal? (list 1 2 3) (list 1 2 3))
 	(equal? (list 1 2 3) 1)
 */
-DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_EQUAL_MARK, equal?, 1)
+DUMMY_OP_EVAL(DUMMY_TYPE_EQUAL_MARK, equal?)
 {
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(1);
@@ -629,7 +459,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_EQUAL_MARK, equal?, 1)
 /*
 	(not nil #f)
 */
-DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_NOT, not, 1)
+DUMMY_OP_EVAL(DUMMY_TYPE_NOT, not)
 {
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(1);
@@ -649,7 +479,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_NOT, not, 1)
 	(= 1 2)
 	(= 1 2 3)
 */
-DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_EQUAL, =, 2)
+DUMMY_OP_EVAL(DUMMY_TYPE_EQUAL, =)
 {
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
@@ -669,7 +499,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_EQUAL, =, 2)
 /*
 	(< 1 2 3 4 5)
 */
-DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_LESS, <, 2)
+DUMMY_OP_EVAL(DUMMY_TYPE_LESS, <)
 {
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
@@ -690,7 +520,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_LESS, <, 2)
 	(<= 1 2 3 4 4)
 	(<= 1 2 5 4 4)
 */
-DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_LESS_EQUAL, <=, 2)
+DUMMY_OP_EVAL(DUMMY_TYPE_LESS_EQUAL, <=)
 {
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
@@ -712,7 +542,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_LESS_EQUAL, <=, 2)
 /*
 	(> 5 4 3 2 1)
 */
-DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_BIG, >, 2)
+DUMMY_OP_EVAL(DUMMY_TYPE_BIG, >)
 {
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
@@ -735,7 +565,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_BIG, >, 2)
 /*
 	(>= 4 4 3 2 1)
 */
-DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_BIG_EQUAL, >=, 2)
+DUMMY_OP_EVAL(DUMMY_TYPE_BIG_EQUAL, >=)
 {
 	DummyValueList list = ast->getList();
 	AssertArgBigEqual(2);
@@ -759,7 +589,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_BIG_EQUAL, >=, 2)
 /*
 	(length (list 1 2 3))
 */
-DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_LENGTH, length, 1)
+DUMMY_OP_EVAL(DUMMY_TYPE_LENGTH, length)
 {
 	DummyValueList list = ast->getList();
 	AssertArgEqual(1);
@@ -775,7 +605,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_LENGTH, length, 1)
 /*
 	(load "test.scm")
 */
-DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_LOAD, load, 1)
+DUMMY_OP_EVAL(DUMMY_TYPE_LOAD, load)
 {
 	DummyValueList list = ast->getList();	
 	AssertArgBigEqual(1);
@@ -809,20 +639,7 @@ DUMMY_BUILTIN_OP_NUM(DUMMY_TYPE_LOAD, load, 1)
 	return DummyValue::nil;
 }
 
-/*
-	(define-macro (f b) `(+ 2 b))
- */
-DUMMY_BUILTIN_OP_COMPILE_TYPE(DUMMY_TYPE_DEFINE_MACRO, define-macro)
-{
-	AssertDummyValueList(list.size() == 3, list, "parameter >= 3");
-	
-	DummyValuePtr second = *(list.begin() + 1);
-	AssertDummyValueList(second->isList(), list, "second must be a list");
-	AssertDummyValueList(second->getList().front()->isSymbol(), list, "the first of second must be a symbol");
-
-	return opTypeValue(DUMMY_TYPE_DEFINE_MACRO, list.begin()+1, list.end());
-}
-DUMMY_BUILTIN_OP(DUMMY_TYPE_DEFINE_MACRO, define-macro)
+DUMMY_OP_EVAL(DUMMY_TYPE_DEFINE_MACRO, define-macro)
 {
 	DummyValueList list = ast->getList();
 	AssertArgEqual(2);
@@ -846,3 +663,48 @@ DUMMY_BUILTIN_OP(DUMMY_TYPE_DEFINE_MACRO, define-macro)
 	env->set(symbol->getSymbol(), symbolValue);
 	return symbolValue;
 }
+
+//=============================================================
+// compile code
+//=============================================================
+
+#define DUMMY_OP_COMPILE_NAME(uniq) DummyOpCompile ## uniq
+#define DUMMY_OP_COMPILE_HELP(uniq) DummyOpCompileHelp ## uniq
+
+#define DUMMY_OP_COMPILE(type, symbol)																	\
+DummyValuePtr DUMMY_OP_COMPILE_NAME(type)(DummyValueList& list);				\
+ static DummyTypeOpHelper DUMMY_OP_COMPILE_HELP(type) (type, STR(symbol), DUMMY_OP_COMPILE_NAME(type)); \
+ DummyValueList DUMMY_OP_COMPILE_NAME(type)(DummyValueList& list)
+
+#define DUMMY_OP_COMPILE_NUM(type, symbol, num)													\
+static DummyTypeOpHelper DUMMY_OP_COMPILE_HELP(type) (type, STR(symbol), num);
+
+DUMMY_OP_COMPILE_NUM(DUMMY_TYPE_BEGIN, begin, 1);
+DUMMY_OP_COMPILE_NUM(DUMMY_TYPE_IF, if, 2);
+DUMMY_OP_COMPILE_NUM(DUMMY_TYPE_WHEN, when, 2);
+DUMMY_OP_COMPILE_NUM(DUMMY_TYPE_UNLESS, unless, 2);
+DUMMY_OP_COMPILE_NUM(DUMMY_TYPE_PLUS, +, 2);
+DUMMY_OP_COMPILE_NUM(DUMMY_TYPE_MINUS, -, 2);
+DUMMY_OP_COMPILE_NUM(DUMMY_TYPE_MUL, *, 2);
+DUMMY_OP_COMPILE_NUM(DUMMY_TYPE_DIVIDE, /, 2);
+DUMMY_OP_COMPILE_NUM(DUMMY_TYPE_QUOTE, quote, 1);
+DUMMY_OP_COMPILE_NUM(DUMMY_TYPE_UNQUOTE, unquote, 1);
+DUMMY_OP_COMPILE_NUM(DUMMY_TYPE_UNQUOTE_SPLICING, unquote-splicing, 1);
+DUMMY_OP_COMPILE_NUM(DUMMY_TYPE_QUASIQUOTE, quasiquote, 1);
+
+/*
+	construct let
+	(let ((c 2)) (+ c 2))
+*/
+DUMMY_OP_COMPILE_NUM(DUMMY_TYPE_LET, let, 2);
+
+/*
+	(define a 2)
+	(define (square x) (* x x))
+*/
+DUMMY_OP_COMPILE_NUM(DUMMY_TYPE_DEFINE, define, 2)
+
+/*
+	(define-macro (f b) `(+ 2 b))
+ */
+DUMMY_OP_COMPILE_NUM(DUMMY_TYPE_DEFINE_MACRO, define-macro, 2);

@@ -5,20 +5,24 @@
 namespace DummyScheme{
 
 typedef DummyValuePtr (*DummyOpEval)(DummyValuePtr value, DummyEnvPtr env);
-typedef DummyValuePtr (*DummyOpCompile)(DummyValueList& list);
+typedef DummyValueList (*DummyOpCompile)(DummyValueList& list);
 
-class DummyBuiltInHelper{
+class DummyTypeOpHelper{
 public:
-	DummyBuiltInHelper(int type, const String& op, int num, DummyOpEval opEval);
-	DummyBuiltInHelper(int type, const String& op, int num);
-	DummyBuiltInHelper(int type, const String& op);
-	DummyBuiltInHelper(const String& op, DummyOpCompile opCompile);
-	DummyBuiltInHelper(int type, const String& op, DummyOpCompile opCompile);
+	DummyTypeOpHelper(int type, const String op, int num);
+	DummyTypeOpHelper(int type, const String op);
+	DummyTypeOpHelper(int type, const String op, DummyOpCompile opCompile);
+	DummyTypeOpHelper(int type, const String op, DummyOpEval eval);
 };
-	
-typedef std::map<String, DummyOpCompile> MapOpCompile;
+
+typedef std::map<int, DummyOpCompile> MapOpCompile;
+typedef std::map<int, DummyOpCompile>::iterator MapOpCompileItr;
+
 typedef std::map<String, int> MapOpType;
+typedef std::map<String, int>::iterator MapOpTypeItr;
+
 typedef std::map<String, int> MapOpNum;
+typedef std::map<String, int>::iterator MapOpNumItr;
 
 class DummyCore{
 public:
@@ -26,16 +30,17 @@ public:
 	static DummyValuePtr Eval(DummyValueList list, DummyEnvPtr env);
 	static DummyValuePtr Eval(DummyValueListItr begin, DummyValueListItr end, DummyEnvPtr env);
 	static DummyValuePtr EvalOpType(DummyValuePtr ast, DummyEnvPtr env);
-	static DummyValuePtr Compile(DummyValueList& list);
 public:
 	static String GetTypeStr(int type);
 private:
-	friend class DummyBuiltInHelper;
+	friend class DummyTypeOpHelper;
+	friend class DummyParser;
 	
-	static DummyOpEval builtInOpEval[];
-	static MapOpCompile builtInOpCompile;
-	static MapOpType builtInOpToType;
-	static MapOpNum builtInOpNum;
-	static String builtInTypeToOp[];
+	static MapOpCompile opCompile;
+	static MapOpNum opNum;
+	static DummyOpEval opEval[];
+	
+	static MapOpType opToType;
+	static String typeToOp[];
 };
 };

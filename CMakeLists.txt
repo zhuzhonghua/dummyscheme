@@ -7,7 +7,7 @@ SET(CMAKE_CXX_FLAGS "-O0 -Wall -g -ggdb")
 SET(CMAKE_C_FLAGS "-O0 -Wall -g -ggdb")
 #SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O0 -Wall -g -ggdb")	
 
-set(COMMON_SOURCE dummyscheme.cpp tokenize.cpp env.cpp value.cpp util.cpp core.cpp)
+set(COMMON_SOURCE dummyscheme.cpp tokenize.cpp env.cpp value.cpp util.cpp core.cpp parser.cpp)
 
 set(TARGET_SOURCE main.cpp ${COMMON_SOURCE})
 set(TEST_SOURCE testmain.cpp ${COMMON_SOURCE})

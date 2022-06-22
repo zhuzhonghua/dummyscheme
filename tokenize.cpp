@@ -2,6 +2,7 @@
 #include "env.h"
 #include "value.h"
 #include "core.h"
+#include "parser.h"
 
 using namespace DummyScheme;
 
@@ -24,7 +25,7 @@ void Tokenize::init(const String &input)
 {
 	this->input = input;
 	this->index = 0;
-
+	
 	aheadToken = dLex();
 }
 /*
@@ -116,7 +117,7 @@ DummyValuePtr Tokenize::readQuoteRelate(int type, const char* typeStr)
 	}
 		
 	// TODO: straightly create the dummyvalue with type
-	return DummyCore::Compile(list);
+	return DummyParser::Compile(list);
 }
 
 /*
@@ -203,7 +204,7 @@ DummyValuePtr Tokenize::readList()
 		if (listP.size() > 0)
 			list.insert(list.end(), listP.begin(), listP.end());
 		
-		return DummyCore::Compile(list);
+		return DummyParser::Compile(list);
 	}
 	}
 }

@@ -3,6 +3,7 @@
 #include "env.h"
 #include "tokenize.h"
 #include "core.h"
+#include "parser.h"
 
 using namespace DummyScheme;
 
@@ -358,7 +359,7 @@ DummyValuePtr OpEvalQuasiQuote(DummyValuePtr value, DummyEnvPtr env)
 			retValue.push_back(OpEvalQuasiQuote(*itr, env));
 	}
 
-	return DummyCore::Compile(retValue);
+	return DummyParser::Compile(retValue);
 }
 
 DummyValuePtr DummyOpTypeValue::eval(DummyEnvPtr env)

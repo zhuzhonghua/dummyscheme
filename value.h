@@ -42,6 +42,7 @@ public:
 	bool isEqualValue(DummyValuePtr other, DummyEnvPtr env);
 	bool isEqualString(const String str);
 public:
+	bool isNum() { return isInt() || isFloat(); }
 	bool isInt() { return type == DUMMY_TYPE_INT_NUM; }
 	bool isFloat() { return type == DUMMY_TYPE_FLOAT_NUM; }
 	bool isString() { return type == DUMMY_TYPE_STRING; }

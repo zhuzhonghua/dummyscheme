@@ -17,6 +17,8 @@ typedef DummyRefCountPtr<DummyValue>  DummyValuePtr;
 typedef std::vector<DummyValuePtr> DummyValueList;
 typedef std::vector<DummyValuePtr>::iterator DummyValueListItr;
 
+#define DUMMY_VALUE_LIST_FOR(list) for (DummyValueListItr itr = list.begin(); itr != list.end(); ++itr)
+
 class DummyEnv;
 typedef DummyRefCountPtr<DummyEnv>  DummyEnvPtr;
 
