@@ -19,6 +19,7 @@ RefGC::RefGC()
 
 void* RefGC::newRef(std::size_t size)
 {
+  checkGC();
   void* ptr = std::malloc(size);
   RefGC::inst()->allRef.insert((RefCount*)ptr);
   return ptr;
