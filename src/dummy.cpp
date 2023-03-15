@@ -5,40 +5,40 @@ namespace Dummy {
 
 SymbolMap Dummy::globalSymbols;
 
-const ValuePtr Dummy::Quote = Dummy::intern("quote");
-const ValuePtr Dummy::UnQuote = Dummy::intern("unquote");
-const ValuePtr Dummy::UnQuoteSplicing = Dummy::intern("unquote-splicing");
-const ValuePtr Dummy::QuasiQuote = Dummy::intern("quasiquote");
+const VarValue Dummy::Quote = Dummy::intern("quote");
+const VarValue Dummy::UnQuote = Dummy::intern("unquote");
+const VarValue Dummy::UnQuoteSplicing = Dummy::intern("unquote-splicing");
+const VarValue Dummy::QuasiQuote = Dummy::intern("quasiquote");
 
-ValuePtr Dummy::intern(String symbol)
+VarValue Dummy::intern(String symbol)
 {
   SymbolMapItr itr = globalSymbols.find(symbol);
   if (itr != globalSymbols.end())
     return itr->second;
 
-  ValuePtr value = SymbolValue::create(symbol);
+  VarValue value = SymbolValue::create(symbol);
   globalSymbols[symbol] = value;
 
   return value;
 }
 
-ValuePtr Dummy::list2(ValuePtr a, ValuePtr b)
+VarValue Dummy::list2(VarValue a, VarValue b)
 {
-  ValuePtr val = cons(b, Value::nil);
+  VarValue val = cons(b, Value::nil);
   return PairValue::create(a, val);
 }
 
-ValuePtr Dummy::cons(ValuePtr a, ValuePtr b)
+VarValue Dummy::cons(VarValue a, VarValue b)
 {
   return PairValue::create(a, b);
 }
 
-bool Dummy::pairp(ValuePtr val)
+bool Dummy::pairp(VarValue val)
 {
   return dynamic_cast<PairValue*>(val.ptr()) ? true : false;
 }
 
-ValuePtr Dummy::car(ValuePtr pair, ValuePtr val)
+VarValue Dummy::car(VarValue pair, VarValue val)
 {
   PairValue* tmp = dynamic_cast<PairValue*>(pair.ptr());
   if (!tmp)
@@ -49,7 +49,7 @@ ValuePtr Dummy::car(ValuePtr pair, ValuePtr val)
   return pair;
 }
 
-ValuePtr Dummy::cdr(ValuePtr pair, ValuePtr val)
+VarValue Dummy::cdr(VarValue pair, VarValue val)
 {
   PairValue* tmp = dynamic_cast<PairValue*>(pair.ptr());
   if (!tmp)
@@ -60,7 +60,7 @@ ValuePtr Dummy::cdr(ValuePtr pair, ValuePtr val)
   return pair;
 }
 
-ValuePtr Dummy::car(ValuePtr pair)
+VarValue Dummy::car(VarValue pair)
 {
   PairValue* tmp = dynamic_cast<PairValue*>(pair.ptr());
   if (!tmp)
@@ -69,7 +69,7 @@ ValuePtr Dummy::car(ValuePtr pair)
   return tmp->car();
 }
 
-ValuePtr Dummy::cdr(ValuePtr pair)
+VarValue Dummy::cdr(VarValue pair)
 {
   PairValue* tmp = dynamic_cast<PairValue*>(pair.ptr());
   if (!tmp)
@@ -77,4 +77,5 @@ ValuePtr Dummy::cdr(ValuePtr pair)
 
   return tmp->cdr();
 }
+
 }

@@ -10,13 +10,13 @@ namespace Dummy {
 
 class Value : public RefCount {
 public:
-	static ValuePtr nil;
-	static ValuePtr t;
-	static ValuePtr f;
+	static VarValue nil;
 
 public:
   virtual String toString() { return ""; }
 	virtual ~Value() {}
+
+  void trace() {}
 };
 
 /*
@@ -24,7 +24,7 @@ public:
  */
 class NumValue : public Value {
 public:
-  static ValuePtr create(int num);
+  static VarValue create(int num);
 public:
 	NumValue(int num);
 
@@ -32,7 +32,6 @@ public:
 	virtual String toString();
 protected:
   int num;
-
 };
 
 /*
@@ -40,7 +39,7 @@ protected:
  */
 class StringValue : public Value {
 public:
-  static ValuePtr create(const String &val);
+  static VarValue create(const String &val);
 public:
 	StringValue(const String &val);
 	virtual String getStr() { return str; }
@@ -54,7 +53,7 @@ protected:
  */
 class SymbolValue : public Value {
 public:
-  static ValuePtr create(const String &val);
+  static VarValue create(const String &val);
 public:
 	SymbolValue(const String &value);
 	virtual String getSymbol() { return symbol; }
@@ -65,37 +64,19 @@ protected:
 
 class PairValue : public Value {
 public:
-  static ValuePtr create(ValuePtr head, ValuePtr tail);
+  static VarValue create(VarValue head, VarValue tail);
 public:
-  PairValue(ValuePtr head, ValuePtr tail);
+  PairValue(VarValue head, VarValue tail);
 	virtual String toString();
 
-  void car(ValuePtr val) { head = val; }
-  ValuePtr car() { return head; }
-  void cdr(ValuePtr val) { tail = val; }
-  ValuePtr cdr() { return tail; }
-protected:
-  ValuePtr head;
-  ValuePtr tail;
-};
+  void car(VarValue val) { head = val; }
+  VarValue car() { return head; }
+  void cdr(VarValue val) { tail = val; }
+  VarValue cdr() { return tail; }
 
-/*
-	list value
- */
-class ListValue : public Value {
-public:
-  static ValuePtr create(const ValueList& list);
-public:
-	ListValue(ValueList list);
-	virtual ValueList getList() { return list; }
-  virtual ValuePtr getListItem(int n) { return list[n]; }
-//  virtual bool memq(ValuePtr a);
-	virtual String toString();
-  virtual bool isNull() { return list.empty(); }
-//	virtual ValuePtr eval(EnvPtr env);
+  void trace();
 protected:
-	ValueList list;
-  ValueSet set;
+  MemberValue head;
+  MemberValue tail;
 };
-
 };

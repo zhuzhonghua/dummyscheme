@@ -2,9 +2,9 @@
 
 using namespace Dummy;
 
-ValuePtr Value::nil = SymbolValue::create(STR_NIL);
+VarValue Value::nil = SymbolValue::create(STR_NIL);
 
-ValuePtr NumValue::create(int num)
+VarValue NumValue::create(int num)
 {
   return new NumValue(num);
 }
@@ -21,7 +21,7 @@ String NumValue::toString()
 	return out.str();
 }
 
-ValuePtr StringValue::create(const String &val)
+VarValue StringValue::create(const String &val)
 {
   return new StringValue(val);
 }
@@ -36,7 +36,7 @@ String StringValue::toString()
   return "\"" + str + "\"";
 }
 
-ValuePtr SymbolValue::create(const String &val)
+VarValue SymbolValue::create(const String &val)
 {
   return new SymbolValue(val);
 }
@@ -51,12 +51,12 @@ String SymbolValue::toString()
   return symbol;
 }
 
-ValuePtr PairValue::create(ValuePtr head, ValuePtr tail)
+VarValue PairValue::create(VarValue head, VarValue tail)
 {
   return new PairValue(head, tail);
 }
 
-PairValue::PairValue(ValuePtr head, ValuePtr tail)
+PairValue::PairValue(VarValue head, VarValue tail)
 {
   this->head = head;
   this->tail = tail;
@@ -70,28 +70,8 @@ String PairValue::toString()
 	return out.str();
 }
 
-ValuePtr ListValue::create(const ValueList& list)
+void PairValue::trace()
 {
-  return new ListValue(list);
-}
-
-ListValue::ListValue(ValueList list)
-{
-  this->list = list;
-}
-
-String ListValue::toString()
-{
-  StringStream out;
-	out << "(";
-	ValueListItr itr = list.begin();
-	for (;itr != list.end(); itr++)
-	{
-		out << (*itr)->toString();
-		if (itr + 1 != list.end())
-			out << " ";
-	}
-	out << ")";
-
-	return out.str();
+  RefGC::trace(head);
+  RefGC::trace(tail);
 }

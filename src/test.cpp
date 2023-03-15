@@ -239,6 +239,8 @@ void runTest()
     TestFunc test = *itr;
     test();
   }
+
+  RefGC::collect();
 }
 
 };

@@ -8,20 +8,18 @@ using namespace Dummy;
 
 #define AssertInputEnd(idx) Assert(idx < input.size(), "reached end of input")
 
-ValueList Reader::parse(const String &input)
+void Reader::parse(const String &input)
 {
   this->input = input;
 	this->index = 0;
 
   aheadToken = dLex();
 
-  ValueList values;
+  VarValue val;
   while (aheadToken != TOKEN_END)
   {
-    values.push_back(readValue());
+    val = readValue();
   }
-
-  return values;
 }
 
 void Reader::match(int type)
@@ -150,20 +148,6 @@ int Reader::readString()
 	return TOKEN_STRING;
 }
 
-
-/*
-  TODO: support other type of number
- */
-bool Reader::isNumber(char c)
-{
-  switch(c){
-  CASE_NUM:
-    return true;
-  }
-
-  return false;
-}
-
 /*
 	TODO:	currently only support int
  */
@@ -218,9 +202,9 @@ int Reader::readSymbol()
 	return TOKEN_SYMBOL;
 }
 
-ValuePtr Reader::readValue()
+VarValue Reader::readValue()
 {
-  ValuePtr val = Value::nil;
+  VarValue val = Value::nil;
 	switch(aheadToken){
 	case TOKEN_NUM:
 		val = NumValue::create(numLexVal);
@@ -263,18 +247,18 @@ ValuePtr Reader::readValue()
   return val;
 }
 
-ValuePtr Reader::readList()
+VarValue Reader::readList()
 {
-  ValuePtr res = Value::nil;
-  ValuePtr parent = NULL;
+  VarValue res = Value::nil;
+  VarValue parent = NULL;
 
   while (aheadToken != TOKEN_RIGHT_PAREN)
   {
-    ValuePtr val = readValue();
+    VarValue val = readValue();
 
     if (val != Value::nil)
     {
-      ValuePtr tmp = PairValue::create(val, Value::nil);
+      VarValue tmp = PairValue::create(val, Value::nil);
       if (res == Value::nil) res = tmp;
 
       if (parent) Dummy::cdr(parent, tmp);

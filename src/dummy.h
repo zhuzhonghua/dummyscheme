@@ -6,33 +6,31 @@
 namespace Dummy {
 
 class Value;
-typedef RefCountPtr<Value>  ValuePtr;
-typedef std::vector<ValuePtr> ValueList;
-typedef std::set<ValuePtr> ValueSet;
-typedef ValueList::iterator ValueListItr;
+typedef RefVarPtr<Value>  VarValue;
+typedef RefMemberPtr<Value>  MemberValue;
 
 class Env;
-typedef RefCountPtr<Env>  EnvPtr;
+typedef RefVarPtr<Env>  VarEnv;
 
-typedef std::map<String, ValuePtr> SymbolMap;
+typedef std::map<String, VarValue> SymbolMap;
 typedef SymbolMap::iterator SymbolMapItr;
 
 class Dummy{
 public:
   static SymbolMap globalSymbols;
 public:
-  static const ValuePtr Quote;
-  static const ValuePtr UnQuote;
-  static const ValuePtr UnQuoteSplicing;
-  static const ValuePtr QuasiQuote;
+  static const VarValue Quote;
+  static const VarValue UnQuote;
+  static const VarValue UnQuoteSplicing;
+  static const VarValue QuasiQuote;
 public:
-  static ValuePtr intern(String symbol);
-  static ValuePtr list2(ValuePtr a, ValuePtr b);
-  static ValuePtr cons(ValuePtr a, ValuePtr b);
-  static bool pairp(ValuePtr val);
-  static ValuePtr car(ValuePtr pair, ValuePtr val);
-  static ValuePtr car(ValuePtr pair);
-  static ValuePtr cdr(ValuePtr pair, ValuePtr val);
-  static ValuePtr cdr(ValuePtr pair);
+  static VarValue intern(String symbol);
+  static VarValue list2(VarValue a, VarValue b);
+  static VarValue cons(VarValue a, VarValue b);
+  static bool pairp(VarValue val);
+  static VarValue car(VarValue pair, VarValue val);
+  static VarValue car(VarValue pair);
+  static VarValue cdr(VarValue pair, VarValue val);
+  static VarValue cdr(VarValue pair);
 };
 };

@@ -33,17 +33,16 @@ protected:
 	String input;
 
 public:
-  ValueList parse(const String &input);
+  void parse(const String &input);
 
 protected:
-  ValuePtr readValue();
-	ValuePtr readList();
+  VarValue readValue();
+	VarValue readList();
 protected:
   int readNum();
 	int readString();
 	int readSymbol();
 
-  bool isNumber(char c);
   // space and tab
 	// TODO: comment
 	bool isBlank(char c);
