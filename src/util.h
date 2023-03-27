@@ -32,4 +32,8 @@ public:
 #define Error(...) throw FILE_LINE_FUNCTION + StringPrint(__VA_ARGS__) + "\nerror happended\n";
 #define Assert(condition, ...) do { if (!(condition)) { Error(#condition "" __VA_ARGS__); } } while (0)
 
+#define ValueCStr(ptr) ptr->toString().c_str()
+
+#define MULTILINE(...) #__VA_ARGS__
+
 };

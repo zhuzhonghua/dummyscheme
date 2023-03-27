@@ -8,18 +8,39 @@ using namespace Dummy;
 
 #define AssertInputEnd(idx) Assert(idx < input.size(), "reached end of input")
 
-void Reader::parse(const String &input)
+//void Reader::parse(const String &input)
+//{
+//  this->input = input;
+//	this->index = 0;
+//
+//  aheadToken = dLex();
+//
+//  VarValue val;
+//  while (aheadToken != TOKEN_END)
+//  {
+//    val = readValue();
+//  }
+//}
+
+Reader::Reader(const String& in)
 {
-  this->input = input;
+  init(in);
+}
+
+void Reader::init(const String& in)
+{
+  this->input = in;
 	this->index = 0;
 
   aheadToken = dLex();
+}
 
-  VarValue val;
-  while (aheadToken != TOKEN_END)
-  {
-    val = readValue();
-  }
+VarValue Reader::readOne()
+{
+  if (aheadToken != TOKEN_END)
+    return readValue();
+  else
+    return NULL;
 }
 
 void Reader::match(int type)
@@ -204,35 +225,37 @@ int Reader::readSymbol()
 
 VarValue Reader::readValue()
 {
-  VarValue val = Value::nil;
+  Scheme* scm = Scheme::inst();
+
+  VarValue val;
 	switch(aheadToken){
 	case TOKEN_NUM:
-		val = NumValue::create(numLexVal);
+		val = new NumValue(numLexVal);
 		match(TOKEN_NUM);
     break;
 	case TOKEN_STRING:
-		val = StringValue::create(strLexVal);
+		val = new StringValue(strLexVal);
 		match(TOKEN_STRING);
     break;
 	case TOKEN_SYMBOL:
-    val = Dummy::intern(strLexVal);
+    val = scm->intern(strLexVal);
 		match(TOKEN_SYMBOL);
     break;
 	case TOKEN_QUOTE:
     match(TOKEN_QUOTE);
-    val = Dummy::list2(Dummy::Quote, readValue());
+    val = scm->quote(readValue());
     break;
 	case TOKEN_UNQUOTE:
     match(TOKEN_UNQUOTE);
-    val = Dummy::list2(Dummy::UnQuote, readValue());
+    val = scm->unquote(readValue());
     break;
 	case TOKEN_QUASIQUOTE:
     match(TOKEN_QUASIQUOTE);
-    val = Dummy::list2(Dummy::QuasiQuote, readValue());
+    val = scm->quasiquote(readValue());
     break;
 	case TOKEN_UNQUOTE_SPLICING:
     match(TOKEN_UNQUOTE_SPLICING);
-    val = Dummy::list2(Dummy::UnQuoteSplicing, readValue());
+    val = scm->unquotesplicing(readValue());
     break;
 	case TOKEN_LEFT_PAREN:
 		match(TOKEN_LEFT_PAREN);
@@ -249,22 +272,25 @@ VarValue Reader::readValue()
 
 VarValue Reader::readList()
 {
-  VarValue res = Value::nil;
-  VarValue parent = NULL;
+  Scheme* scm = Scheme::inst();
+
+  VarValue res = scm->Null;
+  VarValue parent;
 
   while (aheadToken != TOKEN_RIGHT_PAREN)
   {
     VarValue val = readValue();
 
-    if (val != Value::nil)
+    VarValue tmp(new PairValue(val, scm->Null));
+    if (scm->nullp(res))
     {
-      VarValue tmp = PairValue::create(val, Value::nil);
-      if (res == Value::nil) res = tmp;
-
-      if (parent) Dummy::cdr(parent, tmp);
-
-      parent = tmp;
+      res = tmp;
     }
+    if (parent)
+    {
+      parent->cdr(tmp);
+    }
+    parent = tmp;
   }
 
   return res;

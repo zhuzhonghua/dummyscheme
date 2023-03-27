@@ -85,6 +85,10 @@ public:
 		return *this;
 	}
 
+  bool operator < (const RefCountPtr& rhs) const {
+    return object < rhs.object;
+  }
+
 	bool operator == (const RefCountPtr& rhs) const {
 		return object == rhs.object;
 	}
@@ -137,6 +141,9 @@ template<class T>
 class RefMemberPtr : public RefCountPtr<T>{
 public:
   RefMemberPtr():RefCountPtr<T>() { }
+  RefMemberPtr(T* object): RefCountPtr<T>(object) {}
+  RefMemberPtr(const RefCountPtr<T>& rhs): RefCountPtr<T>(rhs) {}
+
   const RefMemberPtr& operator = (const RefCountPtr<T>& rhs) {
 		RefCountPtr<T>::operator = (rhs);
 		return *this;

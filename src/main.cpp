@@ -9,6 +9,8 @@ using namespace Dummy;
 
 int main()
 {
+  Scheme::init();
+
   runTest();
 
   std::cout << "pause";

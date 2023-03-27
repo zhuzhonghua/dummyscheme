@@ -33,7 +33,10 @@ protected:
 	String input;
 
 public:
-  void parse(const String &input);
+  Reader(const String& in);
+  VarValue readOne();
+  void init(const String& in);
+//  void parse(const String &input);
 
 protected:
   VarValue readValue();
