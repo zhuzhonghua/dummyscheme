@@ -1,4 +1,4 @@
-#include "value.h"
+#include "scheme.h"
 
 using namespace Dummy;
 
@@ -112,8 +112,7 @@ IfValue::IfValue(VarValue p, VarValue c, VarValue a)
 
 VarValue IfValue::eval(VarValue env)
 {
-  Scheme* scm = Scheme::inst();
-  if (scm->truep(pproc->eval(env)))
+  if (Struep(pproc->eval(env)))
     return cproc->eval(env);
   else
     return aproc->eval(env);
@@ -144,9 +143,7 @@ ProcedureValue::ProcedureValue(VarValue v, VarValue b)
 
 VarValue ProcedureValue::eval(VarValue env)
 {
-  Scheme* scm = Scheme::inst();
-
-  return scm->make_procedure(vars, bproc, env);
+  return Scheme::make_procedure(vars, bproc, env);
 }
 
 String ProcedureValue::toString()
@@ -173,14 +170,13 @@ VarValue ApplicationValue::eval(VarValue env)
 {
   fproc->eval(env);
 
-  Scheme* scm = Scheme::inst();
   VarValue tmp = aprocs;
-  while (!scm->nullp(tmp))
+  while (!Snullp(tmp))
   {
     tmp->car()->eval(env);
     tmp = tmp->cdr();
   }
-  return scm->True;
+  return Strue;
 }
 
 String ApplicationValue::toString()

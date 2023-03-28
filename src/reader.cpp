@@ -1,5 +1,4 @@
-#include "reader.h"
-#include "value.h"
+#include "scheme.h"
 
 using namespace Dummy;
 
@@ -225,8 +224,6 @@ int Reader::readSymbol()
 
 VarValue Reader::readValue()
 {
-  Scheme* scm = Scheme::inst();
-
   VarValue val;
 	switch(aheadToken){
 	case TOKEN_NUM:
@@ -238,24 +235,24 @@ VarValue Reader::readValue()
 		match(TOKEN_STRING);
     break;
 	case TOKEN_SYMBOL:
-    val = scm->intern(strLexVal);
+    val = Scheme::intern(strLexVal);
 		match(TOKEN_SYMBOL);
     break;
 	case TOKEN_QUOTE:
     match(TOKEN_QUOTE);
-    val = scm->quote(readValue());
+    val = Squote(readValue());
     break;
 	case TOKEN_UNQUOTE:
     match(TOKEN_UNQUOTE);
-    val = scm->unquote(readValue());
+    val = Sunquote(readValue());
     break;
 	case TOKEN_QUASIQUOTE:
     match(TOKEN_QUASIQUOTE);
-    val = scm->quasiquote(readValue());
+    val = Squasiquote(readValue());
     break;
 	case TOKEN_UNQUOTE_SPLICING:
     match(TOKEN_UNQUOTE_SPLICING);
-    val = scm->unquotesplicing(readValue());
+    val = Sunquotesplicing(readValue());
     break;
 	case TOKEN_LEFT_PAREN:
 		match(TOKEN_LEFT_PAREN);
@@ -272,17 +269,15 @@ VarValue Reader::readValue()
 
 VarValue Reader::readList()
 {
-  Scheme* scm = Scheme::inst();
-
-  VarValue res = scm->Null;
+  VarValue res = Snull;
   VarValue parent;
 
   while (aheadToken != TOKEN_RIGHT_PAREN)
   {
     VarValue val = readValue();
 
-    VarValue tmp(new PairValue(val, scm->Null));
-    if (scm->nullp(res))
+    VarValue tmp(new PairValue(val, Scheme::Null));
+    if (Snullp(res))
     {
       res = tmp;
     }

@@ -1,14 +1,15 @@
 #pragma once
 
+#include "dummy.h"
 #include "value.h"
 #include "reader.h"
 
 namespace Dummy{
 
-#define Snil Scheme::Nil;
-#define Snull Scheme::Null;
-#define Strue Scheme::True;
-#define Sfalse Scheme::False;
+#define Snil (Scheme::Nil);
+#define Snull (Scheme::Null);
+#define Strue (Scheme::True);
+#define Sfalse (Scheme::False);
 
 #define Squote Scheme::Quote;
 #define Sunquote Scheme::UnQuote;
@@ -25,6 +26,7 @@ namespace Dummy{
 #define Selse Scheme::Else;
 
 #define Snullp Scheme::nullp
+#define Struep Scheme::truep
 
 #define Splus Scheme::plus
 #define Scons Scheme::cons

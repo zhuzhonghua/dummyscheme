@@ -141,6 +141,7 @@ protected:
 
 class EnvValue : public Value {
 public:
+  EnvValue(): EnvValue(NULL) {}
 	EnvValue(VarValue outer);
   void trace();
 public:

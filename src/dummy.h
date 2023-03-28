@@ -2,7 +2,6 @@
 
 #include "util.h"
 #include "refcount.h"
-#include "scheme.h"
 
 namespace Dummy {
 
@@ -50,20 +49,15 @@ struct RegPrimProc{
 
 class Scheme {
 protected:
-  static Scheme* instance;
-protected:
   static SymbolMap constSyms;
   static ProcMap primProcs;
 
   static void initPrimProc();
   static void regPrimProcs(RegPrimProc* procs, int num);
   static void regPrimProc(const String& name, PrimProc proc);
-  void initProgram();
   static void initIntern();
 public:
   static void init();
-  static Scheme* inst();
-
 public:
   static VarValue Nil;
   static VarValue Null;

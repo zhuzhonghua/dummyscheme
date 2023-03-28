@@ -1,5 +1,4 @@
-#include "dummy.h"
-#include "value.h"
+#include "scheme.h"
 
 namespace Dummy {
 
@@ -28,6 +27,7 @@ SymbolMap Scheme::constSyms;
 void Scheme::init()
 {
   initIntern();
+  initPrimProc();
 }
 
 void Scheme::initIntern()
@@ -147,16 +147,6 @@ void Scheme::regPrimProcs(RegPrimProc* procs, int num)
 void Scheme::regPrimProc(const String& name, PrimProc proc)
 {
   primProcs.insert(std::make_pair(intern(name), proc));
-}
-
-void Scheme::initProgram()
-{
-//  Reader reader(scm_expand_clauses);
-//  VarValue exp;
-//  while (exp = reader.readOne())
-//  {
-//    exp = analyze(exp);
-//  }
 }
 
 VarValue Scheme::intern(const String& symbol)
