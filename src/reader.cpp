@@ -152,15 +152,19 @@ int Reader::readString()
   advInput();
 
 	StringStream str;
+  bool normal = false;
   while(!isEnd())
   {
     char c = curCharAdv();
     if (c == '\"')
+    {
+      normal = true;
       break;
+    }
     str << c;
   }
 
-  if (isEnd())
+  if (!normal)
     return TOKEN_UNKNOWN;
 
 	strLexVal = str.str();
