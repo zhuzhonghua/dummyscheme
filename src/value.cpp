@@ -2,36 +2,39 @@
 
 using namespace Dummy;
 
-NumValue::NumValue(int num)
+NullValue* NullValue::create()
 {
-  this->num = num;
+  NullValue* ret = new NullValue();
+  RefGC::newRef(ret);
+  return ret;
 }
 
-String NumValue::toString()
+NumValue* NumValue::create(int n)
 {
-  StringStream out;
-  out << num;
-	return out.str();
+  NumValue* ret = new NumValue(n);
+  RefGC::newRef(ret);
+  return ret;
 }
 
-StringValue::StringValue(const String &val)
+BoolValue* BoolValue::create(bool b)
 {
-  str = val;
+  BoolValue* ret = new BoolValue(b);
+  RefGC::newRef(ret);
+  return ret;
 }
 
-String StringValue::toString()
+StringValue* StringValue::create(const String &val)
 {
-  return "\"" + str + "\"";
+  StringValue* ret = new StringValue(val);
+  RefGC::newRef(ret);
+  return ret;
 }
 
-SymbolValue::SymbolValue(const String &value)
-  :symbol(value)
+SymbolValue* SymbolValue::create(const String &val)
 {
-}
-
-String SymbolValue::toString()
-{
-  return symbol;
+  SymbolValue* ret = new SymbolValue(val);
+  RefGC::newRef(ret);
+  return ret;
 }
 
 VarValue SymbolValue::eval(VarValue env)
@@ -39,30 +42,18 @@ VarValue SymbolValue::eval(VarValue env)
   return env->findEnv(this);
 }
 
-PairValue::PairValue(VarValue head, VarValue tail)
+PairValue* PairValue::create(VarValue h, VarValue t)
 {
-  this->head = head;
-  this->tail = tail;
+  PairValue* ret = new PairValue(h, t);
+  RefGC::newRef(ret);
+  return ret;
 }
 
-String PairValue::toString()
+AssignmentValue* AssignmentValue::create(VarValue v, VarValue vp)
 {
-  StringStream out;
-	out << "(" << head->toString() << " " << tail->toString() << ")";
-
-	return out.str();
-}
-
-void PairValue::trace()
-{
-  RefGC::trace(head);
-  RefGC::trace(tail);
-}
-
-AssignmentValue::AssignmentValue(VarValue v, VarValue vp)
-{
-  var = v;
-  vproc = vp;
+  AssignmentValue* ret = new AssignmentValue(v, vp);
+  RefGC::newRef(ret);
+  return ret;
 }
 
 VarValue AssignmentValue::eval(VarValue env)
@@ -89,6 +80,13 @@ void AssignmentValue::trace()
   RefGC::trace(vproc);
 }
 
+DefineValue* DefineValue::create(VarValue v, VarValue vp)
+{
+  DefineValue* ret = new DefineValue(v, vp);
+  RefGC::newRef(ret);
+  return ret;
+}
+
 VarValue DefineValue::eval(VarValue env)
 {
   env->setEnvSym(var, vproc->eval(env));
@@ -103,11 +101,11 @@ String DefineValue::toString()
 	return out.str();
 }
 
-IfValue::IfValue(VarValue p, VarValue c, VarValue a)
+IfValue* IfValue::create(VarValue p, VarValue c, VarValue a)
 {
-  pproc = p;
-  cproc = c;
-  aproc = a;
+  IfValue* ret = new IfValue(p, c, a);
+  RefGC::newRef(ret);
+  return ret;
 }
 
 VarValue IfValue::eval(VarValue env)
@@ -135,10 +133,11 @@ void IfValue::trace()
   RefGC::trace(aproc);
 }
 
-ProcedureValue::ProcedureValue(VarValue v, VarValue b)
+ProcedureValue* ProcedureValue::create(VarValue v, VarValue b)
 {
-  vars = v;
-  bproc = b;
+  ProcedureValue* ret = new ProcedureValue(v, b);
+  RefGC::newRef(ret);
+  return ret;
 }
 
 VarValue ProcedureValue::eval(VarValue env)
@@ -160,23 +159,29 @@ void ProcedureValue::trace()
   RefGC::trace(bproc);
 }
 
-ApplicationValue::ApplicationValue(VarValue f, VarValue a)
+ApplicationValue* ApplicationValue::create(VarValue f, VarValue a)
 {
-  fproc = f;
-  aprocs = a;
+  ApplicationValue* ret = new ApplicationValue(f, a);
+  RefGC::newRef(ret);
+  return ret;
 }
 
 VarValue ApplicationValue::eval(VarValue env)
 {
-  fproc->eval(env);
-
-  VarValue tmp = aprocs;
-  while (!Snullp(tmp))
+  VarValue fRes = fproc;
+  if (!Scheme::isPrimProc(fproc))
   {
-    tmp->car()->eval(env);
-    tmp = tmp->cdr();
+    fRes = fproc->eval(env);
   }
-  return Strue;
+
+  VarValue res = Snull;
+  VarValue parent;
+  for (VarValue arg = aprocs; !Snullp(arg); arg = Scdr(arg))
+  {
+    set_cons_parent(Scar(arg)->eval(env), res, parent);
+  }
+
+  return Scheme::execute_application(fRes, res);
 }
 
 String ApplicationValue::toString()
@@ -193,9 +198,11 @@ void ApplicationValue::trace()
   RefGC::trace(aprocs);
 }
 
-EnvValue::EnvValue(VarValue out)
+EnvValue* EnvValue::create(VarValue o)
 {
-  outer = out;
+  EnvValue* ret = new EnvValue(o);
+  RefGC::newRef(ret);
+  return ret;
 }
 
 void EnvValue::trace()

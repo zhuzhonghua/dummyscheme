@@ -6,6 +6,7 @@
 
 namespace Dummy{
 
+#define Svoid (Scheme::Void);
 #define Snil (Scheme::Nil);
 #define Snull (Scheme::Null);
 #define Strue (Scheme::True);

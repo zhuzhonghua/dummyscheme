@@ -21,8 +21,8 @@ VarValue Scheme::Begin;
 VarValue Scheme::Cond;
 VarValue Scheme::Else;
 
-ProcMap Scheme::primProcs;
-SymbolMap Scheme::constSyms;
+Scheme::ProcMap Scheme::primProcs;
+Scheme::SymbolMap Scheme::constSyms;
 
 void Scheme::init()
 {
@@ -32,9 +32,10 @@ void Scheme::init()
 
 void Scheme::initIntern()
 {
-  Null = intern("null");
-  True = intern("true");
-  False = intern("false");
+  Null = intern("null", NullValue::create());
+  Nil = intern("nil", Null);
+  True = intern("true", BoolValue::create(true));
+  False = intern("false", BoolValue::create(false));
 
   Quote = intern("quote");
   UnQuote = intern("unquote");
@@ -72,17 +73,17 @@ void Scheme::initPrimProc()
 VarValue Scheme::plus(VarValue arg)
 {
   int num = 0;
-  for (; !nullp(arg); arg = arg->cdr())
+  for (; !Snullp(arg); arg = arg->cdr())
   {
     num += arg->car()->getNum();
   }
 
-  return new NumValue(num);
+  return NumValue::create(num);
 }
 
 VarValue Scheme::cons(VarValue arg1, VarValue arg2)
 {
-  return new PairValue(arg1, arg2);
+  return PairValue::create(arg1, arg2);
 }
 
 VarValue Scheme::list(VarValue arg)
@@ -149,31 +150,34 @@ void Scheme::regPrimProc(const String& name, PrimProc proc)
   primProcs.insert(std::make_pair(intern(name), proc));
 }
 
+VarValue Scheme::intern(const String& symbol, VarValue value)
+{
+  constSyms[symbol] = value;
+  return value;
+}
+
 VarValue Scheme::intern(const String& symbol)
 {
   SymbolMapItr itr = constSyms.find(symbol);
   if (itr != constSyms.end())
     return itr->second;
 
-  VarValue value(new SymbolValue(symbol));
-  constSyms[symbol] = value;
-
-  return value;
+  return intern(symbol, SymbolValue::create(symbol));
 }
 
 VarValue Scheme::list2(VarValue a, VarValue b)
 {
-  return new PairValue(a, Scons(b, Null));
+  return cons(a, cons(b, Null));
 }
 
 VarValue Scheme::list3(VarValue a, VarValue b, VarValue c)
 {
-  return new PairValue(a, list2(b, c));
+  return cons(a, list2(b, c));
 }
 
 VarValue Scheme::list4(VarValue a, VarValue b, VarValue c, VarValue d)
 {
-  return new PairValue(a, list3(b, c, d));
+  return PairValue::create(a, list3(b, c, d));
 }
 
 VarValue Scheme::listn(int num, ...)
@@ -185,70 +189,59 @@ VarValue Scheme::listn(int num, ...)
   va_start(ap, num);
   for (int i = 0; i < num; ++i)
   {
-    VarValue one = va_arg(ap, VarValue);
-    VarValue tmp = new PairValue(one, Null);
-
-    if (nullp(res))
-    {
-      res = tmp;
-    }
-    if (parent)
-    {
-      parent->cdr(tmp);
-    }
-    parent = tmp;
+    set_cons_parent(va_arg(ap, VarValue), res, parent);
   }
   va_end(ap);
 
   return res;
 }
 
-bool Scheme::nullp(VarValue exp)
+VarValue Scheme::nullp(VarValue exp)
 {
-  return exp == Null;
+  return exp ? False : True;
 }
 
-bool Scheme::notp(VarValue exp)
+VarValue Scheme::notp(VarValue exp)
 {
-  return !falsep(exp);
+  return falsep(exp) ? True : False;
 }
 
-bool Scheme::truep(VarValue exp)
+VarValue Scheme::truep(VarValue exp)
 {
-  return exp != False;
+  return exp != False ? True : False;
 }
 
-bool Scheme::falsep(VarValue exp)
+VarValue Scheme::falsep(VarValue exp)
 {
-  return exp == False;
+  return exp == False ? True : False;
 }
 
-bool Scheme::booleanp(VarValue exp)
+VarValue Scheme::booleanp(VarValue exp)
 {
-  return truep(exp) || falsep(exp);
+  return truep(exp) || falsep(exp) ? True : False;
 }
 
-bool Scheme::numberp(VarValue val)
+VarValue Scheme::numberp(VarValue val)
 {
-  return dynamic_cast<NumValue*>(val.ptr()) != NULL ? true : false;
+  return dynamic_cast<NumValue*>(val.ptr()) != NULL ? True : False;
 }
 
-bool Scheme::pairp(VarValue val)
+VarValue Scheme::pairp(VarValue val)
 {
-  return dynamic_cast<PairValue*>(val.ptr()) != NULL ? true : false;
+  return dynamic_cast<PairValue*>(val.ptr()) != NULL ? True : False;
 }
 
-bool Scheme::stringp(VarValue val)
+VarValue Scheme::stringp(VarValue val)
 {
-  return dynamic_cast<StringValue*>(val.ptr()) != NULL ? true : false;
+  return dynamic_cast<StringValue*>(val.ptr()) != NULL ? True : False;
 }
 
-bool Scheme::symbolp(VarValue val)
+VarValue Scheme::symbolp(VarValue val)
 {
-  return dynamic_cast<SymbolValue*>(val.ptr()) != NULL ? true : false;
+  return dynamic_cast<SymbolValue*>(val.ptr()) != NULL ? True : False;
 }
 
-bool Scheme::assignmentp(VarValue val)
+VarValue Scheme::assignmentp(VarValue val)
 {
   return tagged_list_p(val, SetMark);
 }
@@ -263,25 +256,25 @@ VarValue Scheme::assignment_value(VarValue val)
   return caddr(val);
 }
 
-bool Scheme::self_evaluating_p(VarValue val)
+VarValue Scheme::self_evaluating_p(VarValue val)
 {
-  return numberp(val) || stringp(val);
+  return numberp(val) || stringp(val) ? True : False;
 }
 
-bool Scheme::tagged_list_p(VarValue val, VarValue tag)
+VarValue Scheme::tagged_list_p(VarValue val, VarValue tag)
 {
   if (!pairp(val))
-    return false;
+    return False;
 
-  return tag == val->car();
+  return tag == val->car() ? True : False;
 }
 
-bool Scheme::eqp(VarValue e1, VarValue e2)
+VarValue Scheme::eqp(VarValue e1, VarValue e2)
 {
-  return e1 == e2;
+  return e1 == e2 ? True : False;
 }
 
-bool Scheme::quotedp(VarValue val)
+VarValue Scheme::quotedp(VarValue val)
 {
   return tagged_list_p(val, Quote);
 }
@@ -308,13 +301,13 @@ VarValue Scheme::analyze(VarValue exp)
   }
   if (assignmentp(exp))
   {
-    new AssignmentValue(assignment_variable(exp),
-                        analyze(assignment_value(exp)));
+    return AssignmentValue::create(assignment_variable(exp),
+                                   analyze(assignment_value(exp)));
   }
   if (definep(exp))
   {
-    new DefineValue(define_variable(exp),
-                    analyze(define_value(exp)));
+    return DefineValue::create(define_variable(exp),
+                               analyze(define_value(exp)));
   }
   if (ifp(exp))
   {
@@ -328,7 +321,7 @@ VarValue Scheme::analyze(VarValue exp)
   {
     VarValue vars = lambda_parameters(exp);
     VarValue bproc = analyze_sequence(lambda_body(exp));
-    return new ProcedureValue(vars, bproc);
+    return ProcedureValue::create(vars, bproc);
   }
   if (beginp(exp))
   {
@@ -340,13 +333,13 @@ VarValue Scheme::analyze(VarValue exp)
   }
   if (applicationp(exp))
   {
-
+    return analyze_application(exp);
   }
 
   return NULL;
 }
 
-bool Scheme::definep(VarValue val)
+VarValue Scheme::definep(VarValue val)
 {
   return tagged_list_p(val, Define);
 }
@@ -374,10 +367,10 @@ VarValue Scheme::make_lambda(VarValue parameters, VarValue body)
 
 VarValue Scheme::make_if(VarValue predicate, VarValue consequent, VarValue alternative)
 {
-  return new IfValue(predicate, consequent, alternative);
+  return IfValue::create(predicate, consequent, alternative);
 }
 
-bool Scheme::ifp(VarValue exp)
+VarValue Scheme::ifp(VarValue exp)
 {
   return tagged_list_p(exp, If);
 }
@@ -395,9 +388,9 @@ VarValue Scheme::if_consequent(VarValue exp)
 VarValue Scheme::if_alternative(VarValue exp)
 {
   VarValue tmp = cdddr(exp);
-  if (!(nullp(tmp)))
+  if (!(Snullp(tmp)))
   {
-    if (!(nullp(tmp->cdr())))
+    if (!(Snullp(Scdr(tmp))))
       throw "bad if syntax";
     return tmp->car();
   }
@@ -405,7 +398,7 @@ VarValue Scheme::if_alternative(VarValue exp)
     return False;
 }
 
-bool Scheme::lambdap(VarValue exp)
+VarValue Scheme::lambdap(VarValue exp)
 {
   return tagged_list_p(exp, Lambda);
 }
@@ -422,21 +415,11 @@ VarValue Scheme::lambda_body(VarValue exp)
 
 VarValue Scheme::analyze_sequence(VarValue exps)
 {
-  VarValue res = Null;
+  VarValue res;
   VarValue parent;
-
-  for (; !nullp(exps); exps = exps->cdr())
+  for (; !Snullp(exps); exps = Scdr(exps))
   {
-    VarValue tmp(new PairValue(analyze(exps->car()), Null));
-    if (nullp(res))
-    {
-      res = tmp;
-    }
-    if (parent)
-    {
-      parent->cdr(tmp);
-    }
-    parent = tmp;
+    set_cons_parent(analyze(Scar(exps)), res, parent);
   }
 
   return res;
@@ -447,7 +430,7 @@ VarValue Scheme::make_procedure(VarValue parameters, VarValue body, VarValue env
   return list4(Procedure, parameters, body, env);
 }
 
-bool Scheme::compound_procedure_p(VarValue exp)
+VarValue Scheme::compound_procedure_p(VarValue exp)
 {
   return tagged_list_p(exp, Procedure);
 }
@@ -469,7 +452,7 @@ VarValue Scheme::procedure_env(VarValue exp)
 
 VarValue Scheme::sequence_to_exp(VarValue seq)
 {
-  if (nullp(seq))
+  if (Snullp(seq))
     return seq;
   else if (last_exp_p(seq))
     return first_exp(seq);
@@ -477,9 +460,9 @@ VarValue Scheme::sequence_to_exp(VarValue seq)
     return make_begin(seq);
 }
 
-bool Scheme::last_exp_p(VarValue seq)
+VarValue Scheme::last_exp_p(VarValue seq)
 {
-  return nullp(seq->cdr());
+  return Snullp(seq->cdr()) ? True : False;
 }
 
 VarValue Scheme::first_exp(VarValue seq)
@@ -497,7 +480,7 @@ VarValue Scheme::make_begin(VarValue seq)
   return cons(Begin, seq);
 }
 
-bool Scheme::beginp(VarValue exp)
+VarValue Scheme::beginp(VarValue exp)
 {
   return tagged_list_p(exp, Begin);
 }
@@ -507,7 +490,7 @@ VarValue Scheme::begin_actions(VarValue exp)
   return exp->cdr();
 }
 
-bool Scheme::condp(VarValue exp)
+VarValue Scheme::condp(VarValue exp)
 {
   return tagged_list_p(exp, Cond);
 }
@@ -522,7 +505,7 @@ VarValue Scheme::cond_predicate(VarValue clause)
   return clause->car();
 }
 
-bool Scheme::cond_else_clause_p(VarValue clause)
+VarValue Scheme::cond_else_clause_p(VarValue clause)
 {
   return eqp(clause->car(), Else);
 }
@@ -539,7 +522,7 @@ VarValue Scheme::cond_to_if(VarValue exp)
 
 VarValue Scheme::expand_clauses(VarValue clauses)
 {
-  if (nullp(clauses))
+  if (Snullp(clauses))
   {
     return quote(False);
   }
@@ -550,7 +533,7 @@ VarValue Scheme::expand_clauses(VarValue clauses)
 
     if (cond_else_clause_p(first))
     {
-      if (nullp(rest))
+      if (Snullp(rest))
       {
         return sequence_to_exp(cond_actions(first));
       }
@@ -567,6 +550,54 @@ VarValue Scheme::expand_clauses(VarValue clauses)
                      expand_clauses(rest));
     }
   }
+}
+
+VarValue Scheme::analyze_application(VarValue exp)
+{
+  VarValue fproc = analyze(operatr(exp));
+  VarValue aprocs;
+  VarValue parent;
+  for (VarValue arg = operands(exp); !Snullp(arg); arg = Scdr(arg))
+  {
+    set_cons_parent(analyze(Scar(arg)), aprocs, parent);
+  }
+
+  return ApplicationValue::create(fproc, aprocs);
+}
+
+VarValue Scheme::operatr(VarValue exp)
+{
+  return Scar(exp);
+}
+
+VarValue Scheme::operands(VarValue exp)
+{
+  return Scdr(exp);
+}
+
+VarValue Scheme::no_operands_p(VarValue ops)
+{
+  return Snullp(ops);
+}
+
+VarValue Scheme::first_operand(VarValue ops)
+{
+  return Scar(ops);
+}
+
+VarValue Scheme::rest_operands(VarValue ops)
+{
+  return Scdr(ops);
+}
+
+VarValue Scheme::applicationp(VarValue exp)
+{
+  return pairp(exp);
+}
+
+bool Scheme::isPrimProc(VarValue exp)
+{
+  return primProcs.find(exp) != primProcs.end();
 }
 
 VarValue Scheme::execute_application(VarValue proc, VarValue args)
@@ -606,9 +637,9 @@ VarValue Scheme::execute_application(VarValue proc, VarValue args)
 
 VarValue Scheme::extend_env(VarValue vars, VarValue vals, VarValue outer)
 {
-  VarValue env(new EnvValue(outer));
+  VarValue env(EnvValue::create(outer));
 
-  while (!nullp(vars) && !nullp(vals))
+  while (!Snullp(vars) && !Snullp(vals))
   {
     VarValue p1 = vars->car();
     VarValue a1 = vals->car();
@@ -618,11 +649,11 @@ VarValue Scheme::extend_env(VarValue vars, VarValue vals, VarValue outer)
     vals = vals->cdr();
   }
 
-  if (!nullp(vars))
+  if (!Snullp(vars))
   {
     Error("too many arguments supplied", ValueCStr(vars), ValueCStr(vals));
   }
-  else if (!nullp(vals))
+  else if (!Snullp(vals))
   {
     Error("too few arguments supplied", ValueCStr(vars), ValueCStr(vals));
   }

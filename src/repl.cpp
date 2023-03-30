@@ -26,7 +26,7 @@ int main()
   std::cout << "dummyscheme v0.0.1" << std::endl;
 
   Scheme::init();
-  VarValue env(new EnvValue());
+  VarValue env(EnvValue::create(NULL));
 
 	while(true) {
 		try {

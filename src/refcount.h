@@ -9,23 +9,29 @@ class RefCountP;
 
 class RefGC {
 public:
-  static void* newRef(std::size_t size);
-  static void rlzRef(void* ptr);
+  static void newRef(RefCount* ptr) {
+    RefGC::inst()->collect();
+    RefGC::inst()->allRef.insert(ptr);
+  }
 
-  static void inUse(RefCountP* ptr);
-  static void rmUse(RefCountP* ptr);
+  static void rlzRef(RefCount* ptr) {
+    RefGC::inst()->allRef.erase(ptr);
+    delete ptr;
+  }
 
-  static void trace(RefCountP& p);
+  void inUse(RefCountP* ptr);
+  void rmUse(RefCountP* ptr);
 
-  static void checkGC();
+  void checkGC();
 
-  static void collect();
-  static void mark();
-  static void sweep();
+  void collect();
+  void mark();
+  void sweep();
 public:
+  static void trace(RefCountP& p);
   static RefGC* inst();
 protected:
-  RefGC();
+  RefGC() {}
   static RefGC* instance;
 protected:
   std::set<RefCount*> allRef;
@@ -48,15 +54,10 @@ public:
   bool dead() const { return white; }
   void dead(bool v) { white = v; }
 
-  static void* operator new(std::size_t size) {
-    return RefGC::newRef(size);
-  }
-
-  static void operator delete(void* ptr) {
-    RefGC::rlzRef(ptr);
-  }
-
   virtual void trace() = 0;
+private:
+//  static void* operator new(std::size_t size);
+//  static void operator delete(void* ptr);
 private:
 	RefCount(const RefCount&); // no copy ctor
 	RefCount& operator = (const RefCount&); // no assignments
@@ -98,7 +99,9 @@ public:
 	}
 
 	operator bool() const {
-		return object != NULL;
+//    return object != NULL;
+    if (!object) return false;
+    else return object->operator bool();
 	}
 
   bool mark() {
@@ -130,7 +133,7 @@ protected:
 
 	void release() {
 		if (object != NULL && object->release() == 0 && !object->dead()) {
-			delete object;
+      RefGC::rlzRef(object);
 		}
 	}
 
@@ -152,22 +155,22 @@ public:
 };
 
 template<class T>
-class RefVarPtr : public RefCountPtr<T>{
+class RefVarPtr : public RefCountPtr<T> {
 public:
   RefVarPtr():RefCountPtr<T>() {
-    RefGC::inUse(this);
+    RefGC::inst()->inUse(this);
   }
 
   RefVarPtr(T* object): RefCountPtr<T>(object) {
-    RefGC::inUse(this);
+    RefGC::inst()->inUse(this);
   }
 
   RefVarPtr(const RefVarPtr<T>& rhs): RefCountPtr<T>(rhs) {
-    RefGC::inUse(this);
+    RefGC::inst()->inUse(this);
   }
 
   RefVarPtr(const RefCountPtr<T>& rhs): RefCountPtr<T>(rhs) {
-    RefGC::inUse(this);
+    RefGC::inst()->inUse(this);
   }
 
   const RefVarPtr& operator = (const RefCountPtr<T>& rhs) {
@@ -181,7 +184,7 @@ public:
 	}
 
   ~RefVarPtr() {
-    RefGC::rmUse(this);
+    RefGC::inst()->rmUse(this);
   }
 };
 

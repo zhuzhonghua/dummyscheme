@@ -152,19 +152,16 @@ int Reader::readString()
   advInput();
 
 	StringStream str;
-  bool normal = false;
+  char c;
   while(!isEnd())
   {
-    char c = curCharAdv();
+    c = curCharAdv();
     if (c == '\"')
-    {
-      normal = true;
       break;
-    }
     str << c;
   }
 
-  if (!normal)
+  if (c != '\"')
     return TOKEN_UNKNOWN;
 
 	strLexVal = str.str();
@@ -231,11 +228,11 @@ VarValue Reader::readValue()
   VarValue val;
 	switch(aheadToken){
 	case TOKEN_NUM:
-		val = new NumValue(numLexVal);
+		val = NumValue::create(numLexVal);
 		match(TOKEN_NUM);
     break;
 	case TOKEN_STRING:
-		val = new StringValue(strLexVal);
+		val = StringValue::create(strLexVal);
 		match(TOKEN_STRING);
     break;
 	case TOKEN_SYMBOL:
@@ -278,18 +275,7 @@ VarValue Reader::readList()
 
   while (aheadToken != TOKEN_RIGHT_PAREN)
   {
-    VarValue val = readValue();
-
-    VarValue tmp(new PairValue(val, Scheme::Null));
-    if (Snullp(res))
-    {
-      res = tmp;
-    }
-    if (parent)
-    {
-      parent->cdr(tmp);
-    }
-    parent = tmp;
+    set_cons_parent(readValue(), res, parent);
   }
 
   return res;

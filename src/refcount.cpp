@@ -2,43 +2,22 @@
 
 namespace Dummy {
 
-RefGC* RefGC::instance = NULL;
+RefGC* RefGC::instance;
 
 RefGC* RefGC::inst()
 {
-  if (instance == NULL) instance = new RefGC();
-
+  if (!instance) instance = new RefGC();
   return instance;
-}
-
-RefGC::RefGC()
-{
-  maxRef = 16;
-  checkTimes = 0;
-}
-
-void* RefGC::newRef(std::size_t size)
-{
-  checkGC();
-  void* ptr = std::malloc(size);
-  RefGC::inst()->allRef.insert((RefCount*)ptr);
-  return ptr;
-}
-
-void RefGC::rlzRef(void* ptr)
-{
-  std::free(ptr);
-  RefGC::inst()->allRef.erase((RefCount*)ptr);
 }
 
 void RefGC::inUse(RefCountP* ptr)
 {
-  RefGC::inst()->allInUse.insert(ptr);
+  allInUse.insert(ptr);
 }
 
 void RefGC::rmUse(RefCountP* ptr)
 {
-  RefGC::inst()->allInUse.erase(ptr);
+  allInUse.erase(ptr);
 }
 
 void RefGC::trace(RefCountP& p)
@@ -48,14 +27,13 @@ void RefGC::trace(RefCountP& p)
 
 void RefGC::checkGC()
 {
-  RefGC* gc = RefGC::inst();
-  gc->checkTimes++;
-  if (gc->allRef.size() > 0 &&
-      (gc->allRef.size() >= gc->maxRef || gc->checkTimes >= 1024*8))
+  checkTimes++;
+  if (allRef.size() > 0 &&
+      (allRef.size() >= maxRef || checkTimes >= 1024*8))
   {
     collect();
-    gc->maxRef = gc->allRef.size() > 0 ? gc->allRef.size() * 2 : 16;
-    gc->checkTimes = 0;
+    maxRef = allRef.size() > 0 ? allRef.size() * 2 : 16;
+    checkTimes = 0;
   }
 }
 
@@ -67,10 +45,9 @@ void RefGC::collect()
 
 void RefGC::mark()
 {
-  RefGC* gc = RefGC::inst();
+  typedef std::set<RefCountP*>::iterator RefPSetItr;
   // mark in use true
-  for (std::set<RefCountP*>::iterator it = gc->allInUse.begin();
-       it != gc->allInUse.end(); it++)
+  for (RefPSetItr it = allInUse.begin(); it != allInUse.end(); it++)
   {
     RefCountP* p = *it;
     if (p->mark()) continue;
@@ -82,8 +59,9 @@ void RefGC::mark()
 void RefGC::sweep()
 {
   std::set<RefCount*> toBeRlz;
-  for (std::set<RefCount*>::iterator it = RefGC::inst()->allRef.begin();
-       it != RefGC::inst()->allRef.end(); it++)
+  typedef std::set<RefCount*>::iterator RefSetItr;
+
+  for (RefSetItr it = allRef.begin(); it != allRef.end(); it++)
   {
     RefCount* p = *it;
     if (!p->mark())
@@ -97,10 +75,10 @@ void RefGC::sweep()
     }
   }
 
-  for (std::set<RefCount*>::iterator it = toBeRlz.begin();
-       it != toBeRlz.end(); it++)
+  for (RefSetItr it = toBeRlz.begin(); it != toBeRlz.end(); it++)
   {
-    delete *it;
+    RefCount* p = *it;
+    RefGC::rlzRef(p);
   }
 }
 
