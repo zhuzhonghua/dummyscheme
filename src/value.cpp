@@ -174,12 +174,10 @@ VarValue ApplicationValue::eval(VarValue env)
     fRes = fproc->eval(env);
   }
 
-  VarValue res = Snull;
-  VarValue parent;
-  for (VarValue arg = aprocs; !Snullp(arg); arg = Scdr(arg))
-  {
-    set_cons_parent(Scar(arg)->eval(env), res, parent);
-  }
+  VarValue res;
+  cons_list(for (VarValue arg = aprocs; !Snullp(arg); arg = Scdr(arg)),
+            Scar(arg)->eval(env),
+            res);
 
   return Scheme::execute_application(fRes, res);
 }

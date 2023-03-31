@@ -36,6 +36,8 @@ class NullValue : public Value {
 public:
   static NullValue* create();
   virtual operator bool() const { return false; }
+  virtual VarValue eval(VarValue env) { return this; }
+  virtual String toString() { return "'()"; }
 protected:
   NullValue() {}
 };
@@ -119,7 +121,7 @@ public:
 
 	String toString() {
     StringStream out;
-    out << "(" << head->toString() << " " << tail->toString() << ")";
+    out << "'(" << head->toString() << " " << tail->toString() << ")";
 
     return out.str();
   }

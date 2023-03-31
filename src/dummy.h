@@ -181,6 +181,26 @@ public:
   static VarValue analyze(VarValue exp);
 };
 
+#define cons_list(LOOP, PROC, res)                          \
+  do{                                                       \
+    res = Snull;                                            \
+    VarValue parent;                                        \
+    LOOP                                                    \
+    {                                                       \
+      VarValue tmp(PairValue::create(PROC, Scheme::Null));  \
+      if (Snullp(res))                                      \
+      {                                                     \
+        res = tmp;                                          \
+      }                                                     \
+      if (parent)                                           \
+      {                                                     \
+        parent->cdr(tmp);                                   \
+      }                                                     \
+      parent = tmp;                                         \
+    }                                                       \
+  }while(0)
+
+
 #define set_cons_parent(PROC, res, parent)                \
   do{                                                     \
     VarValue __tmp__(PairValue::create(PROC, Scheme::Null));    \

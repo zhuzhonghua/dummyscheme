@@ -26,6 +26,7 @@ namespace Dummy{
 #define Scond Scheme::Cond;
 #define Selse Scheme::Else;
 
+#define Spairp Scheme::pairp
 #define Snullp Scheme::nullp
 #define Struep Scheme::truep
 

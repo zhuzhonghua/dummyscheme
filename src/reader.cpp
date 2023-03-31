@@ -270,13 +270,8 @@ VarValue Reader::readValue()
 
 VarValue Reader::readList()
 {
-  VarValue res = Snull;
-  VarValue parent;
-
-  while (aheadToken != TOKEN_RIGHT_PAREN)
-  {
-    set_cons_parent(readValue(), res, parent);
-  }
+  VarValue res;
+  cons_list(while (aheadToken != TOKEN_RIGHT_PAREN), readValue(), res);
 
   return res;
 }

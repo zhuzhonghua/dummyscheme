@@ -33,7 +33,8 @@ void Scheme::init()
 void Scheme::initIntern()
 {
   Null = intern("null", NullValue::create());
-  Nil = intern("nil", Null);
+//  Nil = intern("nil", Null);
+  Nil = Null;
   True = intern("true", BoolValue::create(true));
   False = intern("false", BoolValue::create(false));
 
@@ -182,15 +183,14 @@ VarValue Scheme::list4(VarValue a, VarValue b, VarValue c, VarValue d)
 
 VarValue Scheme::listn(int num, ...)
 {
-  VarValue res = Null;
-  VarValue parent;
+  VarValue res;
 
   va_list ap;
   va_start(ap, num);
-  for (int i = 0; i < num; ++i)
-  {
-    set_cons_parent(va_arg(ap, VarValue), res, parent);
-  }
+  cons_list(for (int i = 0; i < num; ++i),
+            va_arg(ap, VarValue),
+            res);
+
   va_end(ap);
 
   return res;
@@ -198,7 +198,7 @@ VarValue Scheme::listn(int num, ...)
 
 VarValue Scheme::nullp(VarValue exp)
 {
-  return exp ? False : True;
+  return exp == Null ? True : False;
 }
 
 VarValue Scheme::notp(VarValue exp)
@@ -218,7 +218,7 @@ VarValue Scheme::falsep(VarValue exp)
 
 VarValue Scheme::booleanp(VarValue exp)
 {
-  return truep(exp) || falsep(exp) ? True : False;
+  return exp == True || exp == False ? True : False;
 }
 
 VarValue Scheme::numberp(VarValue val)
@@ -258,7 +258,7 @@ VarValue Scheme::assignment_value(VarValue val)
 
 VarValue Scheme::self_evaluating_p(VarValue val)
 {
-  return numberp(val) || stringp(val) ? True : False;
+  return numberp(val) || stringp(val) || booleanp(val) || nullp(val) ? True : False;
 }
 
 VarValue Scheme::tagged_list_p(VarValue val, VarValue tag)
@@ -335,6 +335,8 @@ VarValue Scheme::analyze(VarValue exp)
   {
     return analyze_application(exp);
   }
+
+  Error("unknown expression type: ANALYZE %s", ValueCStr(exp));
 
   return NULL;
 }
@@ -416,11 +418,9 @@ VarValue Scheme::lambda_body(VarValue exp)
 VarValue Scheme::analyze_sequence(VarValue exps)
 {
   VarValue res;
-  VarValue parent;
-  for (; !Snullp(exps); exps = Scdr(exps))
-  {
-    set_cons_parent(analyze(Scar(exps)), res, parent);
-  }
+  cons_list(for (; !Snullp(exps); exps = Scdr(exps)),
+            analyze(Scar(exps)),
+            res);
 
   return res;
 }
@@ -557,10 +557,9 @@ VarValue Scheme::analyze_application(VarValue exp)
   VarValue fproc = analyze(operatr(exp));
   VarValue aprocs;
   VarValue parent;
-  for (VarValue arg = operands(exp); !Snullp(arg); arg = Scdr(arg))
-  {
-    set_cons_parent(analyze(Scar(arg)), aprocs, parent);
-  }
+  cons_list(for (VarValue arg = operands(exp); !Snullp(arg); arg = Scdr(arg)),
+            analyze(Scar(arg)),
+            aprocs);
 
   return ApplicationValue::create(fproc, aprocs);
 }
