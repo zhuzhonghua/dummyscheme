@@ -29,6 +29,7 @@ namespace Dummy{
 #define Spairp Scheme::pairp
 #define Snullp Scheme::nullp
 #define Struep Scheme::truep
+#define Ssymbolp Scheme::symbolp
 
 #define Splus Scheme::plus
 #define Scons Scheme::cons
@@ -44,5 +45,6 @@ namespace Dummy{
 #define Scadddr Scheme::cadddr
 
 #define Sreverse Scheme::reverse
+#define Smake_lambda Scheme::make_lambda
 
 };

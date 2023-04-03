@@ -71,9 +71,18 @@ String PairValue::toString()
     return out.str();
 }
 
-AssignmentValue* AssignmentValue::create(VarValue v, VarValue vp)
+/*
+  (set! a 2)
+ */
+AssignmentValue* AssignmentValue::create(VarValue exp)
 {
-  AssignmentValue* ret = new AssignmentValue(v, vp);
+  if (!Snullp(Scdddr(exp)))
+    Error("too many args to set! %s", ValueCStr(exp));
+
+  VarValue variable = Scadr(exp);
+  VarValue value = Scaddr(exp);
+
+  AssignmentValue* ret = new AssignmentValue(variable, value);
   RefGC::newRef(ret);
   return ret;
 }
@@ -88,23 +97,25 @@ VarValue AssignmentValue::eval(VarValue env)
   return var;
 }
 
-String AssignmentValue::toString()
+VarValue DefineValue::def_variable(VarValue val)
 {
-  StringStream out;
-	out << "(set! " << var << " " << vproc->toString() << ")";
+  VarValue var = Scadr(val);
+  if (Ssymbolp(var)) return var;
 
-	return out.str();
+  return Scar(var);
 }
 
-void AssignmentValue::trace()
+VarValue DefineValue::def_value(VarValue val)
 {
-  RefGC::trace(var);
-  RefGC::trace(vproc);
+  if (Ssymbolp(Scadr(val)))
+    return Scaddr(val);
+  else
+    return Smake_lambda(Scdadr(val), Scddr(val));
 }
 
-DefineValue* DefineValue::create(VarValue v, VarValue vp)
+DefineValue* DefineValue::create(VarValue exp)
 {
-  DefineValue* ret = new DefineValue(v, vp);
+  DefineValue* ret = new DefineValue(def_variable(exp), Scheme::analyze(def_value(exp)));
   RefGC::newRef(ret);
   return ret;
 }
@@ -115,19 +126,20 @@ VarValue DefineValue::eval(VarValue env)
   return var;
 }
 
-String DefineValue::toString()
-{
-  StringStream out;
-	out << "(define " << var << " " << vproc->toString() << ")";
-
-	return out.str();
-}
-
 IfValue* IfValue::create(VarValue p, VarValue c, VarValue a)
 {
   IfValue* ret = new IfValue(p, c, a);
   RefGC::newRef(ret);
   return ret;
+}
+
+IfValue* IfValue::create(VarValue exp)
+{
+  VarValue p = Scheme::analyze(predicate(exp));
+  VarValue c = Scheme::analyze(consequent(exp));
+  VarValue a = Scheme::analyze(alternative(exp));
+
+  return create(p, c, a);
 }
 
 VarValue IfValue::eval(VarValue env)
@@ -138,26 +150,45 @@ VarValue IfValue::eval(VarValue env)
     return aproc->eval(env);
 }
 
-String IfValue::toString()
+VarValue IfValue::predicate(VarValue exp)
 {
-  StringStream out;
-	out << "(if " << pproc->toString() << " "
-      << cproc->toString() << " "
-      << aproc->toString() << ")";
-
-	return out.str();
+  return Scadr(exp);
 }
 
-void IfValue::trace()
+VarValue IfValue::consequent(VarValue exp)
 {
-  RefGC::trace(pproc);
-  RefGC::trace(cproc);
-  RefGC::trace(aproc);
+  return Scaddr(exp);
 }
 
-ProcedureValue* ProcedureValue::create(VarValue v, VarValue b)
+VarValue IfValue::alternative(VarValue exp)
 {
-  ProcedureValue* ret = new ProcedureValue(v, b);
+  VarValue tmp = Scdddr(exp);
+  if (!(Snullp(tmp)))
+  {
+    if (!(Snullp(Scdr(tmp))))
+      throw "bad if syntax";
+    return Scar(tmp);
+  }
+  else
+    return Sfalse;
+}
+
+VarValue ProcedureValue::parameters(VarValue exp)
+{
+  return Scadr(exp);
+}
+
+VarValue ProcedureValue::body(VarValue exp)
+{
+  return Scddr(exp);
+}
+
+ProcedureValue* ProcedureValue::create(VarValue exp)
+{
+  VarValue vars = parameters(exp);
+  VarValue bproc = Scheme::analyze_sequence(body(exp));
+
+  ProcedureValue* ret = new ProcedureValue(vars, bproc);
   RefGC::newRef(ret);
   return ret;
 }
@@ -167,23 +198,22 @@ VarValue ProcedureValue::eval(VarValue env)
   return Scheme::make_procedure(vars, bproc, env);
 }
 
-String ProcedureValue::toString()
+VarValue ApplicationValue::operatr(VarValue exp)
 {
-  StringStream out;
-	out << "#<procedure>";
-
-	return out.str();
+  return Scar(exp);
 }
 
-void ProcedureValue::trace()
+VarValue ApplicationValue::operands(VarValue exp)
 {
-  RefGC::trace(vars);
-  RefGC::trace(bproc);
+  return Scdr(exp);
 }
 
-ApplicationValue* ApplicationValue::create(VarValue f, VarValue a)
+ApplicationValue* ApplicationValue::create(VarValue exp)
 {
-  ApplicationValue* ret = new ApplicationValue(f, a);
+  VarValue fproc = Scheme::analyze(operatr(exp));
+  VarValue aprocs = Scheme::map_proc(operands(exp), Scheme::analyze);
+
+  ApplicationValue* ret = new ApplicationValue(fproc, aprocs);
   RefGC::newRef(ret);
   return ret;
 }
@@ -196,36 +226,8 @@ VarValue ApplicationValue::eval(VarValue env)
     fRes = fproc->eval(env);
   }
 
-  VarValue res = Snull;
-  for (VarValue arg = aprocs; !Snullp(arg); arg = Scdr(arg))
-  {
-    if (Spairp(arg))
-    {
-      res = Scons(Scar(arg)->eval(env), res);
-    }
-    else
-    {
-      res = Scons(arg->eval(env), res);
-      break;
-    }
-  }
-  res = Sreverse(res);
-
-  return Scheme::execute_application(fRes, res);
-}
-
-String ApplicationValue::toString()
-{
-  StringStream out;
-	out << "#<application>:" << fproc->toString();
-
-	return out.str();
-}
-
-void ApplicationValue::trace()
-{
-  RefGC::trace(fproc);
-  RefGC::trace(aprocs);
+  return Scheme::execute_application(fRes,
+                                     Scheme::map_proc(aprocs, Scheme::eval, env));
 }
 
 EnvValue* EnvValue::create(VarValue o)

@@ -17,11 +17,18 @@ typedef VarValue (*PrimProc4)(VarValue arg1, VarValue arg2, VarValue arg3, VarVa
 
 class PrimProc{
 public:
-  PrimProc(int num, PrimProc0 p): argNum(num) { proc.proc0 = p; }
-  PrimProc(int num, PrimProc1 p): argNum(num) { proc.proc1 = p; }
-  PrimProc(int num, PrimProc2 p): argNum(num) { proc.proc2 = p; }
-  PrimProc(int num, PrimProc3 p): argNum(num) { proc.proc3 = p; }
+  PrimProc(PrimProc0 p): argNum(0) { proc.proc0 = p; }
+  PrimProc(PrimProc1 p): argNum(1) { proc.proc1 = p; }
+  PrimProc(PrimProc2 p): argNum(2) { proc.proc2 = p; }
+  PrimProc(PrimProc3 p): argNum(3) { proc.proc3 = p; }
+  PrimProc(PrimProc4 p): argNum(4) { proc.proc4 = p; }
 
+public:
+  VarValue eval() { return proc.proc0(); }
+  VarValue eval(VarValue v1) { return proc.proc1(v1); }
+  VarValue eval(VarValue v1, VarValue v2) { return proc.proc2(v1, v2); }
+  VarValue eval(VarValue v1, VarValue v2, VarValue v3) { return proc.proc3(v1, v2, v3); }
+  VarValue eval(VarValue v1, VarValue v2, VarValue v3, VarValue v4) { return proc.proc4(v1, v2, v3, v4); }
 public:
   int argNum;
   union {
@@ -121,25 +128,12 @@ public:
 
   static VarValue self_evaluating_p(VarValue val);
 
-
   static VarValue assignmentp(VarValue val);
-  static VarValue assignment_variable(VarValue val);
-  static VarValue assignment_value(VarValue val);
-
   static VarValue definep(VarValue val);
-  static VarValue define_variable(VarValue val);
-  static VarValue define_value(VarValue val);
-
   static VarValue ifp(VarValue exp);
-  static VarValue if_predicate(VarValue exp);
-  static VarValue if_consequent(VarValue exp);
-  static VarValue if_alternative(VarValue exp);
-  static VarValue make_if(VarValue predicate, VarValue consequent, VarValue alternative);
 
   static VarValue make_lambda(VarValue parameters, VarValue body);
   static VarValue lambdap(VarValue exp);
-  static VarValue lambda_parameters(VarValue exp);
-  static VarValue lambda_body(VarValue exp);
 
   static VarValue analyze_sequence(VarValue exps);
 
@@ -168,8 +162,6 @@ public:
 
   static VarValue sequence_to_exp(VarValue seq);
 
-  static VarValue operatr(VarValue exp);
-  static VarValue operands(VarValue exp);
   static VarValue no_operands_p(VarValue ops);
   static VarValue first_operand(VarValue ops);
   static VarValue rest_operands(VarValue ops);
@@ -182,7 +174,13 @@ public:
 public:
   static VarValue analyze(VarValue exp);
 public:
-  static VarValue reverse(VarValue );
+  static VarValue reverse(VarValue exps);
+  static VarValue map_proc(VarValue exps, PrimProc1 proc);
+  static VarValue map_proc(VarValue exps, PrimProc2 proc, VarValue v2);
+  static VarValue map_proc(VarValue exps, PrimProc3 proc, VarValue v2, VarValue v3);
+  static VarValue map_proc(VarValue exps, PrimProc4 proc, VarValue v2, VarValue v3, VarValue v4);
+
+  static VarValue eval(VarValue exp, VarValue env);
 };
 
 };

@@ -55,20 +55,20 @@ void Scheme::initIntern()
 void Scheme::initPrimProc()
 {
   RegPrimProc procs[] = {
-    {"+", {1, Splus}},
-    {"cons", {2, Scons}},
-    {"list", {1, Slist}},
-    {"car", {1, Scar}},
-    {"cdr", {1, Scdr}},
-    {"set-car!", {2, set_car}},
-    {"set-cdr!", {2, set_cdr}},
-    {"cadr", {1, Scadr}},
-    {"cddr", {1, Scddr}},
-    {"caadr", {1, Scaadr}},
-    {"caddr", {1, Scaddr}},
-    {"cdadr", {1, Scdadr}},
-    {"cdddr", {1, Scdddr}},
-    {"cadddr", {1, Scadddr}},
+    {"+", Splus},
+    {"cons", Scons},
+    {"list", Slist},
+    {"car", Scar},
+    {"cdr", Scdr},
+    {"set-car!", set_car},
+    {"set-cdr!", set_cdr},
+    {"cadr", Scadr},
+    {"cddr", Scddr},
+    {"caadr", Scaadr},
+    {"caddr", Scaddr},
+    {"cdadr", Scdadr},
+    {"cdddr", Scdddr},
+    {"cadddr", Scadddr},
   };
   regPrimProcs(procs, sizeof(procs)/sizeof(RegPrimProc));
 }
@@ -259,16 +259,6 @@ VarValue Scheme::assignmentp(VarValue val)
   return tagged_list_p(val, SetMark);
 }
 
-VarValue Scheme::assignment_variable(VarValue val)
-{
-  return cadr(val);
-}
-
-VarValue Scheme::assignment_value(VarValue val)
-{
-  return caddr(val);
-}
-
 VarValue Scheme::self_evaluating_p(VarValue val)
 {
   return numberp(val) || stringp(val) || booleanp(val) || nullp(val) ? True : False;
@@ -314,27 +304,19 @@ VarValue Scheme::analyze(VarValue exp)
   }
   if (assignmentp(exp))
   {
-    return AssignmentValue::create(assignment_variable(exp),
-                                   analyze(assignment_value(exp)));
+    return AssignmentValue::create(exp);
   }
   if (definep(exp))
   {
-    return DefineValue::create(define_variable(exp),
-                               analyze(define_value(exp)));
+    return DefineValue::create(exp);
   }
   if (ifp(exp))
   {
-    VarValue pproc = analyze(if_predicate(exp));
-    VarValue cproc = analyze(if_consequent(exp));
-    VarValue aproc = analyze(if_alternative(exp));
-
-    return make_if(pproc, cproc, aproc);
+    return IfValue::create(exp);
   }
   if (lambdap(exp))
   {
-    VarValue vars = lambda_parameters(exp);
-    VarValue bproc = analyze_sequence(lambda_body(exp));
-    return ProcedureValue::create(vars, bproc);
+    return ProcedureValue::create(exp);
   }
   if (beginp(exp))
   {
@@ -346,7 +328,7 @@ VarValue Scheme::analyze(VarValue exp)
   }
   if (applicationp(exp))
   {
-    return analyze_application(exp);
+    return ApplicationValue::create(exp);
   }
 
   Error("unknown expression type: ANALYZE %s", ValueCStr(exp));
@@ -359,30 +341,9 @@ VarValue Scheme::definep(VarValue val)
   return tagged_list_p(val, Define);
 }
 
-VarValue Scheme::define_variable(VarValue val)
-{
-  VarValue var = cadr(val);
-  if (symbolp(var)) return var;
-
-  return var->car();
-}
-
-VarValue Scheme::define_value(VarValue val)
-{
-  if (symbolp(cadr(val)))
-    return caddr(val);
-  else
-    return make_lambda(cdadr(val), cddr(val));
-}
-
 VarValue Scheme::make_lambda(VarValue parameters, VarValue body)
 {
   return cons(Lambda, cons(parameters, body));
-}
-
-VarValue Scheme::make_if(VarValue predicate, VarValue consequent, VarValue alternative)
-{
-  return IfValue::create(predicate, consequent, alternative);
 }
 
 VarValue Scheme::ifp(VarValue exp)
@@ -390,42 +351,9 @@ VarValue Scheme::ifp(VarValue exp)
   return tagged_list_p(exp, If);
 }
 
-VarValue Scheme::if_predicate(VarValue exp)
-{
-  return cadr(exp);
-}
-
-VarValue Scheme::if_consequent(VarValue exp)
-{
-  return caddr(exp);
-}
-
-VarValue Scheme::if_alternative(VarValue exp)
-{
-  VarValue tmp = cdddr(exp);
-  if (!(Snullp(tmp)))
-  {
-    if (!(Snullp(Scdr(tmp))))
-      throw "bad if syntax";
-    return tmp->car();
-  }
-  else
-    return False;
-}
-
 VarValue Scheme::lambdap(VarValue exp)
 {
   return tagged_list_p(exp, Lambda);
-}
-
-VarValue Scheme::lambda_parameters(VarValue exp)
-{
-  return cadr(exp);
-}
-
-VarValue Scheme::lambda_body(VarValue exp)
-{
-  return cddr(exp);
 }
 
 VarValue Scheme::analyze_sequence(VarValue exps)
@@ -564,40 +492,11 @@ VarValue Scheme::expand_clauses(VarValue clauses)
     }
     else
     {
-      return make_if(cond_predicate(first),
-                     sequence_to_exp(cond_actions(first)),
-                     expand_clauses(rest));
+      return IfValue::create(cond_predicate(first),
+                             sequence_to_exp(cond_actions(first)),
+                             expand_clauses(rest));
     }
   }
-}
-
-VarValue Scheme::analyze_application(VarValue exp)
-{
-  VarValue fproc = analyze(operatr(exp));
-  VarValue aprocs = Snull;
-  for (VarValue arg = operands(exp); !Snullp(arg); arg = Scdr(arg))
-  {
-    if (Spairp(arg))
-      aprocs = Scons(analyze(Scar(arg)), aprocs);
-    else
-    {
-      aprocs = Scons(analyze(arg), aprocs);
-      break;
-    }
-  }
-  aprocs = Sreverse(aprocs);
-
-  return ApplicationValue::create(fproc, aprocs);
-}
-
-VarValue Scheme::operatr(VarValue exp)
-{
-  return Scar(exp);
-}
-
-VarValue Scheme::operands(VarValue exp)
-{
-  return Scdr(exp);
 }
 
 VarValue Scheme::no_operands_p(VarValue ops)
@@ -633,15 +532,15 @@ VarValue Scheme::execute_application(VarValue proc, VarValue args)
     PrimProc prim = itr->second;
     switch(prim.argNum){
     case 0:
-      return prim.proc.proc0();
+      return prim.eval();
     case 1:
-      return prim.proc.proc1(args);
+      return prim.eval(args);
     case 2:
-      return prim.proc.proc2(Scar(args), Scadr(args));
+      return prim.eval(Scar(args), Scadr(args));
     case 3:
-      return prim.proc.proc3(Scar(args), Scadr(args), Scaddr(args));
+      return prim.eval(Scar(args), Scadr(args), Scaddr(args));
     case 4:
-      return prim.proc.proc4(Scar(args), Scadr(args), Scaddr(args), Scadddr(args));
+      return prim.eval(Scar(args), Scadr(args), Scaddr(args), Scadddr(args));
     default:
       Error("unkonwn argnum ", prim.argNum, ValueCStr(proc));
     }
@@ -700,6 +599,49 @@ VarValue Scheme::reverse(VarValue ls)
   }
 
   return before;
+}
+
+#define CALL_PROC(EXPS, PROC, ...)                          \
+do{                                                         \
+  VarValue res = Snull;                                     \
+  for (VarValue arg = EXPS; !Snullp(arg); arg = Scdr(arg)){ \
+    if (Spairp(arg))                                        \
+      res = Scons( PROC (Scar(arg), __VA_ARGS__), res);     \
+    else{                                                   \
+      res = Scons( PROC (arg, __VA_ARGS__), res);           \
+      break;                                                \
+    }                                                       \
+  }                                                         \
+  return reverse(res);                                      \
+ }while(0)
+
+VarValue Scheme::map_proc(VarValue exps, PrimProc2 proc, VarValue v2)
+{
+  CALL_PROC(exps, proc, v2);
+  return Snull;
+}
+
+VarValue Scheme::map_proc(VarValue exps, PrimProc1 proc)
+{
+  CALL_PROC(exps, proc);
+  return Snull;
+}
+
+VarValue Scheme::map_proc(VarValue exps, PrimProc3 proc, VarValue v2, VarValue v3)
+{
+  CALL_PROC(exps, proc, v2, v3);
+  return Snull;
+}
+
+VarValue Scheme::map_proc(VarValue exps, PrimProc4 proc, VarValue v2, VarValue v3, VarValue v4)
+{
+  CALL_PROC(exps, proc, v2, v3, v4);
+  return Snull;
+}
+
+VarValue Scheme::eval(VarValue exp, VarValue env)
+{
+  return exp->eval(env);
 }
 
 }

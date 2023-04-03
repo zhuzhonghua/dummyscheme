@@ -139,11 +139,19 @@ protected:
 
 class AssignmentValue: public Value {
 public:
-  static AssignmentValue* create(VarValue v, VarValue vp);
+  static AssignmentValue* create(VarValue exp);
 
   VarValue eval(VarValue env);
-  String toString();
-  void trace();
+  String toString() {
+    StringStream out;
+    out << "(set! " << var << " " << vproc->toString() << ")";
+
+    return out.str();
+  }
+  void trace() {
+    RefGC::trace(var);
+    RefGC::trace(vproc);
+  }
 protected:
   AssignmentValue(VarValue v, VarValue vp) { var = v; vproc = vp; }
   MemberValue var;
@@ -152,20 +160,45 @@ protected:
 
 class DefineValue: public AssignmentValue {
 public:
-  static DefineValue* create(VarValue v, VarValue vp);
+  static DefineValue* create(VarValue exp);
   VarValue eval(VarValue env);
-  String toString();
+  String toString() {
+    StringStream out;
+    out << "(define " << var << " " << vproc->toString() << ")";
+    return out.str();
+  }
+protected:
+  static VarValue def_variable(VarValue val);
+  static VarValue def_value(VarValue val);
 protected:
   DefineValue(VarValue v, VarValue vp): AssignmentValue(v, vp) { }
 };
 
 class IfValue: public Value {
 public:
+  static IfValue* create(VarValue exp);
   static IfValue* create(VarValue p, VarValue c, VarValue a);
 
   VarValue eval(VarValue env);
-  String toString();
-  void trace();
+  String toString() {
+    StringStream out;
+    out << "(if "
+        << pproc->toString() << " "
+        << cproc->toString() << " "
+        << aproc->toString() << ")";
+
+    return out.str();
+  }
+
+  void trace() {
+    RefGC::trace(pproc);
+    RefGC::trace(cproc);
+    RefGC::trace(aproc);
+  }
+protected:
+  static VarValue predicate(VarValue exp);
+  static VarValue consequent(VarValue exp);
+  static VarValue alternative(VarValue exp);
 protected:
   IfValue(VarValue p, VarValue c, VarValue a) { pproc = p; cproc = c; aproc = a; }
   MemberValue pproc;
@@ -175,11 +208,22 @@ protected:
 
 class ProcedureValue: public Value {
 public:
-  static ProcedureValue* create(VarValue v, VarValue b);
+  static ProcedureValue* create(VarValue exp);
 
   VarValue eval(VarValue env);
-  String toString();
-  void trace();
+  String toString() {
+    StringStream out;
+    out << "#<procedure>";
+
+    return out.str();
+  }
+  void trace() {
+    RefGC::trace(vars);
+    RefGC::trace(bproc);
+  }
+protected:
+  static VarValue parameters(VarValue exp);
+  static VarValue body(VarValue exp);
 protected:
   ProcedureValue(VarValue v, VarValue b) { vars = v; bproc = b; }
   MemberValue vars;
@@ -188,11 +232,22 @@ protected:
 
 class ApplicationValue: public Value {
 public:
-  static ApplicationValue* create(VarValue f, VarValue a);
+  static ApplicationValue* create(VarValue exp);
 
   VarValue eval(VarValue env);
-  String toString();
-  void trace();
+  String toString() {
+    StringStream out;
+    out << "#<application>:" << fproc->toString();
+
+    return out.str();
+  }
+  void trace() {
+    RefGC::trace(fproc);
+    RefGC::trace(aprocs);
+  }
+protected:
+  static VarValue operatr(VarValue exp);
+  static VarValue operands(VarValue exp);
 protected:
   ApplicationValue(VarValue f, VarValue a) { fproc = f; aprocs = a; }
   MemberValue fproc;
