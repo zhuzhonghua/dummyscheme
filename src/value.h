@@ -118,13 +118,7 @@ protected:
 class PairValue : public Value {
 public:
   static PairValue* create(VarValue h, VarValue t);
-
-	String toString() {
-    StringStream out;
-    out << "'(" << head->toString() << " " << tail->toString() << ")";
-
-    return out.str();
-  }
+	String toString();
 
   void trace() {
     RefGC::trace(head);

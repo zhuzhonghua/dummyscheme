@@ -60,6 +60,8 @@ void Scheme::initPrimProc()
     {"list", {1, Slist}},
     {"car", {1, Scar}},
     {"cdr", {1, Scdr}},
+    {"set-car!", {2, set_car}},
+    {"set-cdr!", {2, set_cdr}},
     {"cadr", {1, Scadr}},
     {"cddr", {1, Scddr}},
     {"caadr", {1, Scaadr}},
@@ -90,6 +92,18 @@ VarValue Scheme::cons(VarValue arg1, VarValue arg2)
 VarValue Scheme::list(VarValue arg)
 {
   return arg;
+}
+
+VarValue Scheme::set_car(VarValue val, VarValue a)
+{
+  val->car(a);
+  return val;
+}
+
+VarValue Scheme::set_cdr(VarValue val, VarValue d)
+{
+  val->cdr(d);
+  return val;
 }
 
 VarValue Scheme::car(VarValue val)
@@ -183,17 +197,16 @@ VarValue Scheme::list4(VarValue a, VarValue b, VarValue c, VarValue d)
 
 VarValue Scheme::listn(int num, ...)
 {
-  VarValue res;
+  VarValue res = Snull;
 
   va_list ap;
   va_start(ap, num);
-  cons_list(for (int i = 0; i < num; ++i),
-            va_arg(ap, VarValue),
-            res);
-
+  for (int i = 0; i < num; ++i)
+  {
+    res = Scons(va_arg(ap, VarValue), res);
+  }
   va_end(ap);
-
-  return res;
+  return Sreverse(res);
 }
 
 VarValue Scheme::nullp(VarValue exp)
@@ -417,12 +430,18 @@ VarValue Scheme::lambda_body(VarValue exp)
 
 VarValue Scheme::analyze_sequence(VarValue exps)
 {
-  VarValue res;
-  cons_list(for (; !Snullp(exps); exps = Scdr(exps)),
-            analyze(Scar(exps)),
-            res);
-
-  return res;
+  VarValue res = Snull;
+  for (; !Snullp(exps); exps = Scdr(exps))
+  {
+    if (Spairp(exps))
+      res = Scons(analyze(Scar(exps)), res);
+    else
+    {
+      res = Scons(analyze(exps), res);
+      break;
+    }
+  }
+  return Sreverse(res);
 }
 
 VarValue Scheme::make_procedure(VarValue parameters, VarValue body, VarValue env)
@@ -555,11 +574,18 @@ VarValue Scheme::expand_clauses(VarValue clauses)
 VarValue Scheme::analyze_application(VarValue exp)
 {
   VarValue fproc = analyze(operatr(exp));
-  VarValue aprocs;
-  VarValue parent;
-  cons_list(for (VarValue arg = operands(exp); !Snullp(arg); arg = Scdr(arg)),
-            analyze(Scar(arg)),
-            aprocs);
+  VarValue aprocs = Snull;
+  for (VarValue arg = operands(exp); !Snullp(arg); arg = Scdr(arg))
+  {
+    if (Spairp(arg))
+      aprocs = Scons(analyze(Scar(arg)), aprocs);
+    else
+    {
+      aprocs = Scons(analyze(arg), aprocs);
+      break;
+    }
+  }
+  aprocs = Sreverse(aprocs);
 
   return ApplicationValue::create(fproc, aprocs);
 }
@@ -658,6 +684,22 @@ VarValue Scheme::extend_env(VarValue vars, VarValue vals, VarValue outer)
   }
 
   return env;
+}
+
+VarValue Scheme::reverse(VarValue ls)
+{
+  VarValue before = ls;
+  VarValue after = cdr(ls);
+  set_cdr(before, Null);
+
+  VarValue tmp;
+  for (; pairp(after); before = after, after = tmp)
+  {
+    tmp = cdr(after);
+    set_cdr(after, before);
+  }
+
+  return before;
 }
 
 }

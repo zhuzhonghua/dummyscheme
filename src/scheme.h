@@ -43,4 +43,6 @@ namespace Dummy{
 #define Scdddr Scheme::cdddr
 #define Scadddr Scheme::cadddr
 
+#define Sreverse Scheme::reverse
+
 };

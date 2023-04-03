@@ -49,6 +49,28 @@ PairValue* PairValue::create(VarValue h, VarValue t)
   return ret;
 }
 
+String PairValue::toString()
+{
+    StringStream out;
+    out << "'(" << head->toString();
+    for (VarValue tmp = tail; !Snullp(tmp); tmp = Scdr(tmp))
+    {
+      if (Spairp(tmp))
+      {
+        out << " " << Scar(tmp)->toString();
+        continue;
+      }
+      else
+      {
+        out << " " << tmp->toString();
+        break;
+      }
+    }
+    out << ")";
+
+    return out.str();
+}
+
 AssignmentValue* AssignmentValue::create(VarValue v, VarValue vp)
 {
   AssignmentValue* ret = new AssignmentValue(v, vp);
@@ -174,10 +196,20 @@ VarValue ApplicationValue::eval(VarValue env)
     fRes = fproc->eval(env);
   }
 
-  VarValue res;
-  cons_list(for (VarValue arg = aprocs; !Snullp(arg); arg = Scdr(arg)),
-            Scar(arg)->eval(env),
-            res);
+  VarValue res = Snull;
+  for (VarValue arg = aprocs; !Snullp(arg); arg = Scdr(arg))
+  {
+    if (Spairp(arg))
+    {
+      res = Scons(Scar(arg)->eval(env), res);
+    }
+    else
+    {
+      res = Scons(arg->eval(env), res);
+      break;
+    }
+  }
+  res = Sreverse(res);
 
   return Scheme::execute_application(fRes, res);
 }

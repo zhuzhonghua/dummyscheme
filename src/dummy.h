@@ -93,6 +93,8 @@ public:
   static VarValue list(VarValue arg);
   static VarValue car(VarValue val);
   static VarValue cdr(VarValue val);
+  static VarValue set_car(VarValue val, VarValue a);
+  static VarValue set_cdr(VarValue val, VarValue d);
   static VarValue cadr(VarValue val);
   static VarValue cddr(VarValue val);
   static VarValue caadr(VarValue val);
@@ -179,40 +181,8 @@ public:
   static VarValue extend_env(VarValue parameters, VarValue args, VarValue outer);
 public:
   static VarValue analyze(VarValue exp);
+public:
+  static VarValue reverse(VarValue );
 };
-
-#define cons_list(LOOP, PROC, res)                          \
-  do{                                                       \
-    res = Snull;                                            \
-    VarValue parent;                                        \
-    LOOP                                                    \
-    {                                                       \
-      VarValue tmp(PairValue::create(PROC, Scheme::Null));  \
-      if (Snullp(res))                                      \
-      {                                                     \
-        res = tmp;                                          \
-      }                                                     \
-      if (parent)                                           \
-      {                                                     \
-        parent->cdr(tmp);                                   \
-      }                                                     \
-      parent = tmp;                                         \
-    }                                                       \
-  }while(0)
-
-
-#define set_cons_parent(PROC, res, parent)                \
-  do{                                                     \
-    VarValue __tmp__(PairValue::create(PROC, Scheme::Null));    \
-    if (Snullp(res))                                      \
-    {                                                     \
-      res = __tmp__;                                      \
-    }                                                     \
-    if (parent)                                           \
-    {                                                     \
-      parent->cdr(__tmp__);                               \
-    }                                                     \
-    parent = __tmp__;                                     \
-  }while(0)
 
 };
