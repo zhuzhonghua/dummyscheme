@@ -601,7 +601,7 @@ VarValue Scheme::reverse(VarValue ls)
   return before;
 }
 
-#define CALL_PROC(EXPS, PROC, ...)                          \
+#define MAP_CALL_PROC(EXPS, PROC, ...)                      \
 do{                                                         \
   VarValue res = Snull;                                     \
   for (VarValue arg = EXPS; !Snullp(arg); arg = Scdr(arg)){ \
@@ -617,25 +617,25 @@ do{                                                         \
 
 VarValue Scheme::map_proc(VarValue exps, PrimProc2 proc, VarValue v2)
 {
-  CALL_PROC(exps, proc, v2);
+  MAP_CALL_PROC(exps, proc, v2);
   return Snull;
 }
 
 VarValue Scheme::map_proc(VarValue exps, PrimProc1 proc)
 {
-  CALL_PROC(exps, proc);
+  MAP_CALL_PROC(exps, proc);
   return Snull;
 }
 
 VarValue Scheme::map_proc(VarValue exps, PrimProc3 proc, VarValue v2, VarValue v3)
 {
-  CALL_PROC(exps, proc, v2, v3);
+  MAP_CALL_PROC(exps, proc, v2, v3);
   return Snull;
 }
 
 VarValue Scheme::map_proc(VarValue exps, PrimProc4 proc, VarValue v2, VarValue v3, VarValue v4)
 {
-  CALL_PROC(exps, proc, v2, v3, v4);
+  MAP_CALL_PROC(exps, proc, v2, v3, v4);
   return Snull;
 }
 
