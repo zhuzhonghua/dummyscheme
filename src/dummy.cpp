@@ -289,6 +289,11 @@ VarValue Scheme::text_of_quotation(VarValue val)
 
 VarValue Scheme::analyze(VarValue exp)
 {
+  return analyze(exp, CompileEnvValue::create(NULL, NULL));
+}
+
+VarValue Scheme::analyze(VarValue exp, VarValue env)
+{
   if (self_evaluating_p(exp))
   {
     return exp;
@@ -300,40 +305,40 @@ VarValue Scheme::analyze(VarValue exp)
   // variable?
   if (symbolp(exp))
   {
-    return exp;
+    return LexSymbolValue::create(exp, env);
   }
   if (assignmentp(exp))
   {
-    return AssignmentValue::create(exp);
+    return AssignmentValue::create(exp, env);
   }
   if (definep(exp))
   {
-    return DefineValue::create(exp);
+    return DefineValue::create(exp, env);
   }
   if (ifp(exp))
   {
-    return IfValue::create(exp);
+    return IfValue::create(exp, env);
   }
   if (lambdap(exp))
   {
-    return ProcedureValue::create(exp);
+    return ProcedureValue::create(exp, env);
   }
   if (beginp(exp))
   {
-    return analyze_sequence(begin_actions(exp));
+    return analyze_sequence(begin_actions(exp), env);
   }
   if (condp(exp))
   {
-    return analyze(cond_to_if(exp));
+    return analyze(cond_to_if(exp), env);
   }
   if (applicationp(exp))
   {
-    return ApplicationValue::create(exp);
+    return ApplicationValue::create(exp, env);
   }
 
   Error("unknown expression type: ANALYZE %s", ValueCStr(exp));
 
-  return NULL;
+  return Snull;
 }
 
 VarValue Scheme::definep(VarValue val)
@@ -354,22 +359,6 @@ VarValue Scheme::ifp(VarValue exp)
 VarValue Scheme::lambdap(VarValue exp)
 {
   return tagged_list_p(exp, Lambda);
-}
-
-VarValue Scheme::analyze_sequence(VarValue exps)
-{
-  VarValue res = Snull;
-  for (; !Snullp(exps); exps = Scdr(exps))
-  {
-    if (Spairp(exps))
-      res = Scons(analyze(Scar(exps)), res);
-    else
-    {
-      res = Scons(analyze(exps), res);
-      break;
-    }
-  }
-  return Sreverse(res);
 }
 
 VarValue Scheme::make_procedure(VarValue parameters, VarValue body, VarValue env)
@@ -524,38 +513,25 @@ bool Scheme::isPrimProc(VarValue exp)
   return primProcs.find(exp) != primProcs.end();
 }
 
-VarValue Scheme::execute_application(VarValue proc, VarValue args)
+VarValue Scheme::execute_prim(VarValue proc, VarValue args)
 {
   ProcMapItr itr = primProcs.find(proc);
-  if (itr != primProcs.end())
-  {
-    PrimProc prim = itr->second;
-    switch(prim.argNum){
-    case 0:
-      return prim.eval();
-    case 1:
-      return prim.eval(args);
-    case 2:
-      return prim.eval(Scar(args), Scadr(args));
-    case 3:
-      return prim.eval(Scar(args), Scadr(args), Scaddr(args));
-    case 4:
-      return prim.eval(Scar(args), Scadr(args), Scaddr(args), Scadddr(args));
-    default:
-      Error("unkonwn argnum ", prim.argNum, ValueCStr(proc));
-    }
-  }
-  else if (compound_procedure_p(proc))
-  {
-    VarValue body = procedure_body(proc);
-    return body->eval(extend_env(procedure_parameters(proc),
-                                 args,
-                                 procedure_env(proc)));
-  }
-  else
-  {
-    Error("Unknown procedure type: execute-application", ValueCStr(proc));
-    return NULL;
+  // On purpose
+  PrimProc prim = itr->second;
+  switch(prim.argNum){
+  case 0:
+    return prim.eval();
+  case 1:
+    return prim.eval(args);
+  case 2:
+    return prim.eval(Scar(args), Scadr(args));
+  case 3:
+    return prim.eval(Scar(args), Scadr(args), Scaddr(args));
+  case 4:
+    return prim.eval(Scar(args), Scadr(args), Scaddr(args), Scadddr(args));
+  default:
+    Error("unkonwn argnum ", prim.argNum, ValueCStr(proc));
+    return Snull;
   }
 }
 
@@ -612,8 +588,14 @@ do{                                                         \
       break;                                                \
     }                                                       \
   }                                                         \
-  return reverse(res);                                      \
+  return Sreverse(res);                                     \
  }while(0)
+
+VarValue Scheme::analyze_sequence(VarValue exps, VarValue env)
+{
+  MAP_CALL_PROC(exps, Scheme::analyze, env);
+  return Snull;
+}
 
 VarValue Scheme::map_proc(VarValue exps, PrimProc2 proc, VarValue v2)
 {

@@ -10,10 +10,12 @@ protected:
 public:
   virtual String getSymbol() { throw "not a symbol"; return ""; }
   virtual int getNum() { throw "not a number"; return 0; }
-  virtual VarValue getEnvSym(VarValue symbol) { throw "not a env, cant get"; return NULL; }
-	virtual VarValue findEnv(VarValue symbol) { throw "not a env, cant find"; return NULL; }
+  virtual VarValue getEnvSym(VarValue symbol, int lexAddr) { throw "not a env, cant getlexsym"; return NULL; }
+
+	virtual VarValue findEnv(VarValue symbol, int lexAddr) { throw "not a env, cant find lex addr "; return NULL; }
 	virtual VarValue setEnvSym(VarValue symbol, VarValue value) { throw "not a env, cant set"; return NULL; }
 
+  virtual int getSymLexAddr(VarValue symbol) { throw "not a env, cant getsymlexaddr"; return NULL; }
   virtual operator bool() const { return true; }
 public:
   virtual String toString() { return ""; }
@@ -105,7 +107,6 @@ class SymbolValue : public Value {
 public:
   static SymbolValue* create(const String &val);
 
-  virtual VarValue eval(VarValue env);
 	virtual String getSymbol() { return symbol; }
 	virtual String toString() {
     return symbol;
@@ -113,6 +114,21 @@ public:
 protected:
   SymbolValue(const String &value) { symbol = value; }
 	String symbol;
+};
+
+/*
+	symbol value
+ */
+class LexSymbolValue : public Value {
+public:
+  static LexSymbolValue* create(VarValue value, VarValue env);
+
+	virtual String toString();
+  virtual VarValue eval(VarValue env);
+protected:
+  LexSymbolValue(VarValue value, int addr);
+  VarValue variable;
+  int lexAddr;
 };
 
 class PairValue : public Value {
@@ -139,10 +155,10 @@ protected:
 
 class AssignmentValue: public Value {
 public:
-  static AssignmentValue* create(VarValue exp);
+  static AssignmentValue* create(VarValue exp, VarValue env);
 
-  VarValue eval(VarValue env);
-  String toString() {
+  virtual VarValue eval(VarValue env);
+  virtual String toString() {
     StringStream out;
     out << "(set! " << var << " " << vproc->toString() << ")";
 
@@ -153,14 +169,15 @@ public:
     RefGC::trace(vproc);
   }
 protected:
-  AssignmentValue(VarValue v, VarValue vp) { var = v; vproc = vp; }
+  AssignmentValue(VarValue v, VarValue vp, int addr) { lexAddr = addr; var = v; vproc = vp; }
   MemberValue var;
   MemberValue vproc;
+  int lexAddr;
 };
 
 class DefineValue: public AssignmentValue {
 public:
-  static DefineValue* create(VarValue exp);
+  static DefineValue* create(VarValue exp, VarValue env);
   VarValue eval(VarValue env);
   String toString() {
     StringStream out;
@@ -171,12 +188,13 @@ protected:
   static VarValue def_variable(VarValue val);
   static VarValue def_value(VarValue val);
 protected:
-  DefineValue(VarValue v, VarValue vp): AssignmentValue(v, vp) { }
+  DefineValue(VarValue v, VarValue vp, int addr)
+    :AssignmentValue(v, vp, addr) { }
 };
 
 class IfValue: public Value {
 public:
-  static IfValue* create(VarValue exp);
+  static IfValue* create(VarValue exp, VarValue env);
   static IfValue* create(VarValue p, VarValue c, VarValue a);
 
   VarValue eval(VarValue env);
@@ -208,7 +226,7 @@ protected:
 
 class ProcedureValue: public Value {
 public:
-  static ProcedureValue* create(VarValue exp);
+  static ProcedureValue* create(VarValue exp, VarValue env);
 
   VarValue eval(VarValue env);
   String toString() {
@@ -232,7 +250,7 @@ protected:
 
 class ApplicationValue: public Value {
 public:
-  static ApplicationValue* create(VarValue exp);
+  static ApplicationValue* create(VarValue exp, VarValue env);
 
   VarValue eval(VarValue env);
   String toString() {
@@ -246,31 +264,67 @@ public:
     RefGC::trace(aprocs);
   }
 protected:
-  static VarValue operatr(VarValue exp);
-  static VarValue operands(VarValue exp);
-protected:
   ApplicationValue(VarValue f, VarValue a) { fproc = f; aprocs = a; }
   MemberValue fproc;
   MemberValue aprocs;
 };
 
 class EnvValue : public Value {
+protected:
+  typedef std::map<MemberValue, MemberValue> VarMap;
+  typedef VarMap::iterator VarMapItr;
 public:
   static EnvValue* create(VarValue o);
 
-  void trace();
+  virtual void trace() {
+    for (VarMapItr itr = vars.begin(); itr != vars.end(); itr++)
+    {
+      VarValue key = itr->first;
+      VarValue value = itr->second;
+      RefGC::trace(key);
+      RefGC::trace(value);
+    }
+
+    RefGC::trace(outer);
+  }
 
   String toString() { return "<env>"; }
-	VarValue getEnvSym(VarValue symbol);
-	VarValue findEnv(VarValue symbol);
 	VarValue setEnvSym(VarValue symbol, VarValue value);
-protected:
-	EnvValue(VarValue o) { outer = o; }
 
-  typedef std::map<MemberValue, MemberValue> VarMap;
-  typedef VarMap::iterator VarMapItr;
+  virtual VarValue getEnvSym(VarValue symbol, int lexAddr);
+  virtual VarValue findEnv(VarValue symbol, int lexAddr);
+protected:
+  EnvValue* findEnvLex(VarValue symbol, int lexAddr);
+protected:
+	EnvValue(VarValue o);
 
 	VarMap vars;
+	MemberValue outer;
+};
+
+class CompileEnvValue : public Value {
+protected:
+  typedef std::set<MemberValue> VarSet;
+  typedef VarSet::iterator VarSetItr;
+public:
+  static CompileEnvValue* create(VarValue o, VarValue variables);
+
+  virtual void trace() {
+    for (VarSetItr itr = vars.begin(); itr != vars.end(); itr++) {
+      VarValue var = *itr;
+      RefGC::trace(var);
+    }
+
+    RefGC::trace(outer);
+  }
+
+  String toString() { return "<compile-env>"; }
+protected:
+  virtual int getSymLexAddr(VarValue symbol);
+protected:
+	CompileEnvValue(VarValue o, VarValue v);
+
+	VarSet vars;
 	MemberValue outer;
 };
 

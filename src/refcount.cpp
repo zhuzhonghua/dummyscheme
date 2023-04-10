@@ -10,6 +10,12 @@ RefGC* RefGC::inst()
   return instance;
 }
 
+void RefGC::rlzRef(RefCount* ptr)
+{
+  RefGC::inst()->allRef.erase(ptr);
+  delete ptr;
+}
+
 void RefGC::inUse(RefCountP* ptr)
 {
   allInUse.insert(ptr);

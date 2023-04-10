@@ -135,7 +135,7 @@ public:
   static VarValue make_lambda(VarValue parameters, VarValue body);
   static VarValue lambdap(VarValue exp);
 
-  static VarValue analyze_sequence(VarValue exps);
+  static VarValue analyze_sequence(VarValue exps, VarValue env);
 
   static VarValue make_procedure(VarValue parameters, VarValue body, VarValue env);
   static VarValue compound_procedure_p(VarValue exp);
@@ -168,10 +168,11 @@ public:
 
   static VarValue analyze_application(VarValue exp);
   static VarValue applicationp(VarValue exp);
-  static VarValue execute_application(VarValue proc, VarValue args);
+  static VarValue execute_prim(VarValue proc, VarValue args);
 
   static VarValue extend_env(VarValue parameters, VarValue args, VarValue outer);
 public:
+  static VarValue analyze(VarValue exp, VarValue env);
   static VarValue analyze(VarValue exp);
 public:
   static VarValue reverse(VarValue exps);

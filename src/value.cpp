@@ -37,9 +37,31 @@ SymbolValue* SymbolValue::create(const String &val)
   return ret;
 }
 
-VarValue SymbolValue::eval(VarValue env)
+LexSymbolValue::LexSymbolValue(VarValue value, int addr)
 {
-  return env->findEnv(this);
+  variable = value;
+  lexAddr = addr;
+}
+
+String LexSymbolValue::toString()
+{
+  return variable->toString();
+}
+
+LexSymbolValue* LexSymbolValue::create(VarValue variable, VarValue env)
+{
+  int lexAddr = env->getSymLexAddr(variable);
+  if (lexAddr < 0)
+    throw "unbound variable: " + variable->toString();
+
+  LexSymbolValue* ret = new LexSymbolValue(variable, lexAddr);
+  RefGC::newRef(ret);
+  return ret;
+}
+
+VarValue LexSymbolValue::eval(VarValue env)
+{
+  return env->getEnvSym(variable, lexAddr);
 }
 
 PairValue* PairValue::create(VarValue h, VarValue t)
@@ -74,24 +96,29 @@ String PairValue::toString()
 /*
   (set! a 2)
  */
-AssignmentValue* AssignmentValue::create(VarValue exp)
+AssignmentValue* AssignmentValue::create(VarValue exp, VarValue env)
 {
   if (!Snullp(Scdddr(exp)))
     Error("too many args to set! %s", ValueCStr(exp));
 
   VarValue variable = Scadr(exp);
-  VarValue value = Scaddr(exp);
 
-  AssignmentValue* ret = new AssignmentValue(variable, value);
+  int lexAddr = env->getSymLexAddr(variable);
+  if (lexAddr < 0)
+    throw "unbound variable: SET! " + variable->toString();
+
+  VarValue value = Scheme::analyze(Scaddr(exp), env);
+
+  AssignmentValue* ret = new AssignmentValue(variable, value, lexAddr);
   RefGC::newRef(ret);
   return ret;
 }
 
 VarValue AssignmentValue::eval(VarValue env)
 {
-  VarValue resEnv = env->findEnv(var);
-  if (!(resEnv))
-    throw "unbound variable: SET! "+var;
+  VarValue resEnv = env->findEnv(var, lexAddr);
+//  if (!(resEnv))
+//    throw "unbound variable: SET! "+var;
 
   resEnv->setEnvSym(var, vproc->eval(env));
   return var;
@@ -113,16 +140,25 @@ VarValue DefineValue::def_value(VarValue val)
     return Smake_lambda(Scdadr(val), Scddr(val));
 }
 
-DefineValue* DefineValue::create(VarValue exp)
+DefineValue* DefineValue::create(VarValue exp, VarValue env)
 {
-  DefineValue* ret = new DefineValue(def_variable(exp), Scheme::analyze(def_value(exp)));
+  VarValue variable = def_variable(exp);
+  int lexAddr = env->getSymLexAddr(variable);
+
+  VarValue vproc = Scheme::analyze(def_value(exp), env);
+
+  DefineValue* ret = new DefineValue(variable, vproc, lexAddr);
   RefGC::newRef(ret);
   return ret;
 }
 
 VarValue DefineValue::eval(VarValue env)
 {
-  env->setEnvSym(var, vproc->eval(env));
+  VarValue resEnv = env->findEnv(var, lexAddr);
+  if (resEnv)
+    resEnv->setEnvSym(var, vproc->eval(env));
+  else
+    env->setEnvSym(var, vproc->eval(env));
   return var;
 }
 
@@ -133,11 +169,11 @@ IfValue* IfValue::create(VarValue p, VarValue c, VarValue a)
   return ret;
 }
 
-IfValue* IfValue::create(VarValue exp)
+IfValue* IfValue::create(VarValue exp, VarValue env)
 {
-  VarValue p = Scheme::analyze(predicate(exp));
-  VarValue c = Scheme::analyze(consequent(exp));
-  VarValue a = Scheme::analyze(alternative(exp));
+  VarValue p = Scheme::analyze(predicate(exp), env);
+  VarValue c = Scheme::analyze(consequent(exp), env);
+  VarValue a = Scheme::analyze(alternative(exp), env);
 
   return create(p, c, a);
 }
@@ -183,10 +219,12 @@ VarValue ProcedureValue::body(VarValue exp)
   return Scddr(exp);
 }
 
-ProcedureValue* ProcedureValue::create(VarValue exp)
+ProcedureValue* ProcedureValue::create(VarValue exp, VarValue env)
 {
   VarValue vars = parameters(exp);
-  VarValue bproc = Scheme::analyze_sequence(body(exp));
+  env = CompileEnvValue::create(env, vars);
+
+  VarValue bproc = Scheme::analyze_sequence(body(exp), env);
 
   ProcedureValue* ret = new ProcedureValue(vars, bproc);
   RefGC::newRef(ret);
@@ -198,20 +236,13 @@ VarValue ProcedureValue::eval(VarValue env)
   return Scheme::make_procedure(vars, bproc, env);
 }
 
-VarValue ApplicationValue::operatr(VarValue exp)
+ApplicationValue* ApplicationValue::create(VarValue exp, VarValue env)
 {
-  return Scar(exp);
-}
+  VarValue operatr = Scar(exp);
+  VarValue operands = Scdr(exp);
 
-VarValue ApplicationValue::operands(VarValue exp)
-{
-  return Scdr(exp);
-}
-
-ApplicationValue* ApplicationValue::create(VarValue exp)
-{
-  VarValue fproc = Scheme::analyze(operatr(exp));
-  VarValue aprocs = Scheme::map_proc(operands(exp), Scheme::analyze);
+  VarValue fproc = Scheme::analyze(operatr, env);
+  VarValue aprocs = Scheme::map_proc(operands, Scheme::analyze, env);
 
   ApplicationValue* ret = new ApplicationValue(fproc, aprocs);
   RefGC::newRef(ret);
@@ -221,13 +252,36 @@ ApplicationValue* ApplicationValue::create(VarValue exp)
 VarValue ApplicationValue::eval(VarValue env)
 {
   VarValue fRes = fproc;
-  if (!Scheme::isPrimProc(fproc))
+  bool isPrim = Scheme::isPrimProc(fproc);
+  if (!isPrim)
   {
     fRes = fproc->eval(env);
   }
 
-  return Scheme::execute_application(fRes,
-                                     Scheme::map_proc(aprocs, Scheme::eval, env));
+  VarValue args = Scheme::map_proc(aprocs, Scheme::eval, env);
+  if (isPrim)
+  {
+    return Scheme::execute_prim(fRes, args);
+  }
+  else if (Scheme::compound_procedure_p(fproc))
+  {
+    VarValue body = Scheme::procedure_body(fproc);
+    VarValue parameters = Scheme::procedure_parameters(fproc);
+    VarValue childEnv = Scheme::extend_env(parameters,
+                                           args,
+                                           Scheme::procedure_env(fproc));
+    return body->eval(childEnv);
+  }
+  else
+  {
+    Error("Unknown procedure type: execute-application", ValueCStr(fproc));
+    return NULL;
+  }
+}
+
+EnvValue::EnvValue(VarValue o)
+  :outer(o)
+{
 }
 
 EnvValue* EnvValue::create(VarValue o)
@@ -237,52 +291,73 @@ EnvValue* EnvValue::create(VarValue o)
   return ret;
 }
 
-void EnvValue::trace()
+VarValue EnvValue::getEnvSym(VarValue symbol, int lexAddr)
 {
-  for (VarMapItr itr = vars.begin(); itr != vars.end(); itr++)
-  {
-    VarValue key = itr->first;
-    VarValue value = itr->second;
-    RefGC::trace(key);
-    RefGC::trace(value);
+  EnvValue* env = findEnvLex(symbol, lexAddr);
+  VarMapItr it = env->vars.find(symbol);
+  return it->second;
+}
+
+EnvValue* EnvValue::findEnvLex(VarValue symbol, int lexAddr)
+{
+  if (lexAddr < 0)
+    return NULL;
+
+  // TODO: check null
+  EnvValue* env = this;
+  while (lexAddr-- > 0) {
+    env = dynamic_cast<EnvValue*>(env->outer.ptr());
   }
 
-  RefGC::trace(outer);
+  return env;
 }
 
-VarValue EnvValue::getEnvSym(VarValue symbol)
+VarValue EnvValue::findEnv(VarValue symbol, int lexAddr)
 {
-	for (EnvValue* env = this; env; env = dynamic_cast<EnvValue*>(env->outer.ptr()))
-  {
-		VarMapItr it = env->vars.find(symbol);
-		if (it != env->vars.end())
-    {
-			return it->second;
-		}
-	}
-
-	Error("didn't find value of symobl %s", ValueCStr(symbol));
-
-	return NULL;
-}
-
-VarValue EnvValue::findEnv(VarValue symbol)
-{
-	for (EnvValue* env = this; env; env = dynamic_cast<EnvValue*>(env->outer.ptr()))
-  {
-		if (env->vars.find(symbol) != env->vars.end())
-    {
-			return env;
-		}
-	}
-
-	Error("didn't find env of symobl %s", ValueCStr(symbol));
-
-	return NULL;
+  return findEnvLex(symbol, lexAddr);
 }
 
 VarValue EnvValue::setEnvSym(VarValue symbol, VarValue value)
 {
 	vars[symbol] = value;
 	return value;
+}
+
+CompileEnvValue* CompileEnvValue::create(VarValue o, VarValue variables)
+{
+  CompileEnvValue* ret = new CompileEnvValue(o, variables);
+  RefGC::newRef(ret);
+  return ret;
+}
+
+int CompileEnvValue::getSymLexAddr(VarValue symbol)
+{
+  int n = 0;
+  CompileEnvValue* env = this;
+  for (;env;n++, env = dynamic_cast<CompileEnvValue*>(env->outer.ptr())) {
+    VarSetItr it = env->vars.find(symbol);
+    if (it != env->vars.end()) return n;
+  }
+
+  if (env)
+    return n;
+  else
+    return -1;
+}
+
+CompileEnvValue::CompileEnvValue(VarValue o, VarValue variables)
+  :outer(o)
+{
+  if (!variables)
+    return;
+
+  for (; !Snullp(variables); variables = Scdr(variables))
+  {
+    if (Spairp(variables))
+      vars.insert(Scar(variables));
+    else{
+      vars.insert(variables);
+      break;
+    }
+  }
 }

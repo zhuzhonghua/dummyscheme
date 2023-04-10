@@ -14,10 +14,7 @@ public:
     RefGC::inst()->allRef.insert(ptr);
   }
 
-  static void rlzRef(RefCount* ptr) {
-    RefGC::inst()->allRef.erase(ptr);
-    delete ptr;
-  }
+  static void rlzRef(RefCount* ptr);
 
   void inUse(RefCountP* ptr);
   void rmUse(RefCountP* ptr);
