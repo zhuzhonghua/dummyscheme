@@ -45,6 +45,11 @@ struct RegPrimProc{
   PrimProc proc;
 };
 
+enum LexAddr{
+  LEX_ADDR_PRIM = -2,
+  LEX_ADDR_INVALID = -1
+};
+
 class Scheme {
 protected:
   typedef std::map<String, VarValue> SymbolMap;

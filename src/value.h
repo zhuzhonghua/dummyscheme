@@ -121,7 +121,7 @@ protected:
  */
 class LexSymbolValue : public Value {
 public:
-  static LexSymbolValue* create(VarValue value, VarValue env);
+  static VarValue create(VarValue value, VarValue env);
 
 	virtual String toString();
   virtual VarValue eval(VarValue env);

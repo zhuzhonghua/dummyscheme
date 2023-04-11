@@ -48,11 +48,16 @@ String LexSymbolValue::toString()
   return variable->toString();
 }
 
-LexSymbolValue* LexSymbolValue::create(VarValue variable, VarValue env)
+VarValue LexSymbolValue::create(VarValue variable, VarValue env)
 {
   int lexAddr = env->getSymLexAddr(variable);
   if (lexAddr < 0)
+  {
+    if (lexAddr == LEX_ADDR_PRIM)
+      return variable;
+
     throw "unbound variable: " + variable->toString();
+  }
 
   LexSymbolValue* ret = new LexSymbolValue(variable, lexAddr);
   RefGC::newRef(ret);
@@ -330,6 +335,8 @@ EnvValue* EnvValue::findEnvLex(VarValue symbol, int lexAddr)
   // TODO: check null
   EnvValue* env = this;
   while (lexAddr-- > 0) {
+    if (!env) throw "internal error in finding lexcial symbol address";
+
     env = dynamic_cast<EnvValue*>(env->outer.ptr());
   }
 
@@ -360,5 +367,10 @@ int EnvValue::getSymLexAddr(VarValue symbol)
   if (env)
     return n;
   else
-    return -1;
+  {
+    if (Scheme::primp(symbol))
+      return LEX_ADDR_PRIM;
+    else
+      return LEX_ADDR_INVALID;
+  }
 }
