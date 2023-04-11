@@ -16,7 +16,7 @@ void eval(String &input, VarValue env)
   VarValue exp;
   while ((exp = reader.readOne()).ptr())
   {
-    exp = Scheme::analyze(exp);
+    exp = Scheme::analyze(exp, env);
     std::cout << ValueCStr(exp->eval(env)) << std::endl;
   }
 }

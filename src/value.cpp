@@ -222,7 +222,7 @@ VarValue ProcedureValue::body(VarValue exp)
 ProcedureValue* ProcedureValue::create(VarValue exp, VarValue env)
 {
   VarValue vars = parameters(exp);
-  env = CompileEnvValue::create(env, vars);
+  env = EnvValue::create(env, vars);
 
   VarValue bproc = Scheme::analyze_sequence(body(exp), env);
 
@@ -252,7 +252,7 @@ ApplicationValue* ApplicationValue::create(VarValue exp, VarValue env)
 VarValue ApplicationValue::eval(VarValue env)
 {
   VarValue fRes = fproc;
-  bool isPrim = Scheme::isPrimProc(fproc);
+  bool isPrim = Scheme::primp(fproc);
   if (!isPrim)
   {
     fRes = fproc->eval(env);
@@ -284,9 +284,33 @@ EnvValue::EnvValue(VarValue o)
 {
 }
 
+EnvValue::EnvValue(VarValue o, VarValue variables)
+  :EnvValue(o)
+{
+  if (!variables)
+    return;
+
+  for (; !Snullp(variables); variables = Scdr(variables))
+  {
+    if (Spairp(variables))
+      EnvValue::setEnvSym(Scar(variables), Snull);
+    else
+    {
+      EnvValue::setEnvSym(variables, Snull);
+      break;
+    }
+  }
+}
+
+
 EnvValue* EnvValue::create(VarValue o)
 {
-  EnvValue* ret = new EnvValue(o);
+  return create(0, Snull);
+}
+
+EnvValue* EnvValue::create(VarValue o, VarValue variables)
+{
+  EnvValue* ret = new EnvValue(o, variables);
   RefGC::newRef(ret);
   return ret;
 }
@@ -323,41 +347,18 @@ VarValue EnvValue::setEnvSym(VarValue symbol, VarValue value)
 	return value;
 }
 
-CompileEnvValue* CompileEnvValue::create(VarValue o, VarValue variables)
-{
-  CompileEnvValue* ret = new CompileEnvValue(o, variables);
-  RefGC::newRef(ret);
-  return ret;
-}
-
-int CompileEnvValue::getSymLexAddr(VarValue symbol)
+int EnvValue::getSymLexAddr(VarValue symbol)
 {
   int n = 0;
-  CompileEnvValue* env = this;
-  for (;env;n++, env = dynamic_cast<CompileEnvValue*>(env->outer.ptr())) {
-    VarSetItr it = env->vars.find(symbol);
-    if (it != env->vars.end()) return n;
+  EnvValue* env = this;
+  for (; env; n++, env = dynamic_cast<EnvValue*>(env->outer.ptr()))
+  {
+    if (env->vars.find(symbol) != env->vars.end())
+      return n;
   }
 
   if (env)
     return n;
   else
     return -1;
-}
-
-CompileEnvValue::CompileEnvValue(VarValue o, VarValue variables)
-  :outer(o)
-{
-  if (!variables)
-    return;
-
-  for (; !Snullp(variables); variables = Scdr(variables))
-  {
-    if (Spairp(variables))
-      vars.insert(Scar(variables));
-    else{
-      vars.insert(variables);
-      break;
-    }
-  }
 }

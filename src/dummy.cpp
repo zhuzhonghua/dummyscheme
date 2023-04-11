@@ -211,6 +211,7 @@ VarValue Scheme::listn(int num, ...)
 
 VarValue Scheme::nullp(VarValue exp)
 {
+//  return exp == Null || exp.ptr() == NULL ? True : False;
   return exp == Null ? True : False;
 }
 
@@ -285,11 +286,6 @@ VarValue Scheme::quotedp(VarValue val)
 VarValue Scheme::text_of_quotation(VarValue val)
 {
   return cadr(val);
-}
-
-VarValue Scheme::analyze(VarValue exp)
-{
-  return analyze(exp, CompileEnvValue::create(NULL, NULL));
 }
 
 VarValue Scheme::analyze(VarValue exp, VarValue env)
@@ -508,7 +504,7 @@ VarValue Scheme::applicationp(VarValue exp)
   return pairp(exp);
 }
 
-bool Scheme::isPrimProc(VarValue exp)
+bool Scheme::primp(VarValue exp)
 {
   return primProcs.find(exp) != primProcs.end();
 }

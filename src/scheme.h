@@ -6,25 +6,25 @@
 
 namespace Dummy{
 
-#define Svoid (Scheme::Void);
-#define Snil (Scheme::Nil);
-#define Snull (Scheme::Null);
-#define Strue (Scheme::True);
-#define Sfalse (Scheme::False);
+#define Svoid Scheme::Void
+#define Snil Scheme::Nil
+#define Snull Scheme::Null
+#define Strue Scheme::True
+#define Sfalse Scheme::False
 
-#define Squote Scheme::Quote;
-#define Sunquote Scheme::UnQuote;
-#define Sunquotesplicing Scheme::UnQuoteSplicing;
-#define Squasiquote Scheme::QuasiQuote;
+//#define Sset_ Scheme::SetMark
+//#define Sdefine Scheme::Define
+//#define Slambda Scheme::Lambda
+//#define Sif Scheme::If
+//#define Sprocedure Scheme::Procedure
+//#define Sbegin Scheme::Begin
+//#define Scond Scheme::Cond
+//#define Selse Scheme::Else
 
-#define Sset_ Scheme::SetMark;
-#define Sdefine Scheme::Define;
-#define Slambda Scheme::Lambda;
-#define Sif Scheme::If;
-#define Sprocedure Scheme::Procedure;
-#define Sbegin Scheme::Begin;
-#define Scond Scheme::Cond;
-#define Selse Scheme::Else;
+#define Squote Scheme::quote
+#define Sunquote Scheme::unquote
+#define Sunquotesplicing Scheme::unquotesplicing
+#define Squasiquote Scheme::quasiquote
 
 #define Spairp Scheme::pairp
 #define Snullp Scheme::nullp

@@ -275,10 +275,10 @@ protected:
   typedef VarMap::iterator VarMapItr;
 public:
   static EnvValue* create(VarValue o);
+  static EnvValue* create(VarValue o, VarValue variables);
 
   virtual void trace() {
-    for (VarMapItr itr = vars.begin(); itr != vars.end(); itr++)
-    {
+    for (VarMapItr itr = vars.begin(); itr != vars.end(); itr++) {
       VarValue key = itr->first;
       VarValue value = itr->second;
       RefGC::trace(key);
@@ -288,43 +288,19 @@ public:
     RefGC::trace(outer);
   }
 
-  String toString() { return "<env>"; }
-	VarValue setEnvSym(VarValue symbol, VarValue value);
-
+  virtual String toString() { return "<env>"; }
+public:
+	virtual VarValue setEnvSym(VarValue symbol, VarValue value);
   virtual VarValue getEnvSym(VarValue symbol, int lexAddr);
   virtual VarValue findEnv(VarValue symbol, int lexAddr);
+  virtual int getSymLexAddr(VarValue symbol);
 protected:
   EnvValue* findEnvLex(VarValue symbol, int lexAddr);
 protected:
 	EnvValue(VarValue o);
+	EnvValue(VarValue o, VarValue variables);
 
 	VarMap vars;
-	MemberValue outer;
-};
-
-class CompileEnvValue : public Value {
-protected:
-  typedef std::set<MemberValue> VarSet;
-  typedef VarSet::iterator VarSetItr;
-public:
-  static CompileEnvValue* create(VarValue o, VarValue variables);
-
-  virtual void trace() {
-    for (VarSetItr itr = vars.begin(); itr != vars.end(); itr++) {
-      VarValue var = *itr;
-      RefGC::trace(var);
-    }
-
-    RefGC::trace(outer);
-  }
-
-  String toString() { return "<compile-env>"; }
-protected:
-  virtual int getSymLexAddr(VarValue symbol);
-protected:
-	CompileEnvValue(VarValue o, VarValue v);
-
-	VarSet vars;
 	MemberValue outer;
 };
 

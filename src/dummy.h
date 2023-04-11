@@ -60,7 +60,7 @@ protected:
   static void regPrimProc(const String& name, PrimProc proc);
   static void initIntern();
 public:
-  static bool isPrimProc(VarValue exp);
+  static bool primp(VarValue exp);
   static void init();
 public:
   static VarValue Void;
@@ -173,7 +173,6 @@ public:
   static VarValue extend_env(VarValue parameters, VarValue args, VarValue outer);
 public:
   static VarValue analyze(VarValue exp, VarValue env);
-  static VarValue analyze(VarValue exp);
 public:
   static VarValue reverse(VarValue exps);
   static VarValue map_proc(VarValue exps, PrimProc1 proc);
