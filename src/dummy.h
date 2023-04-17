@@ -17,6 +17,8 @@ typedef VarValue (*PrimProc4)(VarValue arg1, VarValue arg2, VarValue arg3, VarVa
 
 class PrimProc{
 public:
+  PrimProc(int d): argNum(-1) { }
+  PrimProc(): argNum(-1) { }
   PrimProc(PrimProc0 p): argNum(0) { proc.proc0 = p; }
   PrimProc(PrimProc1 p): argNum(1) { proc.proc1 = p; }
   PrimProc(PrimProc2 p): argNum(2) { proc.proc2 = p; }
@@ -45,27 +47,21 @@ struct RegPrimProc{
   PrimProc proc;
 };
 
-enum LexAddr{
-  LEX_ADDR_PRIM = -2,
-  LEX_ADDR_INVALID = -1
-};
-
 class Scheme {
-protected:
+public:
   typedef std::map<String, VarValue> SymbolMap;
   typedef SymbolMap::iterator SymbolMapItr;
   static SymbolMap constSyms;
+  static void initIntern();
 
-  typedef std::map<VarValue, PrimProc> ProcMap;
-  typedef ProcMap::iterator ProcMapItr;
-  static ProcMap primProcs;
+  static VarValue globalEnv;
 
   static void initPrimProc();
   static void regPrimProcs(RegPrimProc* procs, int num);
   static void regPrimProc(const String& name, PrimProc proc);
-  static void initIntern();
-public:
-  static bool primp(VarValue exp);
+  static bool primitivep(VarValue exp);
+  static VarValue getPrimProc(VarValue sym);
+  
   static void init();
 public:
   static VarValue Void;

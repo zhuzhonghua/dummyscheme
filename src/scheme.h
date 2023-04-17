@@ -12,15 +12,6 @@ namespace Dummy{
 #define Strue Scheme::True
 #define Sfalse Scheme::False
 
-//#define Sset_ Scheme::SetMark
-//#define Sdefine Scheme::Define
-//#define Slambda Scheme::Lambda
-//#define Sif Scheme::If
-//#define Sprocedure Scheme::Procedure
-//#define Sbegin Scheme::Begin
-//#define Scond Scheme::Cond
-//#define Selse Scheme::Else
-
 #define Squote Scheme::quote
 #define Sunquote Scheme::unquote
 #define Sunquotesplicing Scheme::unquotesplicing
@@ -30,6 +21,8 @@ namespace Dummy{
 #define Snullp Scheme::nullp
 #define Struep Scheme::truep
 #define Ssymbolp Scheme::symbolp
+
+#define Sprimitivep Scheme::primitivep
 
 #define Splus Scheme::plus
 #define Scons Scheme::cons

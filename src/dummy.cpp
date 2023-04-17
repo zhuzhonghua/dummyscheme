@@ -21,7 +21,8 @@ VarValue Scheme::Begin;
 VarValue Scheme::Cond;
 VarValue Scheme::Else;
 
-Scheme::ProcMap Scheme::primProcs;
+VarValue Scheme::globalEnv;
+
 Scheme::SymbolMap Scheme::constSyms;
 
 void Scheme::init()
@@ -54,6 +55,8 @@ void Scheme::initIntern()
 
 void Scheme::initPrimProc()
 {
+  globalEnv = EnvValue::create(NULL);
+
   RegPrimProc procs[] = {
     {"+", Splus},
     {"cons", Scons},
@@ -162,7 +165,12 @@ void Scheme::regPrimProcs(RegPrimProc* procs, int num)
 
 void Scheme::regPrimProc(const String& name, PrimProc proc)
 {
-  primProcs.insert(std::make_pair(intern(name), proc));
+  globalEnv->setEnvSym(intern(name), PrimProcValue::create(proc));
+}
+
+VarValue Scheme::getPrimProc(VarValue sym)
+{
+  return globalEnv->getEnvSym(sym);
 }
 
 VarValue Scheme::intern(const String& symbol, VarValue value)
@@ -504,16 +512,14 @@ VarValue Scheme::applicationp(VarValue exp)
   return pairp(exp);
 }
 
-bool Scheme::primp(VarValue exp)
+bool Scheme::primitivep(VarValue exp)
 {
-  return primProcs.find(exp) != primProcs.end();
+  return dynamic_cast<PrimProcValue*>(exp.ptr()) != NULL;
 }
 
 VarValue Scheme::execute_prim(VarValue proc, VarValue args)
 {
-  ProcMapItr itr = primProcs.find(proc);
-  // On purpose
-  PrimProc prim = itr->second;
+  PrimProc prim = proc->getPrimProc();
   switch(prim.argNum){
   case 0:
     return prim.eval();

@@ -8,14 +8,39 @@ class Value : public RefCount {
 protected:
   Value() {}
 public:
-  virtual String getSymbol() { throw "not a symbol"; return ""; }
-  virtual int getNum() { throw "not a number"; return 0; }
-  virtual VarValue getEnvSym(VarValue symbol, int lexAddr) { throw "not a env, cant getlexsym"; return NULL; }
-
-	virtual VarValue findEnv(VarValue symbol, int lexAddr) { throw "not a env, cant find lex addr "; return NULL; }
-	virtual VarValue setEnvSym(VarValue symbol, VarValue value) { throw "not a env, cant set"; return NULL; }
-
-  virtual int getSymLexAddr(VarValue symbol) { throw "not a env, cant getsymlexaddr"; return NULL; }
+  virtual String getSymbol() {
+    Error("not a symbol");
+    return "";
+  }
+  virtual int getNum() {
+    Error("not a number");
+    return 0;
+  }
+  virtual VarValue getEnvSym(VarValue symbol, int lexAddr) {
+    Error("not a env, cant getlexsym");
+    return NULL;
+  }
+  virtual VarValue getEnvSym(VarValue symbol) {
+    Error("not a env, cant getlexsym2");
+    return NULL;
+  }
+	virtual VarValue findEnv(VarValue symbol, int lexAddr, bool f) {
+    Error("not a env, cant find lex addr ");
+    return NULL;
+  }
+	virtual VarValue setEnvSym(VarValue symbol, VarValue value) {
+    Error("not a env, cant set");
+    return NULL;
+  }
+  virtual int getSymLexAddr(VarValue symbol) {
+    Error("not a env, cant getsymlexaddr");
+    return NULL;
+  }
+  virtual PrimProc getPrimProc() {
+    Error("not a prim value");
+    return NULL;
+  }
+public:
   virtual operator bool() const { return true; }
 public:
   virtual String toString() { return ""; }
@@ -274,6 +299,7 @@ protected:
   typedef std::map<MemberValue, MemberValue> VarMap;
   typedef VarMap::iterator VarMapItr;
 public:
+  static EnvValue* create() { return create(NULL); }
   static EnvValue* create(VarValue o);
   static EnvValue* create(VarValue o, VarValue variables);
 
@@ -292,16 +318,31 @@ public:
 public:
 	virtual VarValue setEnvSym(VarValue symbol, VarValue value);
   virtual VarValue getEnvSym(VarValue symbol, int lexAddr);
-  virtual VarValue findEnv(VarValue symbol, int lexAddr);
+  virtual VarValue getEnvSym(VarValue symbol);
+  virtual VarValue findEnv(VarValue symbol, int lexAddr, bool f);
   virtual int getSymLexAddr(VarValue symbol);
 protected:
-  EnvValue* findEnvLex(VarValue symbol, int lexAddr);
+  EnvValue* findEnvLex(VarValue symbol, int& lexAddr);
 protected:
 	EnvValue(VarValue o);
 	EnvValue(VarValue o, VarValue variables);
 
 	VarMap vars;
 	MemberValue outer;
+};
+
+/*
+	primitive value
+ */
+class PrimProcValue : public Value {
+public:
+  static PrimProcValue* create(const PrimProc& prim);
+
+	virtual PrimProc getPrimProc() { return proc; }
+	virtual String toString() { return "<prim-proc>"; }
+protected:
+  PrimProcValue(const PrimProc &prim) { proc = prim; }
+	PrimProc proc;
 };
 
 };

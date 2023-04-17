@@ -52,11 +52,12 @@ VarValue LexSymbolValue::create(VarValue variable, VarValue env)
 {
   int lexAddr = env->getSymLexAddr(variable);
   if (lexAddr < 0)
-  {
-    if (lexAddr == LEX_ADDR_PRIM)
-      return variable;
+    Error("unbound variable: ", ValueCStr(variable));
 
-    throw "unbound variable: " + variable->toString();
+  // primitive optimization
+  if (!env->findEnv(variable, lexAddr+1, false))
+  {
+    return Scheme::getPrimProc(variable);
   }
 
   LexSymbolValue* ret = new LexSymbolValue(variable, lexAddr);
@@ -110,7 +111,7 @@ AssignmentValue* AssignmentValue::create(VarValue exp, VarValue env)
 
   int lexAddr = env->getSymLexAddr(variable);
   if (lexAddr < 0)
-    throw "unbound variable: SET! " + variable->toString();
+    Error("unbound variable: SET! ", ValueCStr(variable));
 
   VarValue value = Scheme::analyze(Scaddr(exp), env);
 
@@ -121,9 +122,7 @@ AssignmentValue* AssignmentValue::create(VarValue exp, VarValue env)
 
 VarValue AssignmentValue::eval(VarValue env)
 {
-  VarValue resEnv = env->findEnv(var, lexAddr);
-//  if (!(resEnv))
-//    throw "unbound variable: SET! "+var;
+  VarValue resEnv = env->findEnv(var, lexAddr, true);
 
   resEnv->setEnvSym(var, vproc->eval(env));
   return var;
@@ -149,6 +148,8 @@ DefineValue* DefineValue::create(VarValue exp, VarValue env)
 {
   VarValue variable = def_variable(exp);
   int lexAddr = env->getSymLexAddr(variable);
+  // 
+  if (lexAddr < 0) lexAddr = 0;
 
   VarValue vproc = Scheme::analyze(def_value(exp), env);
 
@@ -159,7 +160,7 @@ DefineValue* DefineValue::create(VarValue exp, VarValue env)
 
 VarValue DefineValue::eval(VarValue env)
 {
-  VarValue resEnv = env->findEnv(var, lexAddr);
+  VarValue resEnv = env->findEnv(var, lexAddr, true);
   if (resEnv)
     resEnv->setEnvSym(var, vproc->eval(env));
   else
@@ -207,7 +208,7 @@ VarValue IfValue::alternative(VarValue exp)
   if (!(Snullp(tmp)))
   {
     if (!(Snullp(Scdr(tmp))))
-      throw "bad if syntax";
+      Error("bad IF syntax");
     return Scar(tmp);
   }
   else
@@ -257,14 +258,13 @@ ApplicationValue* ApplicationValue::create(VarValue exp, VarValue env)
 VarValue ApplicationValue::eval(VarValue env)
 {
   VarValue fRes = fproc;
-  bool isPrim = Scheme::primp(fproc);
-  if (!isPrim)
+  if (!Sprimitivep(fRes))
   {
-    fRes = fproc->eval(env);
+    fRes = fRes->eval(env);
   }
 
   VarValue args = Scheme::map_proc(aprocs, Scheme::eval, env);
-  if (isPrim)
+  if (Sprimitivep(fRes))
   {
     return Scheme::execute_prim(fRes, args);
   }
@@ -323,11 +323,15 @@ EnvValue* EnvValue::create(VarValue o, VarValue variables)
 VarValue EnvValue::getEnvSym(VarValue symbol, int lexAddr)
 {
   EnvValue* env = findEnvLex(symbol, lexAddr);
-  VarMapItr it = env->vars.find(symbol);
-  return it->second;
+  return env->getEnvSym(symbol);
 }
 
-EnvValue* EnvValue::findEnvLex(VarValue symbol, int lexAddr)
+VarValue EnvValue::getEnvSym(VarValue symbol)
+{
+  return vars.find(symbol)->second;
+}
+
+EnvValue* EnvValue::findEnvLex(VarValue symbol, int& lexAddr)
 {
   if (lexAddr < 0)
     return NULL;
@@ -335,7 +339,8 @@ EnvValue* EnvValue::findEnvLex(VarValue symbol, int lexAddr)
   // TODO: check null
   EnvValue* env = this;
   while (lexAddr-- > 0) {
-    if (!env) throw "internal error in finding lexcial symbol address";
+    if (!env)
+      return NULL;
 
     env = dynamic_cast<EnvValue*>(env->outer.ptr());
   }
@@ -343,9 +348,12 @@ EnvValue* EnvValue::findEnvLex(VarValue symbol, int lexAddr)
   return env;
 }
 
-VarValue EnvValue::findEnv(VarValue symbol, int lexAddr)
+VarValue EnvValue::findEnv(VarValue symbol, int lexAddr, bool f)
 {
-  return findEnvLex(symbol, lexAddr);
+  EnvValue* env = findEnvLex(symbol, lexAddr);
+  if (!env && f)
+    Error("internal error in finding lexcial symbol address");
+  return env;
 }
 
 VarValue EnvValue::setEnvSym(VarValue symbol, VarValue value)
@@ -368,9 +376,13 @@ int EnvValue::getSymLexAddr(VarValue symbol)
     return n;
   else
   {
-    if (Scheme::primp(symbol))
-      return LEX_ADDR_PRIM;
-    else
-      return LEX_ADDR_INVALID;
+    return -1;
   }
+}
+
+PrimProcValue* PrimProcValue::create(const PrimProc& prim)
+{
+  PrimProcValue* ret = new PrimProcValue(prim);
+  RefGC::newRef(ret);
+  return ret;
 }

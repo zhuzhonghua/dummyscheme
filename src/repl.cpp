@@ -10,10 +10,12 @@ int read(String &input)
 		return 0;
 }
 
-void eval(String &input, VarValue env)
+void eval(String &input)
 {
   Reader reader(input);
   VarValue exp;
+  VarValue env(Scheme::globalEnv);
+
   while ((exp = reader.readOne()).ptr())
   {
     exp = Scheme::analyze(exp, env);
@@ -26,7 +28,6 @@ int main()
   std::cout << "dummyscheme v0.0.1" << std::endl;
 
   Scheme::init();
-  VarValue env(EnvValue::create(NULL));
 
 	while(true) {
 		try {
@@ -34,7 +35,7 @@ int main()
 			String input;
 			if(!read(input))
 				break;
-			eval(input, env);
+			eval(input);
 		}	catch(String &exception) {
       std::cout << exception << std::endl;
 		}
