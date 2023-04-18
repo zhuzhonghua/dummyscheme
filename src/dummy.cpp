@@ -60,6 +60,7 @@ void Scheme::initPrimProc()
   RegPrimProc procs[] = {
     {"+", Splus},
     {"cons", Scons},
+    {"length", Slength},
     {"list", Slist},
     {"car", Scar},
     {"cdr", Scdr},
@@ -74,6 +75,14 @@ void Scheme::initPrimProc()
     {"cadddr", Scadddr},
   };
   regPrimProcs(procs, sizeof(procs)/sizeof(RegPrimProc));
+}
+
+VarValue Scheme::length(VarValue arg)
+{
+  int num = 0;
+  for (; !Snullp(arg); num++, arg = arg->cdr());
+
+  return NumValue::create(num);
 }
 
 VarValue Scheme::plus(VarValue arg)

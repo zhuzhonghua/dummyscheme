@@ -24,6 +24,7 @@ namespace Dummy{
 
 #define Sprimitivep Scheme::primitivep
 
+#define Slength Scheme::length
 #define Splus Scheme::plus
 #define Scons Scheme::cons
 #define Slist Scheme::list

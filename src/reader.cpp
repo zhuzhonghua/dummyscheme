@@ -44,10 +44,8 @@ VarValue Reader::readOne()
 
 void Reader::match(int type)
 {
-	if (type == aheadToken)
-		aheadToken = dLex();
-	else
-		Error("unrecognized token type %d with current %d", type, aheadToken);
+  Assert(type == aheadToken, "unrecognized token type %d with current %d", type, aheadToken);
+  aheadToken = dLex();
 }
 
 void Reader::skipBlankComment()

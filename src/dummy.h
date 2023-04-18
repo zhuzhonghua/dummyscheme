@@ -61,7 +61,7 @@ public:
   static void regPrimProc(const String& name, PrimProc proc);
   static bool primitivep(VarValue exp);
   static VarValue getPrimProc(VarValue sym);
-  
+
   static void init();
 public:
   static VarValue Void;
@@ -96,6 +96,7 @@ public:
   static VarValue quotedp(VarValue val);
   static VarValue nullp(VarValue exp);
 
+  static VarValue length(VarValue arg);
   static VarValue plus(VarValue arg);
   static VarValue cons(VarValue arg1, VarValue arg2);
   static VarValue list(VarValue arg);

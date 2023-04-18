@@ -51,8 +51,7 @@ String LexSymbolValue::toString()
 VarValue LexSymbolValue::create(VarValue variable, VarValue env)
 {
   int lexAddr = env->getSymLexAddr(variable);
-  if (lexAddr < 0)
-    Error("unbound variable: ", ValueCStr(variable));
+  Assert(lexAddr >= 0, "unbound variable: %s", ValueCStr(variable));
 
   // primitive optimization
   if (!env->findEnv(variable, lexAddr+1, false))
@@ -104,14 +103,12 @@ String PairValue::toString()
  */
 AssignmentValue* AssignmentValue::create(VarValue exp, VarValue env)
 {
-  if (!Snullp(Scdddr(exp)))
-    Error("too many args to set! %s", ValueCStr(exp));
+  Assert(Snullp(Scdddr(exp)), "too many args to set! %s", ValueCStr(exp));
 
   VarValue variable = Scadr(exp);
 
   int lexAddr = env->getSymLexAddr(variable);
-  if (lexAddr < 0)
-    Error("unbound variable: SET! ", ValueCStr(variable));
+  Assert(lexAddr >= 0, "unbound variable: SET! %s", ValueCStr(variable));
 
   VarValue value = Scheme::analyze(Scaddr(exp), env);
 
@@ -148,7 +145,7 @@ DefineValue* DefineValue::create(VarValue exp, VarValue env)
 {
   VarValue variable = def_variable(exp);
   int lexAddr = env->getSymLexAddr(variable);
-  // 
+  //
   if (lexAddr < 0) lexAddr = 0;
 
   VarValue vproc = Scheme::analyze(def_value(exp), env);
@@ -207,8 +204,7 @@ VarValue IfValue::alternative(VarValue exp)
   VarValue tmp = Scdddr(exp);
   if (!(Snullp(tmp)))
   {
-    if (!(Snullp(Scdr(tmp))))
-      Error("bad IF syntax");
+    Assert(Snullp(Scdr(tmp)), "bad IF syntax");
     return Scar(tmp);
   }
   else
@@ -249,6 +245,16 @@ ApplicationValue* ApplicationValue::create(VarValue exp, VarValue env)
 
   VarValue fproc = Scheme::analyze(operatr, env);
   VarValue aprocs = Scheme::map_proc(operands, Scheme::analyze, env);
+  // pre check
+  if (Sprimitivep(fproc))
+  {
+    PrimProc pp = fproc->getPrimProc();
+    int len = Slength(aprocs)->getNum();
+
+    Assert(fproc->getPrimProc().argNum == Slength(aprocs)->getNum(),
+           "argnum provided not equal op=%s arg=%s",
+           ValueCStr(fproc), ValueCStr(aprocs));
+  }
 
   ApplicationValue* ret = new ApplicationValue(fproc, aprocs);
   RefGC::newRef(ret);
@@ -279,7 +285,7 @@ VarValue ApplicationValue::eval(VarValue env)
   }
   else
   {
-    Error("Unknown procedure type: execute-application", ValueCStr(fproc));
+    Error("Unknown procedure type: execute-application %s", ValueCStr(fproc));
     return NULL;
   }
 }
