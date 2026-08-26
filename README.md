@@ -12,6 +12,7 @@ A portable, embeddable Scheme implementation based on a register-oriented byteco
 - Two-halves incremental generational GC (partially implemented)
 - `syntax-rules` hygienic macros
 - Bignum arithmetic support
+- Line-level debug info with source location tracking
 - Standard library implementation (`cond`, `let`, `let*`, `letrec`, `and`, `or`, `when`, `unless`, `case`, `do`, `map`, `for-each`, etc. in `init.scm`)
 
 ## Conformance
