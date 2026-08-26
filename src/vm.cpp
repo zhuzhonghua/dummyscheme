@@ -1324,7 +1324,9 @@ void VM::printccode(FILE *f, LambdaPtr lambda)
     VEC_FOR(j, &lambda->ks)
     {
       fprintf(f, "[%d,", j);
-      printvalue0(f, lambda->ks.getptr(j), true);
+      OutputPortFileObj ofile;
+      ofile.file = f;
+      printvalue0(&ofile, lambda->ks.getptr(j), true);
       fprintf(f, "] ");
     }
     fprintf(f, "\n");
@@ -1378,7 +1380,9 @@ void VM::printccode0(FILE *f, LambdaPtr lambda, int pc)
       PrintOffset(B);
       fprintf(f, "\t; set %d as ", A);
       fprintf(f, "(list ");
-      printvalue0(f, this->kconst[B], true);
+      OutputPortFileObj ofile;
+      ofile.file = f;
+      printvalue0(&ofile, this->kconst[B], true);
       fprintf(f, " %d)", A);
       break;
     }
@@ -1417,7 +1421,9 @@ void VM::printccode0(FILE *f, LambdaPtr lambda, int pc)
       PrintCode(ASSIGN);
       PrintOffset2(target, from);
       fprintf(f, "\t; set %d as ", target);
-      printvalue0(f, lambda->getk(from), true);
+      OutputPortFileObj ofile;
+      ofile.file = f;
+      printvalue0(&ofile, lambda->getk(from), true);
       break;
     }
     case OP_TAILCALLAPP: {
@@ -1546,10 +1552,10 @@ void VM::printframe()
 }
 
 struct CallAppState {
-  CallAppState(): callcc(false), callofile(false), callifile(false), fromapply(false) {}
+  CallAppState(): callcc(false), callo(false), calli(false), fromapply(false) {}
   bool callcc;
-  bool callofile;
-  bool callifile;
+  bool callo;
+  bool calli;
   bool fromapply;
 };
 
@@ -1756,7 +1762,7 @@ static void callwithinputfile(VM* vm, CallFrame* frm, ValueT* base, int* olen, C
   setiport(stkvt(1), iport = Sr0(vm, InputPortObj));
   iport->file = fhandle;
   iport->fname = fn;
-  callstate->callifile = true;
+  callstate->calli = true;
   *olen = 1;
 }
 
@@ -1776,11 +1782,48 @@ static void callwithoutputfile(VM* vm, CallFrame* frm, ValueT* base, int* olen, 
     throw "Error: failed ";
   }
   *stkvt(0) = proc;
-  OutputPortObj* oport = NULL;
-  setoport(stkvt(1), oport = Sr0(vm, OutputPortObj));
+  OutputPortFileObj* oport = NULL;
+  setoport(stkvt(1), oport = Sr0(vm, OutputPortFileObj));
   oport->file = fhandle;
   oport->fname = fn;
-  callstate->callofile = true;
+  callstate->callo= true;
+  *olen = 1;
+}
+
+static void callwithoutputstr(VM* vm, CallFrame* frm, ValueT* base, int* olen, CallAppState* callstate)
+{
+  int len = *olen;
+  const static char* METHOD = "call-with-output-string";
+  Stack* stk = Stk(vm);
+  ValueT* cw = stkvt(1);
+  ValueT* proc = NULL;
+  if (callstate->fromapply)
+  {
+    AssertVT(vm, ispair(cw), cw, "%s: internal error in apply", METHOD);
+    proc = Scar(cw);
+    AssertVT(vm, isnull(Scdr(cw)), cw, "%s: two much arguments", METHOD);
+    callstate->fromapply = false;
+  }
+  else
+  {
+    Assert(vm, len==1, "%s: needs 1 arguments, not %d", METHOD, len);
+    proc = stkvt(1);
+  }
+  if (isnativeproc(proc))
+  {
+    NativeProcObj* ccproc = nativeprocref(proc);
+    Assert(vm, ccproc->argnum == 1 || (ccproc->argnum == 2 && ccproc->argrest),
+           "%s: closure object parameter wrong", METHOD);
+  }
+  else if (isclosure(proc))
+  {
+    ClosurePtr ccc = closureref(proc);
+    Assert(vm, ccc->lambda->argnum == 1 || (ccc->lambda->argnum == 2 && ccc->lambda->argrest),
+           "%s: closure object parameter wrong", METHOD);
+  }
+  *stkvt(0) = proc;
+  setoport(stkvt(1), Sr1(vm, OutputPortStrObj, vm));
+  callstate->callo= true;
   *olen = 1;
 }
 
@@ -1789,7 +1832,7 @@ static CallFrame* ctorclosurefrm(VM* vm, Instruction i, CallFrame* frm, ValueT* 
   Stack* stk = Stk(vm);
   ClosurePtr newcall = closureref(base);
   ensurearity(vm, base, len, newcall->lambda->argnum, newcall->lambda->argrest, "", callstate->fromapply);
-  if (GET_OP(i) == OP_CALLAPP || callstate->callcc || callstate->callifile || callstate->callofile)
+  if (GET_OP(i) == OP_CALLAPP || callstate->callcc || callstate->calli || callstate->callo)
   {
     frm = stk->newfrm(frm, base, newcall->lambda->argnum, newcall->lambda->top);
     frm->start = base;
@@ -1816,12 +1859,12 @@ static CallFrame* ctorclosurefrm(VM* vm, Instruction i, CallFrame* frm, ValueT* 
 
 static void checkcalliofile(VM* vm, CallFrame* frm, ValueT* val, CallAppState* callstate)
 {
-  if (callstate->callifile)
+  if (callstate->calli)
   {
     OuterVal* ov = frm->seg->findouterval(vm, val);
     ov->unwind = &closeiport;
   }
-  else if (callstate->callofile)
+  else if (callstate->callo)
   {
     OuterVal* ov = frm->seg->findouterval(vm, val);
     ov->unwind = &closeoport;
@@ -2016,6 +2059,10 @@ void VM::execute(CallFrame* frm)
           callwithoutputfile(this, frm, proc, &len, &callstate);
           goto recallapp;
         }
+        case NATIVE_COMPLEX_CALL_WITH_OUT_STR: {
+          callwithoutputstr(this, frm, proc, &len, &callstate);
+          goto recallapp;
+        }
         default:
           Error(this, "not supported complex native proc %d yet\n", nproc->complexid);
           break;
@@ -2025,8 +2072,8 @@ void VM::execute(CallFrame* frm)
       {
         ensurearity(this, proc, len, nproc->argnum, nproc->argrest, Ssstr(nproc->var), callstate.fromapply);
         *proc = scmcallcproc(this, nproc, proc+1);
-        if (callstate.callifile) closeiport(this, frm, proc+1);
-        if (callstate.callofile) closeoport(this, frm, proc+1);
+        if (callstate.calli) closeiport(this, frm, proc+1);
+        if (callstate.callo) closeoport(this, frm, proc+1);
         if (icode == OP_CALLAPP)
           break;
       }
@@ -2157,7 +2204,9 @@ static void constvalinit(VM* vm)
 void VM::init()
 {
   iport = Sr0(this, InputPortObj);
-  oport = Sr0(this, OutputPortObj);
+  OutputPortFileObj* ofile = NULL;
+  oport = ofile = Sr0(this, OutputPortFileObj);
+  ofile->file = stderr;
   getintern()->init();
   getgenv()->init();
   constvalinit(this);
@@ -2170,6 +2219,7 @@ void VM::init()
   regComplex("call-with-current-continuation", NATIVE_COMPLEX_CALLCC);
   regComplex("call-with-input-file", NATIVE_COMPLEX_CALL_WITH_IN_FILE);
   regComplex("call-with-output-file", NATIVE_COMPLEX_CALL_WITH_OUT_FILE);
+  regComplex("call-with-output-string", NATIVE_COMPLEX_CALL_WITH_OUT_STR);
 }
 
 void VM::getuniquesym(SymPtr sym, ValueT* out)
@@ -2352,7 +2402,7 @@ bool VM::dolex(Lexer* lex, StrPtr source)
 
 #ifdef DebugVT
     Print("\n");
-    printvalue0(stderr, expr, true);
+    printvalue0(expr, true);
     Print("\n");
 #endif
 
@@ -2378,7 +2428,7 @@ bool VM::dolex(Lexer* lex, StrPtr source)
 #ifdef DebugVT
     if (!isvoid(&ac0) && !isundefined(&ac0))
     {
-      printvalue0(stderr, &ac0, true);
+      printvalue0(&ac0, true);
       Print("\n");
     }
 #endif
@@ -2422,215 +2472,238 @@ void VM::dorepl()
   goto loop;
 }
 
-void VM::printvalue(FILE *f, ValueT* val)
+void VM::printvalue(ValueT* val)
 {
   switch (vttype(val)) {
   case VT_REF_PAIR:
   case VT_REF_ARRAY:
-    fprintf(f, "'");
+    oport->writechar('\'');
     break;
   }
-  printvalue0(f, val);
+  printvalue0(this->oport, val);
 }
 
-void VM::printvalue0(FILE *f, ValueT* val, bool stripanno)
+void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
 {
   switch(vttype(val)) {
   case VT_REF_STR: {
     StrPtr strp = strref(val);
     const char* s = Ssstr(strp);
-    fprintf(f, "\"");
+    oport->writechar('"');
     for (int i = 0; i < Sslen(strp); i++)
     {
       char c = strp->str[i];
       switch (c)
       {
       case '"':
-        fprintf(f, "\\\"");
+        oport->writestr("\\\"");
         break;
       case '\\':
-        fprintf(f, "\\\\");
+        oport->writestr("\\\\");
         break;
       case '\a':
-        fprintf(f, "\\a");
+        oport->writestr("\\a");
         break;
       case '\b':
-        fprintf(f, "\\b");
+        oport->writestr("\\b");
         break;
       case '\f':
-        fprintf(f, "\\f");
+        oport->writestr("\\f");
         break;
       case '\n':
-        fprintf(f, "\\n");
+        oport->writestr("\\n");
         break;
       case '\r':
-        fprintf(f, "\\r");
+        oport->writestr("\\r");
         break;
       case '\t':
-        fprintf(f, "\\t");
+        oport->writestr("\\t");
         break;
       case '\v':
-        fprintf(f, "\\v");
+        oport->writestr("\\v");
         break;
       default:
-        if (isprint(c)) fprintf(f, "%c",c); else fprintf(f, "\\%03d", c);
+        if (isprint(c)) oport->writechar(c);
+        else
+        {
+          char buf[5] = {0};
+          snprintf(buf, sizeof(buf), "\\%03d", c);
+          oport->writestr(buf);
+        }
         break;
       }
     }
-    fprintf(f, "\"");
+    oport->writechar('"');
     break;
   }
   case VT_CHAR:{
     char c = vtchar(val);
     switch(c) {
     case '\n':
-      fprintf(f, "#\\newline");
+      oport->writestr("#\\newline");
       break;
     case '\r':
-      fprintf(f, "#\\return");
+      oport->writestr("#\\return");
       break;
     case ' ':
-      fprintf(f, "#\\space");
+      oport->writestr("#\\space");
       break;
     case '\t':
-      fprintf(f, "#\\tab");
+      oport->writestr("#\\tab");
       break;
     case '\a':
-      fprintf(f, "#\\alarm");
+      oport->writestr("#\\alarm");
       break;
     case '\b':
-      fprintf(f, "#\\backspace");
+      oport->writestr("#\\backspace");
       break;
     case 127:
-      fprintf(f, "#\\delete");
+      oport->writestr("#\\delete");
       break;
     case 27:
-      fprintf(f, "#\\escape");
+      oport->writestr("#\\escape");
       break;
     case 0:
-      fprintf(f, "#\\null");
+      oport->writestr("#\\null");
       break;
-    default:
-      fprintf(f, "#\\%c", c);
+    default: {
+      char buf[8] = {0};
+      snprintf(buf, sizeof(buf), "#\\%c", c);
+      oport->writestr(buf);
       break;
+    }
     }
     break;
   }
-  case VT_NUM_INTEGER:
-    fprintf(f, scm_int_fmt, numi(val));
+  case VT_NUM_INTEGER: {
+    char buf[64] = {0};
+    snprintf(buf, sizeof(buf), scm_int_fmt, numi(val));
+    oport->writestr(buf);
     break;
-  case VT_NUM_REAL:
-    fprintf(f, "%f", numreal(val));
+  }
+  case VT_NUM_REAL: {
+    char buf[64] = {0};
+    snprintf(buf, sizeof(buf), "%f", numreal(val));
+    oport->writestr(buf);
     break;
+  }
   case VT_REF_NUM_COMPLEX: {
-    fprintf(f, "%f", numcomplexreal(val));
+    char buf[64] = {0};
+    snprintf(buf, sizeof(buf), "%f", numcomplexreal(val));
+    oport->writestr(buf);
     scm_float imag = numcompleximag(val);
     if (imag > 0)
-      fprintf(f, "+");
-    fprintf(f, "%fi", imag);
+      oport->writechar('+');
+    char buf2[64] = {0};
+    snprintf(buf2, sizeof(buf2), "%fi", imag);
+    oport->writestr(buf2);
     break;
   }
   case VT_REF_NUM_BIG: {
     NumBigObj* b = numbigref(val);
     Lbuffer tmp(this);
     b->tostr(this, &tmp);
-    for (int i = 0; i < tmp.count; i++)
-      fprintf(f, "%c", tmp.buf[i]);
+    oport->writestr(tmp.buf, tmp.count);
+    //for (int i = 0; i < tmp.count; i++)
+    //  fprintf(f, "%c", tmp.buf[i]);
     break;
   }
   case VT_UNDEFINED:
-    fprintf(f, "<undefined>");
+    oport->writestr("<undefined>");
     break;
   case VT_VOID:
-    fprintf(f, "<void>");
+    oport->writestr("<void>");
     break;
   case VT_EOF:
-    fprintf(f, "<eof>");
+    oport->writestr("<eof>");
     break;
   case VT_NULL:
-    fprintf(f, "()");
+    oport->writestr("()");
     break;
   case VT_TRUE:
-    fprintf(f, "#t");
+    oport->writestr("#t");
     break;
   case VT_FALSE:
-    fprintf(f, "#f");
+    oport->writestr("#f");
     break;
   case VT_REF_NATIVE:
-    fprintf(f, "#<procedure:%s>", Ssstr(nativeprocref(val)->var));
+    oport->writestr("#<procedure:");
+    oport->writestr(Ssstr(nativeprocref(val)->var));
+    oport->writechar('>');
     break;
   case VT_REF_CONTINUATION: {
-    fprintf(f, "#<procedure:cont>");
+    oport->writestr("#<procedure:cont>");
     break;
   }
   case VT_REF_CLOSURE:{
     //ClosurePtr cptr = closureref(val);
-    fprintf(f, "#<procedure>");
+    oport->writestr("#<procedure>");
     break;
   }
   case VT_REF_HYGIENE_SYM:
-    fprintf(f, "%s|", Ssstr(hygienesymref(val)->sym));
+    oport->writestr(Ssstr(hygienesymref(val)->sym));
+    oport->writechar('|');
     break;
   case VT_REF_SYM:
-    fprintf(f, "%s", Ssstr(symref(val)));
+    oport->writestr(Ssstr(symref(val)));
     break;
   case VT_REF_PAIR:
     if (isformquote(this, val))
     {
-      fprintf(f, "'");
-      printvalue0(f, Scadr(val), stripanno);
+      oport->writechar('\'');
+      printvalue0(oport, Scadr(val), stripanno);
     }
     else if (isformqquote(this, val))
     {
-      fprintf(f, "`");
-      printvalue0(f, Scadr(val), stripanno);
+      oport->writechar('`');
+      printvalue0(oport, Scadr(val), stripanno);
     }
     else if (isformuquote(this, val))
     {
-      fprintf(f, ",");
-      printvalue0(f, Scadr(val), stripanno);
+      oport->writechar(',');
+      printvalue0(oport, Scadr(val), stripanno);
     }
     else if (isformuquotes(this, val))
     {
-      fprintf(f, ",@");
-      printvalue0(f, Scadr(val), stripanno);
+      oport->writestr(",@");
+      printvalue0(oport, Scadr(val), stripanno);
     }
     else
     {
       ValueT* tortoise = val, * hare = val;
-      fprintf(f, "(");
+      oport->writechar('(');
       do {
-        printvalue0(f, Scar(hare), stripanno);
+        printvalue0(oport, Scar(hare), stripanno);
         hare = Scdr(hare);
         if (!ispair(hare)) break;
-        fprintf(f, " ");
-        printvalue0(f, Scar(hare), stripanno);
+        oport->writechar(' ');
+        printvalue0(oport, Scar(hare), stripanno);
         hare = Scdr(hare);
         if (!ispair(hare)) break;
-        fprintf(f, " ");
+        oport->writechar(' ');
         tortoise = Scdr(tortoise);
       } while (tortoise != hare);
       if (tortoise == hare)
         Serror("cycle list");
       if (!isnull(hare))
       {
-        fprintf(f, " . ");
-        printvalue0(f, hare, stripanno);
+        oport->writestr(" . ");
+        printvalue0(oport, hare, stripanno);
       }
-      fprintf(f, ")");
+      oport->writechar(')');
     }
     break;
   case VT_REF_ARRAY:{
-    fprintf(f, "#(");
+    oport->writestr("#(");
     ArrayObj* arr = arrayref(val);
     int count = arr->array.n;
     for(int i = 0; i < count; i++)
     {
-      printvalue0(f, arr->get(i), stripanno);
+      printvalue0(oport, arr->get(i), stripanno);
       if (i == count - 1) break;
-      fprintf(f, " ");
+      oport->writechar(' ');
     }
-    fprintf(f, ")");
+    oport->writechar(')');
     break;
   }
   case VT_REF_ANNOTATION: {
@@ -2639,30 +2712,37 @@ void VM::printvalue0(FILE *f, ValueT* val, bool stripanno)
     {
       Sgcvar1(this, out);
       SCM::copystripanno(this, out, val);
-      printvalue0(f, out);
+      printvalue0(oport, out);
     }
     else
     {
-      fprintf(f, "(annotation line:%d,", anno->line);
-      printvalue0(f, &anno->vt);
-      fprintf(f, ")");
+      oport->writestr("(annotation line:");
+      char buf[64] = {0};
+      snprintf(buf, sizeof(buf), "%d,", anno->line);
+      oport->writestr(buf);
+      printvalue0(oport, &anno->vt);
+      oport->writechar(')');
     }
     break;
   }
   case VT_REF_SYNTAX:
   case VT_REF_SYNTAX_RULES:
-    fprintf(f, "#<syntax-procedure>");
+    oport->writestr("#<syntax-procedure>");
     break;
   case VT_REF_IPORT: {
     InputPortObj* iport = iportref(val);
     if (iport->fname)
-      fprintf(f, "#<input-port:%s>", Ssstr(iport->fname));
+    {
+      oport->writestr("#<input-port:");
+      oport->writestr(Ssstr(iport->fname));
+      oport->writechar('>');
+    }
     else
-      fprintf(f, "#<input-port>");
+      oport->writestr("#<input-port>");
     break;
   }
   case VT_REF_OPORT:
-    fprintf(f, "#<output-port>");
+    oport->writestr("#<output-port>");
     break;
   default:
     Error(this, "printvalue unknown type %d", vttype(val));
@@ -2835,16 +2915,17 @@ void InputPortObj::finz(VM* vm)
   RefObject::finz(vm);
 }
 
-void OutputPortObj::finz(VM* vm)
-{
-  close();
-  RefObject::finz(vm);
-}
-
-int OutputPortObj::write(VM* vm, ValueT* vt)
+int OutputPortFileObj::write(VM* vm, ValueT* vt)
 {
   if (!file) return -1;
-  vm->printvalue0(file, vt, false);
+  vm->printvalue0(this, vt, false);
+  return 0;
+}
+
+int OutputPortStrObj::write(VM* vm, ValueT* vt)
+{
+  if (closed) return -1;
+  vm->printvalue0(this, vt, false);
   return 0;
 }
 
@@ -2921,12 +3002,20 @@ Lbuffer::Lbuffer(VM* v):vm(v)
   Assert(vm, buf, "out of memory alloc fail, %d", size);
 }
 
+void Lbuffer::close()
+{
+  if (buf)
+  {
+    vm->free(buf, size);
+    buf = NULL;
+    size = 0;
+    count =0;
+  }
+}
+
 Lbuffer::~Lbuffer()
 {
-  vm->free(buf, size);
-  buf = NULL;
-  size = 0;
-  count =0;
+  close();
 }
 
 void Lbuffer::put(char c)

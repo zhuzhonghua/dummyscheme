@@ -13,7 +13,7 @@ using namespace Scheme;
  Print(fmt, ##__VA_ARGS__);                                      \
  Print(" %s:%d: ", vm->gettopsource(), annotateref(expr)->line); \
  Print("\nexpr:");                                               \
- vm->printvalue0(stderr, expr, true);                            \
+ vm->printvalue0(expr, true);                                    \
  DebugAssertStop(*((int*)0) = 0);                                \
  Print("\n");                                                    \
  throw "compile error";                                          \
@@ -21,7 +21,7 @@ using namespace Scheme;
 
 #define Serrorannotate(vm, vt, fmt, ...) do {   \
  Serror(fmt, ##__VA_ARGS__);                    \
- vm->printvalue0(stderr, vt, true);             \
+ vm->printvalue0(vt, true);             \
  } while(0)
 
 static void checkhygienesym(ValueT* hsym, ValueT* out)
@@ -514,7 +514,7 @@ void SCompiler::compilelambda(int target, ValueT* expr, ValueT* link)
 {
 #ifdef DebugCCode
   Print("<--To Compile Lambda-->\n");
-  vm->printvalue0(stderr, expr, true);
+  vm->printvalue0(expr, true);
   Print("\n");
 #endif
 
@@ -1466,7 +1466,7 @@ PatnTmpl* SyntaxRules::expand(SCompiler* lstate, ValueT* out, ValueT* expr)
   VM* vm = lstate->vm;
 #ifdef DebugSRule
   Print("\nTransforming=> ");
-  vm->printvalue0(stderr, expr, true);
+  vm->printvalue0(expr, true);
 #endif
 
   ValueT* expr0 = annotatevt(expr);
@@ -1488,8 +1488,8 @@ PatnTmpl* SyntaxRules::expand(SCompiler* lstate, ValueT* out, ValueT* expr)
     {
 #ifdef DebugSRule
       Print("\n===Match %d=========", i);
-      Print("\n\nPattern=> ");vm->printvalue0(stderr, &pt->patn, true);
-      Print("\nTemplate=> ");vm->printvalue0(stderr, &pt->tmpl, true);
+      Print("\n\nPattern=> ");vm->printvalue0(&pt->patn, true);
+      Print("\nTemplate=> ");vm->printvalue0(&pt->tmpl, true);
       Print("\n\nMatches\n");
       ArrayObj* matches = &match.matches;
       int count = matches->array.n;
@@ -1504,7 +1504,7 @@ PatnTmpl* SyntaxRules::expand(SCompiler* lstate, ValueT* out, ValueT* expr)
                           Ssstr(symref(pcar)), pvd->depth);
 
         Print("%s=>", Ssstr(symref(pcar)));
-        vm->printvalue0(stderr, pcdr, true);
+        vm->printvalue0(pcdr, true);
         Print("\n");
       }
 #endif
@@ -1513,7 +1513,7 @@ PatnTmpl* SyntaxRules::expand(SCompiler* lstate, ValueT* out, ValueT* expr)
 
 #ifdef DebugSRule
       Print("\nAfter=> ");
-      vm->printvalue0(stderr, out, true);
+      vm->printvalue0(out, true);
       Print("\n=================\n");
 #endif
 

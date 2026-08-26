@@ -60,14 +60,14 @@ typedef double scm_float;
 #define Debug(x)
 #define DebugMem(x)
 #define DebugReg(x)
-//#define DebugVT
+#define DebugVT
 //#define DebugSRule
 //#define DebugCCode
 //#define DebugQQuote
-//#define DebugPrintLine Print("\n%s:%d\n", __FILE__, __LINE__);
+#define DebugPrintLine Print("\n%s:%d\n", __FILE__, __LINE__);
 
-//#define DebugAssertStop(x) DebugPrintLine; x
-#define DebugAssertStop(x)
+#define DebugAssertStop(x) DebugPrintLine; x
+//#define DebugAssertStop(x)
 
 #define DebugAssert(vm) DebugAssertStop(vm->printframe();*((int*)0) = 0)
 
@@ -89,7 +89,7 @@ typedef double scm_float;
 
 #define AssertVT(vm, cond, vt, fmt, ...) do{            \
     if (!(cond)) {Print("\nException\n");               \
-      vm->printvalue0(stderr, vt);Print("\n");          \
+      vm->printvalue0(vt);Print("\n");                  \
       Print(fmt, ##__VA_ARGS__);                        \
       DebugAssert(vm);                                  \
       throw STR(cond);                                  \
@@ -97,8 +97,8 @@ typedef double scm_float;
 
 #define AssertVT2(vm, cond, vt, vt2, fmt, ...) do{      \
     if (!(cond)) {Print("\nException\n");               \
-      vm->printvalue0(stderr, vt);Print("\n");          \
-      vm->printvalue0(stderr, vt2);Print("\n");         \
+      vm->printvalue0(vt);Print("\n");                  \
+      vm->printvalue0(vt2);Print("\n");                 \
       Print(fmt, ##__VA_ARGS__);                        \
       DebugAssert(vm);                                  \
       throw STR(cond);                                  \
@@ -108,7 +108,7 @@ typedef double scm_float;
 
 #define AssertArg(vm, cond, op, vt, fmt, ...) do{   \
     if (!(cond)) {Print("\nException in %s: ", op); \
-      vm->printvalue0(stderr, vt);                  \
+      vm->printvalue0(vt);                          \
       Print(fmt, ##__VA_ARGS__);                    \
       DebugAssert(vm);                              \
       throw STR(cond);                              \
@@ -122,7 +122,7 @@ typedef double scm_float;
 
 #define ErrorVT(vm, vt, fmt, ...) do{             \
     Print("\nError:\n");                          \
-    vm->printvalue0(stderr, vt);                  \
+    vm->printvalue0(vt);                          \
     Print("\n");                                  \
     Print(fmt, ##__VA_ARGS__);                    \
     DebugAssert(vm);                              \
@@ -131,7 +131,7 @@ typedef double scm_float;
 
 #define Serrorvt(vm, vt, fmt, ...) do {           \
     Print(fmt, ##__VA_ARGS__);                    \
-    vm->printvalue0(stderr, vt, true);            \
+    vm->printvalue0(vt, true);                    \
     DebugAssertStop(*((int*)0) = 0);              \
  } while(0)
 
@@ -153,6 +153,7 @@ struct Lbuffer {
 
   Lbuffer(VM* v);
   ~Lbuffer();
+  void close();
 
   void put(char* str) {
     put(str, strlen(str));
@@ -634,7 +635,7 @@ struct VecT {
 
 #define MINVEC_SIZE 4
 
-#define vec_add1(T, vm, ks, v)                    \
+#define vec_add1(T, vm, ks, v)                 \
   vec_ensure(T, (vm), &(ks), vec_fill1(0));    \
   (ks).set((ks).n++, (v));
 
@@ -1210,6 +1211,7 @@ enum NATIVE_COMPLEX_PROC {
   NATIVE_COMPLEX_CALLCC,
   NATIVE_COMPLEX_CALL_WITH_IN_FILE,
   NATIVE_COMPLEX_CALL_WITH_OUT_FILE,
+  NATIVE_COMPLEX_CALL_WITH_OUT_STR,
   NATIVE_COMPLEX_EVAL,
   NATIVE_COMPLEX_MAX,
 };
@@ -1267,11 +1269,11 @@ public:
   void checkgc();
 
 public:
-  void printvalue(FILE *f, ValueT* val);
-  void printvalue0(FILE *f, ValueT* val, bool stripanno);
-  void printvalue0(FILE *f, ValueT* val) { printvalue0(f, val, false); }
-  void printvalue0(ValueT* val) { printvalue0(stderr, val); }
-  void printvalue(ValueT* val) { printvalue(stderr, val); }
+  void printvalue(ValueT* val);
+  void printvalue0(OutputPortObj*, ValueT* val, bool stripanno);
+  void printvalue0(OutputPortObj* o, ValueT* val) { printvalue0(o, val, false); }
+  void printvalue0(ValueT* val) { printvalue0(oport, val); }
+  void printvalue0(ValueT* val, bool strip) { printvalue0(oport, val, strip); }
   void printframe();
 
   void execute(CallFrame* frm);
@@ -1501,29 +1503,59 @@ struct InputPortObj : public RefObject {
 };
 
 struct OutputPortObj : public RefObject {
-  OutputPortObj(): fname(NULL), file(NULL) {}
+  virtual void close() = 0;
+  virtual int write(VM* vm, ValueT* vt) = 0;
+  virtual int writestr(const char* str) { return writestr(str, strlen(str)); }
+  virtual int writestr(const char* str, int len) = 0;
+  virtual int writechar(char c) = 0;
+  virtual void finz(VM* vm) {
+    close();
+    RefObject::finz(vm);
+  }
+};
 
-  void close() {
-    if (file) {
+struct OutputPortStrObj : public OutputPortObj {
+  OutputPortStrObj(VM* vm): strbuf(vm), closed(false) {}
+
+  virtual void close() {
+    if (!closed) {
+      closed = true;
+      strbuf.close();
+    }
+  }
+  virtual int write(VM* vm, ValueT* vt);
+  virtual int writestr(const char* str, int len) { strbuf.put(str, len); }
+  virtual int writechar(char c) { strbuf.put(c); }
+
+  GetSize(OutputPortStrObj)
+
+  bool closed;
+  Lbuffer strbuf;
+};
+
+struct OutputPortFileObj : public OutputPortObj {
+  OutputPortFileObj(): fname(NULL), file(NULL) {}
+
+  virtual void close() {
+    if (file && fname) {
       fclose(file);
       file = NULL;
     }
   }
-  int write(VM* vm, ValueT* vt);
-  int writestr(const char* str, int len) {
+  virtual int write(VM* vm, ValueT* vt);
+  virtual int writestr(const char* str, int len) {
     if (!file) return -1;
     fwrite(str, 1, len, file);
     return 1;
   }
-  int writechar(char c) {
+  virtual int writechar(char c) {
     if (!file) return -1;
     putc(c, file);
     fflush(file);
     return c;
   }
-  virtual void finz(VM* vm);
   Visit1(fname)
-  GetSize(OutputPortObj)
+  GetSize(OutputPortFileObj)
 
   StrPtr fname;
   FILE* file;

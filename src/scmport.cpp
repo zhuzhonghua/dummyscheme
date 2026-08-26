@@ -20,7 +20,7 @@ static ValueT scm_stub_write(VM* vm, ValueT* p, ValueT* args)
   if (oport)
     oport->write(vm, p);
   else
-    vm->printvalue(stderr, p);
+    vm->printvalue(p);
   return Svoidref;
 }
 
@@ -58,7 +58,7 @@ static ValueT scm_stub_display(VM* vm, ValueT* p, ValueT* args)
   else
   {
     if (!oport)
-      vm->printvalue(stderr, p);
+      vm->printvalue(p);
     else
       oport->write(vm, p);
   }
@@ -134,9 +134,9 @@ static ValueT scm_stub_open_output_file(VM* vm, ValueT* fname)
     Print("%s: error create file %s", METHOD, filename);
     throw "Error: failed to create file";
   }
-  OutputPortObj* oport = NULL;
+  OutputPortFileObj* oport = NULL;
   ValueT ret;
-  setoport(&ret, oport = Sr0(vm, OutputPortObj));
+  setoport(&ret, oport = Sr0(vm, OutputPortFileObj));
   oport->file = fhandle;
   oport->fname = fn;
   return ret;
