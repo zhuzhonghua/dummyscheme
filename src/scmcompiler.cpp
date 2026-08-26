@@ -248,7 +248,7 @@ void SCompiler::compilesym(int target, ValueT* expr, ValueT* link)
   }
   else
   {
-    compileassert(vm, issym(sym), expr, "internal error, not a normal symbol");
+    checkhygienesym(sym, sym);
     int k = lambda->addk(vm, sym);
     putcode(code_varrefglobal(target, k), line);
   }

@@ -514,7 +514,8 @@ SymPtr Interns::internsym(const char* str, int n)
 {
   buf.count = 0;
   for (int i = 0; i < n; i++)
-    buf.put(toupper(str[i]));
+    //buf.put(toupper(str[i]));
+    buf.put(str[i]);
   return intern(buf.buf, n);
 }
 
