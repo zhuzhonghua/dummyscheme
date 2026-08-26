@@ -186,15 +186,16 @@ static ValueT scm_stub_read_char(VM* vm, ValueT* vt)
   return ret;
 }
 
-static ValueT scm_stub_write_char(VM* vm, ValueT* cvt, ValueT* pvt)
+static ValueT scm_stub_write_char(VM* vm, ValueT* cvt, ValueT* args)
 {
   const static char* METHOD = "write-char";
   AssertVT(vm, ischar(cvt), cvt, "%s: not a char", METHOD);
-  AssertVT(vm, isoport(pvt), pvt, "%s: not a output-port", METHOD);
-  OutputPortObj* oport = oportref(pvt);
+  OutputPortObj* oport = getoportrest(vm, args, METHOD);
   char c = vtchar(cvt);
-  int ret = oport->writechar(c);
-  Assert(vm, ret == c, "%s: port is closed", METHOD);
+  if (oport)
+    oport->writechar(c);
+  else
+    vm->oport->writechar(c);
   return Svoidref;
 }
 
@@ -231,7 +232,7 @@ void SCMPort::init(VM* vm)
     {"close-output-port", scm_stub_close_output_port},
     {"peek-char", scm_stub_peek_char},
     {"read-char", scm_stub_read_char},
-    {"write-char", scm_stub_write_char},
+    {"write-char", scm_stub_write_char, true},
     {"eof-object?", scm_stub_eof_objp},
     {"read", scm_stub_read},
     {NULL, -1}
