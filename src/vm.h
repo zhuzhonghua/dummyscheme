@@ -288,6 +288,7 @@ struct CallFrame;
 #define setoport(VT, e) settyperef(VT, VT_REF_OPORT, e)
 #define iportref(VT) toref(VT, InputPortObj*)
 #define oportref(VT) toref(VT, OutputPortObj*)
+#define oportstrref(VT) toref(VT, OutputPortStrObj*)
 
 /* SymObj Or StrObj */
 #define ishygienesym(VT) istype(VT, VT_REF_HYGIENE_SYM)

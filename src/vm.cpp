@@ -1552,10 +1552,9 @@ void VM::printframe()
 }
 
 struct CallAppState {
-  CallAppState(): callcc(false), callo(false), calli(false), fromapply(false) {}
+  CallAppState(): callcc(false), unwind(NULL), fromapply(false) {}
   bool callcc;
-  bool callo;
-  bool calli;
+  UnWindFunc unwind;
   bool fromapply;
 };
 
@@ -1702,6 +1701,16 @@ static void closeoport(VM* vm, CallFrame* frm, ValueT* val)
   oport->close();
 }
 
+static void closeoportstr(VM* vm, CallFrame* frm, ValueT* val)
+{
+  OutputPortStrObj* oport = oportstrref(val);
+  oport->close();
+  StrObj* str = vm->strintern(oport->strbuf.buf, oport->strbuf.count);
+  ValueT out;
+  setstr(&out, str);
+  vm->ac0 = *frm->start = out;
+}
+
 static void callwithfile(VM* vm, ValueT* base, int len, CallAppState* callstate, ValueT** procp, ValueT** filep, const char* METHOD)
 {
   Stack* stk = Stk(vm);
@@ -1762,7 +1771,7 @@ static void callwithinputfile(VM* vm, CallFrame* frm, ValueT* base, int* olen, C
   setiport(stkvt(1), iport = Sr0(vm, InputPortObj));
   iport->file = fhandle;
   iport->fname = fn;
-  callstate->calli = true;
+  callstate->unwind = &closeiport;
   *olen = 1;
 }
 
@@ -1786,7 +1795,7 @@ static void callwithoutputfile(VM* vm, CallFrame* frm, ValueT* base, int* olen, 
   setoport(stkvt(1), oport = Sr0(vm, OutputPortFileObj));
   oport->file = fhandle;
   oport->fname = fn;
-  callstate->callo= true;
+  callstate->unwind = &closeoport;
   *olen = 1;
 }
 
@@ -1823,7 +1832,7 @@ static void callwithoutputstr(VM* vm, CallFrame* frm, ValueT* base, int* olen, C
   }
   *stkvt(0) = proc;
   setoport(stkvt(1), Sr1(vm, OutputPortStrObj, vm));
-  callstate->callo= true;
+  callstate->unwind = &closeoportstr;
   *olen = 1;
 }
 
@@ -1832,7 +1841,7 @@ static CallFrame* ctorclosurefrm(VM* vm, Instruction i, CallFrame* frm, ValueT* 
   Stack* stk = Stk(vm);
   ClosurePtr newcall = closureref(base);
   ensurearity(vm, base, len, newcall->lambda->argnum, newcall->lambda->argrest, "", callstate->fromapply);
-  if (GET_OP(i) == OP_CALLAPP || callstate->callcc || callstate->calli || callstate->callo)
+  if (GET_OP(i) == OP_CALLAPP || callstate->callcc || callstate->unwind)
   {
     frm = stk->newfrm(frm, base, newcall->lambda->argnum, newcall->lambda->top);
     frm->start = base;
@@ -1859,15 +1868,10 @@ static CallFrame* ctorclosurefrm(VM* vm, Instruction i, CallFrame* frm, ValueT* 
 
 static void checkcalliofile(VM* vm, CallFrame* frm, ValueT* val, CallAppState* callstate)
 {
-  if (callstate->calli)
+  if (callstate->unwind)
   {
     OuterVal* ov = frm->seg->findouterval(vm, val);
-    ov->unwind = &closeiport;
-  }
-  else if (callstate->callo)
-  {
-    OuterVal* ov = frm->seg->findouterval(vm, val);
-    ov->unwind = &closeoport;
+    ov->unwind = callstate->unwind;
   }
 }
 
@@ -2072,8 +2076,7 @@ void VM::execute(CallFrame* frm)
       {
         ensurearity(this, proc, len, nproc->argnum, nproc->argrest, Ssstr(nproc->var), callstate.fromapply);
         *proc = scmcallcproc(this, nproc, proc+1);
-        if (callstate.calli) closeiport(this, frm, proc+1);
-        if (callstate.callo) closeoport(this, frm, proc+1);
+        if (callstate.unwind) callstate.unwind(this, frm, proc+1);
         if (icode == OP_CALLAPP)
           break;
       }
@@ -2936,11 +2939,8 @@ void OuterVal::close(VM* vm, CallFrame* frm)
     unwind(vm, frm, valp);
     unwind = NULL;
   }
-  else
-  {
-    val = *valp;
-    valp = &val;
-  }
+  val = *valp;
+  valp = &val;
 }
 
 void ClosureObj::visit(VM* vm)
