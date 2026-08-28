@@ -70,7 +70,7 @@ static double big2double(NumBigObj* b)
   for (int i = b->len-1; i>=0; i--)
   {
     result = result * RADIX_2_64;
-    result = result + (double)((scm_uint)b->data[i]);
+    result = result + (double)b->data[i];
   }
   return b->sign < 0 ? -result : result;
 }
@@ -190,18 +190,18 @@ static NumBigObj* numbigshlabs(VM* vm, NumBigObj* a, int shift_bits)
   scm_uint carry = 0;
   for (int i = 0; i < a->len; ++i)
   {
-    scm_uint cur = (scm_uint)a->data[i];
+    scm_uint cur = a->data[i];
     if (bit_shifts == 0)
-      res->data[i + limb_shifts] = (scm_int)cur;
+      res->data[i + limb_shifts] = cur;
     else
     {
       scm_uint low = (cur << bit_shifts) | carry;
       carry = cur >> (INT_BITS - bit_shifts);
-      res->data[i + limb_shifts] = (scm_int)low;
+      res->data[i + limb_shifts] = low;
     }
   }
   if (carry > 0)
-    res->data[a->len + limb_shifts] = (scm_int)carry;
+    res->data[a->len + limb_shifts] = carry;
   return res->normalize();
 }
 
@@ -210,10 +210,10 @@ static void numbigshr1absinline(NumBigObj* a)
   scm_uint carry = 0;
   for (int i = a->len - 1; i >= 0; --i)
   {
-    scm_uint cur = (scm_uint)a->data[i];
+    scm_uint cur = a->data[i];
     scm_uint new_cur = (cur >> 1) | (carry << 63);
     carry = cur & 1ULL;
-    a->data[i] = (scm_int)new_cur;
+    a->data[i] = new_cur;
   }
   a->normalize();
 }
@@ -300,7 +300,7 @@ static void bigvtinline(VM* vm, ValueT* vt)
   big->normalize();
   if (big->len == 1 && big->data[0] <= (scm_uint)SCM_INT_MAX)
   {
-    scm_int val = big->data[0];
+    scm_int val = (scm_int)big->data[0];
     if (big->sign < 0) val = -val;
     setnumi(vt, val);
   }
@@ -311,7 +311,7 @@ static void bigsetvt(VM* vm, ValueT* vt, NumBigObj* big)
   big->normalize();
   if (big->len == 1 && big->data[0] <= (scm_uint)SCM_INT_MAX)
   {
-    scm_int val = big->data[0];
+    scm_int val = (scm_int)big->data[0];
     if (big->sign < 0) val = -val;
     setnumi(vt, val);
   }

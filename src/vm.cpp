@@ -1089,10 +1089,10 @@ void NumBigObj::tostr(VM* vm, Lbuffer* buf)
     scm_uint rem = 0;
     for (int i = tmp->len - 1; i >= 0; --i)
     {
-      scm_uint cur_limb = (scm_uint)tmp->data[i];
+      scm_uint cur_limb = tmp->data[i];
       scm_uint new_limb_quot = 0;
       rem = SCM::div128by64(rem, cur_limb, UINT_BASE, &new_limb_quot);
-      tmp->data[i] = (scm_int)new_limb_quot;
+      tmp->data[i] = new_limb_quot;
     }
     tmp->normalize();
     bool is_last_chunk = tmp->iszero();
@@ -1112,7 +1112,7 @@ int NumBigObj::bitlength()
 {
   if (len == 1 && data[0] == 0) return 0;
   int top_idx = len - 1;
-  scm_uint top_limb = (scm_uint)data[top_idx];
+  scm_uint top_limb = data[top_idx];
   scm_int bits = top_idx * INT_BITS;
   while (top_limb > 0)
   {
@@ -1128,14 +1128,14 @@ NumBigObj* NumBigObj::addabs(VM* vm, NumBigObj* other)
   scm_uint carry = 0;
   for (int i = 0; i < len; ++i)
   {
-    scm_uint ua = (scm_uint)data[i];
-    scm_uint ub = (i < other->len) ? (scm_uint)other->data[i] : 0;
+    scm_uint ua = data[i];
+    scm_uint ub = (i < other->len) ? other->data[i] : 0;
     scm_uint sum = ua + ub + carry;
     carry = (sum < ua) || (sum == ua && carry > 0) ? 1 : 0;
-    res->data[i] = (scm_int)sum;
+    res->data[i] = sum;
   }
   if (carry)
-    res->data[len] = (scm_int)carry;
+    res->data[len] = carry;
   return res->normalize();
 }
 
@@ -1167,11 +1167,11 @@ NumBigObj* NumBigObj::subabs(VM* vm, NumBigObj* other)
   scm_uint borrow = 0;
   for (int i = 0; i < len; ++i)
   {
-    scm_uint ua = (scm_uint)data[i];
-    scm_uint ub = (i < other->len) ? (scm_uint)other->data[i] : 0;
+    scm_uint ua = data[i];
+    scm_uint ub = (i < other->len) ? other->data[i] : 0;
     scm_uint diff = ua - ub - borrow;
     borrow = (ua < ub) || (ua == ub && borrow > 0) ? 1 : 0;
-    res->data[i] = (scm_int)diff;
+    res->data[i] = diff;
   }
   return res->normalize();
 }
@@ -1183,14 +1183,14 @@ NumBigObj* NumBigObj::mulabs(VM* vm, NumBigObj* other)
   NumBigObj* res = vm->newnumbig(res_len, 1);
   for (int i = 0; i < len; ++i)
   {
-    scm_uint ua = (scm_uint)data[i];
+    scm_uint ua = data[i];
     if (ua == 0) continue;
     scm_uint ua_lo = ua & UINT_MASK_LOW;
     scm_uint ua_hi = ua >> 32;
     scm_uint carry = 0;
     for (int j = 0; j < other->len; ++j)
     {
-      scm_uint ub = (scm_uint)other->data[j];
+      scm_uint ub = other->data[j];
       scm_uint ub_lo = ub & UINT_MASK_LOW;
       scm_uint ub_hi = ub >> 32;
       scm_uint p0 = ua_lo * ub_lo; // 0-63
@@ -1202,20 +1202,20 @@ NumBigObj* NumBigObj::mulabs(VM* vm, NumBigObj* other)
       scm_uint p_low = p0 + (p1_p2 << 32);
       scm_uint p_high = p3 + (p1_p2 >> 32) + (p1_p2_carry << 32);
       if (p_low < p0) p_high += 1;
-      scm_uint current_dest = (scm_uint)res->data[i + j];
+      scm_uint current_dest = res->data[i + j];
       p_low += current_dest;
       if (p_low < current_dest) p_high += 1;
       p_low += carry;
       if (p_low < carry) p_high += 1;
-      res->data[i + j] = (scm_int)p_low;
+      res->data[i + j] = p_low;
       carry = p_high;
     }
     scm_int k = i + other->len;
     while (carry > 0 && k < res_len)
     {
-      scm_uint cur = (scm_uint)res->data[k];
+      scm_uint cur = res->data[k];
       scm_uint sum = cur + carry;
-      res->data[k] = (scm_int)sum;
+      res->data[k] = sum;
       carry = (sum < cur) ? 1 : 0;
       k++;
     }

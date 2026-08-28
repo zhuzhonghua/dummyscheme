@@ -740,7 +740,7 @@ struct NumBigObj : public RefObject {
     for (int i = 0; i < len; i++) data[i] = 0;
   }
   static int totalsize(int l) {
-    return offsetof(NumBigObj, data) + sizeof(scm_int) * l;
+    return offsetof(NumBigObj, data) + sizeof(scm_uint) * l;
   }
   int bitlength();
   NumBigObj* normalize() {
@@ -755,9 +755,7 @@ struct NumBigObj : public RefObject {
   int cmpabs(NumBigObj* other) {
     if (len != other->len) return len > other->len ? 1 : -1;
     for (int i = len - 1; i >= 0; i--) {
-      scm_uint ad = (scm_uint)data[i];
-      scm_uint bd = (scm_uint)other->data[i];
-      if (ad != bd) return ad > bd ? 1 : -1;
+      if (data[i] != other->data[i]) return data[i] > other->data[i] ? 1 : -1;
     }
     return 0;
   }
@@ -783,7 +781,7 @@ struct NumBigObj : public RefObject {
 
   char sign;
   scm_int len;
-  scm_int data[1];
+  scm_uint data[1];
 };
 
 struct StrObj : public RefObject {
