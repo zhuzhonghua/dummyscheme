@@ -160,6 +160,17 @@ static ValueT scm_stub_close_output_port(VM* vm, ValueT* vt)
   return Svoidref;
 }
 
+static ValueT scm_stub_flush_output_port(VM* vm, ValueT* args)
+{
+  const static char* METHOD = "flush-output-port";
+  OutputPortObj* oport = getoportrest(vm, args, METHOD);
+  if (oport)
+    oport->flush();
+  else
+    vm->oport->flush();
+  return Svoidref;
+}
+
 static ValueT scm_stub_peek_char(VM* vm, ValueT* vt)
 {
   const static char* METHOD = "peek-char";
@@ -235,6 +246,8 @@ void SCMPort::init(VM* vm)
     {"write-char", scm_stub_write_char, true},
     {"eof-object?", scm_stub_eof_objp},
     {"read", scm_stub_read},
+    {"flush-output-port", scm_stub_flush_output_port, true},
+    {"flush-output", scm_stub_flush_output_port, true},
     {NULL, -1}
   };
   regcfunc(vm, port);

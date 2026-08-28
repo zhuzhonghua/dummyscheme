@@ -1509,10 +1509,11 @@ struct OutputPortObj : public RefObject {
   virtual int writestr(const char* str) { return writestr(str, strlen(str)); }
   virtual int writestr(const char* str, int len) = 0;
   virtual int writechar(char c) = 0;
-  virtual void finz(VM* vm) {
+  void finz(VM* vm) {
     close();
     RefObject::finz(vm);
   }
+  virtual int flush() {}
 };
 
 struct OutputPortStrObj : public OutputPortObj {
@@ -1547,6 +1548,7 @@ struct OutputPortFileObj : public OutputPortObj {
   virtual int writestr(const char* str, int len) {
     if (!file) return -1;
     fwrite(str, 1, len, file);
+    fflush(file);
     return 1;
   }
   virtual int writechar(char c) {
@@ -1555,6 +1557,7 @@ struct OutputPortFileObj : public OutputPortObj {
     fflush(file);
     return c;
   }
+  virtual int flush() { if(file) fflush(file); }
   Visit1(fname)
   GetSize(OutputPortFileObj)
 
