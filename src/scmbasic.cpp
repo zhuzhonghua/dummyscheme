@@ -55,14 +55,35 @@ static ValueT scm_stub_list(VM* vm, ValueT* p)
   return p;
 }
 
+static void copylistlast(VM* vm, ValueT* out, ValueT* val, ValueT* rest, const char* METHOD)
+{
+  PAIR_FOR(valp, val)
+  {
+    AssertVT(vm, ispair(valp), val, "%s: not a proper list", val);
+    setpair(out, SCM::cons(vm, Scar(valp), Snullref));
+    out = Scdr(out);
+  }
+  *out = rest;
+}
+
+static void copylistlast(VM* vm, ValueT* out, ValueT* val, const char* METHOD)
+{
+  if (isnull(Scdr(val)))
+  {
+    *out = Scar(val);
+    return;
+  }
+  Sgcvar1(vm, out2);
+  copylistlast(vm, out2, Scdr(val), METHOD);
+  copylistlast(vm, out, Scar(val), out2, METHOD);
+}
+
 static ValueT scm_stub_append(VM* vm, ValueT* p)
 {
-  if (isnull(p))
-    return Snullref;
+  const static char* METHOD = "append";
+  if (isnull(p)) return Snullref;
   Sgcvar1(vm, out);
-  ValueT* pend = SCM::append(vm, out, Scar(p));
-  PAIR_FOR(pp, Scdr(p))
-    pend = SCM::append(vm, pend, Scar(pp));
+  copylistlast(vm, out, p, METHOD);
   return out;
 }
 
