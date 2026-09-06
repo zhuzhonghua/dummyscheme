@@ -17,8 +17,8 @@ A portable, embeddable Scheme implementation based on a register-oriented byteco
 
 ## Conformance
 
-- **Current**: R4RS
-- **Planned**: R5RS, R6RS
+- **Current**: R5RS(Working in progress[176])
+- **Planned**: R6RS
 
 ## Building
 
@@ -38,6 +38,8 @@ Run Scheme files by passing them as arguments:
 ```
 
 `init.scm` loads the standard macro definitions and is required before running most Scheme code.
+
+`init.scm`'s content could be put into vm.cpp as a const char xxx[] like many other scheme implementations(s7)
 
 ## License
 
