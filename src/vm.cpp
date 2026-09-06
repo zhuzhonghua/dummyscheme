@@ -2164,7 +2164,7 @@ void VM::execute(CallFrame* frm)
           if (callforce(this, frm, proc, &len, &callstate))
             goto recallapp;
           else
-            break;
+            goto afternative;
         }
         default:
           Error(this, "not supported complex native proc %d yet\n", nproc->complexid);
@@ -2176,10 +2176,11 @@ void VM::execute(CallFrame* frm)
         ensurearity(this, proc, len, nproc->argnum, nproc->argrest, Ssstr(nproc->var), callstate.fromapply);
         *proc = scmcallcproc(this, nproc, proc+1);
         if (callstate.unwind) callstate.unwind(this, frm, proc+1);
+      }
+    afternative:
         if (icode == OP_CALLAPP)
           break;
       }
-    }
     else  if (isclosure(proc))
       {
         frm = ctorclosurefrm(this, i, frm, proc, len, &callstate);
