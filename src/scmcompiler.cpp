@@ -629,6 +629,15 @@ void SCompiler::compileapp(int target, ValueT* expr, ValueT* link)
   compile(target, type, Snext, false);
 }
 
+void SCompiler::compiledelay(int target, ValueT* expr, ValueT* link)
+{
+  compileassert(vm, !isnull(Scdr(expr)), expr, "illegal delay");
+  int line = annotateline(expr);
+  ValueT* expr0 = annotatevt(expr);
+  putcode(code_promise(target), line);
+  compilelambda0(target, line, Snullref, Scdr(expr0));
+}
+
 void SCompiler::compileqquote(int target, ValueT* expr, int depth)
 {
   int line = annotateline(expr);
@@ -837,6 +846,8 @@ void SCompiler::compilepair(int target, ValueT* expr, ValueT* link, bool defok)
       compiledefsyntax(expr);
     //else;
   }
+  else if (iskwdelay(vm, type))
+    compiledelay(target, expr, link);
   else
     compileapp(target, expr, link);
 }

@@ -145,6 +145,11 @@ StkGCVar::~StkGCVar()
   Stk(vm)->sv = sv->next;
 }
 
+void StackSegment::finz(VM* vm)
+{
+  RefObject::finz(vm);
+}
+
 void StackSegment::closeouterval(VM* vm, CallFrame* frm, ValueT* level)
 {
   OuterVal** p = &outers;
@@ -1523,6 +1528,13 @@ void VM::printccode0(FILE *f, LambdaPtr lambda, int pc)
       fprintf(f, "\t; set %d as a closure from lambda %d", target, k);
       break;
     }
+    case OP_PROMISE: {
+      int target;getcode_promise(i, target);
+      PrintCode(PROMISE);
+      PrintOffset(target);
+      fprintf(f, "\t; set %d as a promise from closure %d", target, target);
+      break;
+    }
     default: Error(this, "unknown op %d", op);
     }
     fprintf(f, "\n");
@@ -1552,10 +1564,11 @@ void VM::printframe()
 }
 
 struct CallAppState {
-  CallAppState(): callcc(false), unwind(NULL), fromapply(false) {}
+  CallAppState(): force(false), callcc(false), unwind(NULL), fromapply(false) {}
   bool callcc;
   UnWindFunc unwind;
   bool fromapply;
+  bool force;
 };
 
 static void shrinkarity(VM* vm, ValueT* base, int len, int argnum)
@@ -1836,15 +1849,88 @@ static void callwithoutputstr(VM* vm, CallFrame* frm, ValueT* base, int* olen, C
   *olen = 1;
 }
 
+static PromiseObj* newpromise(VM* vm, ClosureObj* clo)
+{
+  PromiseObj* promise = Sr0(vm, PromiseObj);
+  Sgcvar1(vm, tmp);
+  setpromise(tmp, promise);
+  PromiseCellObj* promcell = promise->cell = Sr0(vm, PromiseCellObj);
+  promcell->clo = clo;
+  promcell->state = PROMISE_LAZY;
+  return promise;
+}
+
+static bool callforce(VM* vm, CallFrame* frm, ValueT* base, int* olen, CallAppState* state)
+{
+  int len = *olen;
+  const static char* METHOD = "force";
+  Stack* stk = Stk(vm);
+  ValueT* cw = stkvt(1);
+  ValueT* proc = NULL;
+  if (state->fromapply)
+  {
+    AssertVT(vm, ispair(cw), cw, "%s: internal error in apply", METHOD);
+    proc = Scar(cw);
+    AssertVT(vm, isnull(Scdr(cw)), cw, "%s: two much arguments", METHOD);
+    state->fromapply = false;
+  }
+  else
+  {
+    Assert(vm, len==1, "%s: needs 1 arguments, not %d", METHOD, len);
+    proc = stkvt(1);
+  }
+  *olen = 0;
+  if (ispromise(proc))
+  {
+    PromiseObj* prom = promiseref(proc);
+    Assert(vm, prom->cell != NULL, "internal error, promise's cell is null");
+    if (prom->cell->state == PROMISE_EAGER)
+    {
+      *stkvt(0) = prom->cell->val;
+      return false;
+    }
+    else
+    {
+      state->force = true;
+      setclosure(stkvt(0), prom->cell->clo);
+      return true;
+    }
+  }
+  else
+  {
+    *stkvt(0) = proc;
+    return false;
+  }
+}
+
+static CallFrame* recallforce(VM* vm, CallFrame* frm, ValueT* base)
+{
+  Stack* stk = Stk(vm);
+  PromiseObj* prom = promiseref(base);
+  frm->force->cell = prom->cell;
+  ClosureObj* newcall = prom->cell->clo;
+  CallFrame* prevfrm = stk->rtnfrm(frm);
+  frm = stk->newfrm(prevfrm, base, newcall->lambda->argnum, newcall->lambda->top);
+  frm->start = base;
+  frm->force = prom;
+  return frm;
+}
+
 static CallFrame* ctorclosurefrm(VM* vm, Instruction i, CallFrame* frm, ValueT* base, int len, CallAppState* callstate)
 {
   Stack* stk = Stk(vm);
   ClosurePtr newcall = closureref(base);
   ensurearity(vm, base, len, newcall->lambda->argnum, newcall->lambda->argrest, "", callstate->fromapply);
-  if (GET_OP(i) == OP_CALLAPP || callstate->callcc || callstate->unwind)
+  if (GET_OP(i) == OP_CALLAPP || callstate->callcc || callstate->unwind || callstate->force)
   {
     frm = stk->newfrm(frm, base, newcall->lambda->argnum, newcall->lambda->top);
     frm->start = base;
+    if (callstate->force)
+    {
+      ValueT* prom = base+1;
+      Assert(vm, ispromise(prom), "internal error, not a promise in force");
+      frm->force = promiseref(prom);
+    }
   }
   else
   {
@@ -2029,6 +2115,13 @@ void VM::execute(CallFrame* frm)
     clo->initouters(this, frm->seg, base, call->outers);
     break;
   }
+  case OP_PROMISE: {
+    int target;getcode_promise(i, target);
+    ValueT* proc = stkvt(target);
+    AssertVT(this, isclosure(proc), proc, "internal error, not a closure in delay");
+    setpromise(proc, newpromise(this, closureref(proc)));
+    break;
+  }
   case OP_TAILCALLAPP:
   case OP_CALLAPP: {
     int k, len;GET_OPAB(i, k, len);
@@ -2067,6 +2160,12 @@ void VM::execute(CallFrame* frm)
           callwithoutputstr(this, frm, proc, &len, &callstate);
           goto recallapp;
         }
+        case NATIVE_COMPLEX_FORCE: {
+          if (callforce(this, frm, proc, &len, &callstate))
+            goto recallapp;
+          else
+            break;
+        }
         default:
           Error(this, "not supported complex native proc %d yet\n", nproc->complexid);
           break;
@@ -2081,9 +2180,7 @@ void VM::execute(CallFrame* frm)
           break;
       }
     }
-    else
-    {
-      if (isclosure(proc))
+    else  if (isclosure(proc))
       {
         frm = ctorclosurefrm(this, i, frm, proc, len, &callstate);
         checkcalliofile(this, frm, proc+1, &callstate);
@@ -2109,10 +2206,27 @@ void VM::execute(CallFrame* frm)
       else
         ErrorVT(this, proc, "not a procedure");
     }
-  }
   case OP_RETURN: {
     ac0 = *frm->start = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
     frm->seg->closeouterval(this, frm, frm->base);
+    if (frm->force)
+    {
+      if (ispromise(frm->start))
+      {
+        frm = recallforce(this, frm, frm->start);
+        base = frm->base;
+        call = closureref(base);
+        lambda = call->lambda;
+        pc = lambda->getcodestart();
+        goto loop;
+      }
+      else
+      {
+        frm->force->cell->val = ac0;
+        frm->force->cell->state = PROMISE_EAGER;
+        frm->force = NULL;
+      }
+    }
     frm = stk->rtnfrm(frm);
     if (!stk->isbasefrm(frm))
     {
@@ -2192,6 +2306,7 @@ static void constvalinit(VM* vm)
   initreserve2(syntaxerrvt, "syntax-error");
   initreserve2(defsyntaxvt, "define-syntax");
   initreserve2(ellipsisvt, "...");
+  initreserve2(delayvt, "delay");
   initreserve2(quotevt, "quote");
   initreserve2(uquotevt, "unquote");
   initreserve2(uquotesvt, "unquote-splicing");
@@ -2223,6 +2338,7 @@ void VM::init()
   regComplex("call-with-input-file", NATIVE_COMPLEX_CALL_WITH_IN_FILE);
   regComplex("call-with-output-file", NATIVE_COMPLEX_CALL_WITH_OUT_FILE);
   regComplex("call-with-output-string", NATIVE_COMPLEX_CALL_WITH_OUT_STR);
+  regComplex("force", NATIVE_COMPLEX_FORCE);
 }
 
 void VM::getuniquesym(SymPtr sym, ValueT* out)
@@ -2643,6 +2759,16 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
     oport->writestr("#<procedure>");
     break;
   }
+  case VT_REF_PROMISE:{
+    PromiseObj* ptr = promiseref(val);
+    oport->writestr("#<promise:");
+    if (ptr->cell->state == PROMISE_EAGER)
+      oport->writestr("eager");
+    else
+      oport->writestr("done");
+    oport->writechar('>');
+    break;
+  }
   case VT_REF_HYGIENE_SYM:
     oport->writestr(Ssstr(hygienesymref(val)->sym));
     oport->writechar('|');
@@ -2961,6 +3087,21 @@ void ClosureObj::initouters(VM* vm, StackSegment* seg, ValueT* base, OuterVal** 
       outers[i] = seg->findouterval(vm, base + 1 + ov->idx);
     else
       outers[i] = encouter[ov->idx];
+  }
+}
+
+void PromiseCellObj::visit(VM* vm)
+{
+  switch (state) {
+  case PROMISE_LAZY:
+    Check(clo);
+    break;
+  case PROMISE_EAGER:
+    Check(val);
+    break;
+  default:
+    Assert(vm, isundefined(&val), "internal error, promise's cell not null");
+    break;
   }
 }
 

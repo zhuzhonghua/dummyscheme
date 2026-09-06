@@ -135,6 +135,7 @@ public:
   void compiledeflambda(int target, ValueT* vt, ValueT* body, ValueT* link);
   void compileset(int target, ValueT* pair, ValueT* link);
   void compileapp(int target, ValueT* val, ValueT* link);
+  void compiledelay(int target, ValueT* val, ValueT* link);
 
   void compileqquote(int target, ValueT* val, int depth);
   void compileqquotecons(int target, ValueT* a, ValueT* d, int depth);

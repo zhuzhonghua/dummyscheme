@@ -41,6 +41,7 @@ enum OPCode {
   OP_CALLAPP,
   OP_TAILCALLAPP,
   OP_LAMBDA,
+  OP_PROMISE,
   OP_IFFALSEJUMP,
   OP_SETLOCAL,
   OP_SETOVAR,
@@ -114,6 +115,9 @@ enum OPCode {
 
 #define code_lambda(A, B) CREATE_OPAB(OP_LAMBDA, A, B)
 #define getcode_lambda(i, A, B) GET_OPAB(i, A, B)
+
+#define code_promise(A) CREATE_OPA(OP_PROMISE, A)
+#define getcode_promise(i, A) GET_OPA(i, A)
 
 #define code_callapp(k, len) CREATE_OPAB(OP_CALLAPP, k, len)
 #define getcode_callapp(i, k, len) GET_OPAB(i, k, len)

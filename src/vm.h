@@ -276,6 +276,11 @@ struct CallFrame;
 #define setclosure(VT, e) settyperef(VT, VT_REF_CLOSURE, e)
 #define closureref(VT) toref(VT, ClosurePtr)
 
+/* PromiseObj */
+#define ispromise(VT) istype(VT, VT_REF_PROMISE)
+#define setpromise(VT, e) settyperef(VT, VT_REF_PROMISE, e)
+#define promiseref(VT) toref(VT, PromiseObj*)
+
 /* NativeProc */
 #define isnativeproc(VT) istype(VT, VT_REF_NATIVE)
 #define setnativeproc(VT, f) settyperef(VT, VT_REF_NATIVE, f)
@@ -433,6 +438,7 @@ struct NumBigObj;
 #define iskwsyntaxerr(vm, VT) (iskeyword(VT, &vm->syntaxerrvt))
 #define iskwdefsyntax(vm, VT) (iskeyword(VT, &vm->defsyntaxvt))
 #define iskwellipsis(vm, VT) (iskeyword(VT, &vm->ellipsisvt))
+#define iskwdelay(vm, VT) (iskeyword(VT, &vm->delayvt))
 
 #define iskwquote(vm, VT) (iskeyword(VT, &vm->quotevt))
 #define iskwqquote(vm, VT) (iskeyword(VT, &vm->qquotevt))
@@ -469,6 +475,7 @@ enum ValueTEnum {
   VT_REF_OPORT,
   VT_REF_LAMBDA,
   VT_REF_CLOSURE,
+  VT_REF_PROMISE,
   VT_REF_CONTINUATION,
   VT_REF_MACRO,
   VT_REF_SYNTAX,
@@ -884,14 +891,17 @@ public:
   OuterVal* findouterval(VM*, ValueT* level);
   void closeouterval(VM* vm, CallFrame* frm, ValueT* level);
 
+  virtual void finz(VM* vm);
   GetSize(StackSegment)
 
   int frozen;
   OuterVal* outers;
 };
 
+typedef void (*UnWindFrame)(VM*, CallFrame*);
+struct PromiseObj;
 struct CallFrame : public RefObject {
-  CallFrame():
+  CallFrame():unwind(NULL), force(NULL),
     pc(-1),prev(NULL),seg(NULL),start(NULL),base(NULL),top(NULL) {}
 
   void setpc(int p) { pc = p; }
@@ -905,6 +915,8 @@ struct CallFrame : public RefObject {
   ValueT* start;
   ValueT* base;
   ValueT* top; // not included
+  UnWindFrame unwind;
+  PromiseObj* force;
 };
 
 class Stack {
@@ -1211,6 +1223,7 @@ enum NATIVE_COMPLEX_PROC {
   NATIVE_COMPLEX_CALL_WITH_IN_FILE,
   NATIVE_COMPLEX_CALL_WITH_OUT_FILE,
   NATIVE_COMPLEX_CALL_WITH_OUT_STR,
+  NATIVE_COMPLEX_FORCE,
   NATIVE_COMPLEX_EVAL,
   NATIVE_COMPLEX_MAX,
 };
@@ -1248,6 +1261,7 @@ public:
   ValueT syntaxerrvt;
   ValueT defsyntaxvt;
   ValueT ellipsisvt;
+  ValueT delayvt;
 
   ValueT ac0;
   InputPortObj* iport;
@@ -1605,6 +1619,27 @@ struct ClosureObj : public RefObject {
   LambdaPtr lambda;
   short n;
   OuterVal* outers[1];
+};
+
+typedef enum PromiseState { PROMISE_NONE, PROMISE_LAZY, PROMISE_EAGER };
+struct PromiseCellObj : public RefObject {
+  PromiseCellObj(): clo(NULL) { setundefined(&val); state = PROMISE_NONE; }
+
+  virtual void visit(VM* vm);
+  GetSize(PromiseCellObj)
+
+  PromiseState state;
+  ClosureObj* clo;
+  ValueT val;
+};
+
+struct PromiseObj : public RefObject {
+  PromiseObj(): cell(NULL) { }
+
+  virtual void visit(VM* vm) { if (cell) cell->visit(vm); }
+  GetSize(PromiseObj)
+
+  PromiseCellObj* cell;
 };
 
 struct ContinuationObj : public RefObject {
