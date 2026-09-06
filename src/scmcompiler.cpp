@@ -1233,7 +1233,8 @@ bool PatnTmpl::trymatch(ValueT* expr, ValueT* ptn, int depth, MatchState* state)
     if (isliteral(state->literals, ptnsym))
     {
       ValueT* expr0 = annotatevt(expr);
-      return issym(expr0) && ptnsym == symref(expr0);
+      return (issym(expr0) && ptnsym == symref(expr0)) ||
+        (ishygienesym(expr0) && ptnsym == hygienesymref(expr0)->sym);
     }
     state->matches->addmatch(ptn, expr);
     return true;
