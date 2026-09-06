@@ -147,16 +147,17 @@ StkGCVar::~StkGCVar()
 
 void StackSegment::finz(VM* vm)
 {
+  closeouterval(vm, NULL);
   RefObject::finz(vm);
 }
 
-void StackSegment::closeouterval(VM* vm, CallFrame* frm, ValueT* level)
+void StackSegment::closeouterval(VM* vm, ValueT* level)
 {
   OuterVal** p = &outers;
   while ((*p) != NULL && (*p)->valp >= level)
   {
     OuterVal* next = (*p)->next;
-    (*p)->close(vm, frm);
+    (*p)->close(vm);
     *p = next;
   }
 }
@@ -217,6 +218,11 @@ void Stack::setvoid(ValueT* s, ValueT* e)
 
 CallFrame* Stack::rtnfrm(CallFrame* frm)
 {
+  if (frm->unwind)
+  {
+    frm->unwind(vm, frm);
+    frm->unwind = NULL;
+  }
   return curfrm = frm->prev;
 }
 
@@ -1566,7 +1572,7 @@ void VM::printframe()
 struct CallAppState {
   CallAppState(): force(false), callcc(false), unwind(NULL), fromapply(false) {}
   bool callcc;
-  UnWindFunc unwind;
+  UnWindFrame unwind;
   bool fromapply;
   bool force;
 };
@@ -1702,26 +1708,29 @@ static void checkcallcc(VM* vm, CallFrame* oldfrm, ValueT* base, int len, CallAp
   callstate->callcc = true;
 }
 
-static void closeiport(VM* vm, CallFrame* frm, ValueT* val)
+static void closeiport(VM* vm, CallFrame* frm)
 {
+  ValueT* val = frm->base + 1;
   InputPortObj* iport = iportref(val);
   iport->close();
 }
 
-static void closeoport(VM* vm, CallFrame* frm, ValueT* val)
+static void closeoport(VM* vm, CallFrame* frm)
 {
+  ValueT* val = frm->base + 1;
   OutputPortObj* oport = oportref(val);
   oport->close();
 }
 
-static void closeoportstr(VM* vm, CallFrame* frm, ValueT* val)
+static void closeoportstr(VM* vm, CallFrame* frm)
 {
+  ValueT* val = frm->base + 1;
   OutputPortStrObj* oport = oportstrref(val);
-  oport->close();
   StrObj* str = vm->strintern(oport->strbuf.buf, oport->strbuf.count);
   ValueT out;
   setstr(&out, str);
   vm->ac0 = *frm->start = out;
+  oport->close();
 }
 
 static void callwithfile(VM* vm, ValueT* base, int len, CallAppState* callstate, ValueT** procp, ValueT** filep, const char* METHOD)
@@ -1931,10 +1940,11 @@ static CallFrame* ctorclosurefrm(VM* vm, Instruction i, CallFrame* frm, ValueT* 
       Assert(vm, ispromise(prom), "internal error, not a promise in force");
       frm->force = promiseref(prom);
     }
+    if (callstate->unwind) frm->unwind = callstate->unwind;
   }
   else
   {
-    frm->seg->closeouterval(vm, frm, frm->base);
+    frm->seg->closeouterval(vm, frm->base);
     frm->top = frm->base + 1 + newcall->lambda->top;
     if (frm->seg->frozen > 0 || frm->top >= frm->seg->end())
     {
@@ -1950,15 +1960,6 @@ static CallFrame* ctorclosurefrm(VM* vm, Instruction i, CallFrame* frm, ValueT* 
   }
   stk->setvoid(frm->base+newcall->lambda->argnum+1, frm->top-1);
   return frm;
-}
-
-static void checkcalliofile(VM* vm, CallFrame* frm, ValueT* val, CallAppState* callstate)
-{
-  if (callstate->unwind)
-  {
-    OuterVal* ov = frm->seg->findouterval(vm, val);
-    ov->unwind = callstate->unwind;
-  }
 }
 
 void VM::execute(CallFrame* frm)
@@ -2175,7 +2176,7 @@ void VM::execute(CallFrame* frm)
       {
         ensurearity(this, proc, len, nproc->argnum, nproc->argrest, Ssstr(nproc->var), callstate.fromapply);
         *proc = scmcallcproc(this, nproc, proc+1);
-        if (callstate.unwind) callstate.unwind(this, frm, proc+1);
+        if (callstate.unwind) callstate.unwind(this, frm);
       }
     afternative:
         if (icode == OP_CALLAPP)
@@ -2184,7 +2185,6 @@ void VM::execute(CallFrame* frm)
     else  if (isclosure(proc))
       {
         frm = ctorclosurefrm(this, i, frm, proc, len, &callstate);
-        checkcalliofile(this, frm, proc+1, &callstate);
         base = frm->base;
         call = closureref(base);
         lambda = call->lambda;
@@ -2195,7 +2195,6 @@ void VM::execute(CallFrame* frm)
       {
         ContinuationPtr cont = continuationref(proc);
         frm = stk->curfrm = cont->frm;
-        checkcalliofile(this, frm, proc+1, &callstate);
         ac0 = *cont->base = proc+1;
         base = frm->base;
         call = closureref(base);
@@ -2209,7 +2208,7 @@ void VM::execute(CallFrame* frm)
     }
   case OP_RETURN: {
     ac0 = *frm->start = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
-    frm->seg->closeouterval(this, frm, frm->base);
+    frm->seg->closeouterval(this, frm->base);
     if (frm->force)
     {
       if (ispromise(frm->start))
@@ -3059,13 +3058,8 @@ int OutputPortStrObj::write(VM* vm, ValueT* vt)
   return 0;
 }
 
-void OuterVal::close(VM* vm, CallFrame* frm)
+void OuterVal::close(VM* vm)
 {
-  if (unwind)
-  {
-    unwind(vm, frm, valp);
-    unwind = NULL;
-  }
   val = *valp;
   valp = &val;
 }

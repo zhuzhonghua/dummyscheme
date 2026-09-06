@@ -889,7 +889,7 @@ public:
   ValueT* first() { return &slots[0]; }
   ValueT* end() { return &slots[SEGMENT_SLOTS_SIZE]; }
   OuterVal* findouterval(VM*, ValueT* level);
-  void closeouterval(VM* vm, CallFrame* frm, ValueT* level);
+  void closeouterval(VM* vm, ValueT* level);
 
   virtual void finz(VM* vm);
   GetSize(StackSegment)
@@ -1587,20 +1587,16 @@ struct AnnotationObj : public RefObject {
   int line;
 };
 
-typedef void (*UnWindFunc)(VM*, CallFrame*, ValueT*);
-
 struct OuterVal : public RefObject {
   OuterVal() {
     valp = NULL;
     next = NULL;
-    unwind = NULL;
   }
   GetSize(OuterVal)
-  void close(VM*, CallFrame*);
+  void close(VM*);
   ValueT* valp;
   ValueT val;
   OuterVal* next;
-  UnWindFunc unwind;
 };
 
 struct ClosureObj : public RefObject {
