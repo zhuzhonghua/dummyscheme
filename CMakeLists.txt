@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.10)
 
 project(vm C CXX)
 
-add_executable(vm src/main.cpp src/vm.cpp src/scmbasic.cpp src/scmmath.cpp src/scmstring.cpp src/scmcompiler.cpp src/scmport.cpp src/scmvector.cpp)
-include_directories(src)
+add_executable(vm main.cpp vm.cpp scmbasic.cpp scmmath.cpp scmstring.cpp scmcompiler.cpp scmport.cpp scmvector.cpp)
+include_directories(src .)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0")
 
