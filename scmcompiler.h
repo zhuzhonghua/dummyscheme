@@ -1,5 +1,6 @@
 #pragma once
 
+#include "vm.h"
 #include <cstdio>
 namespace Scheme {
 
@@ -110,9 +111,9 @@ struct SyntaxObj : public RefObject {
 
 class SCompiler {
 public:
-  SCompiler(VM* v, LambdaPtr lam, SCompiler* enclosing, ValueT* n2h):
-    vm(v), lambda(lam), enclose(enclosing), name2hy(n2h),
-    prevline(0) {}
+  SCompiler(VM* v, LambdaPtr lam, SCompiler* enclosing):
+    vm(v), lambda(lam), enclose(enclosing),
+    prevline(0), name2hystk(v) {}
   ~SCompiler();
 public:
   void compilelink(ValueT* link, int line);
@@ -158,7 +159,7 @@ public:
   int prevline;
   SCompiler* enclose;
   ValueT defs;
-  ValueT* name2hy;
+  StkVar name2hystk;
   LambdaPtr lambda;
   VM* vm;
 };

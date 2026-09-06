@@ -311,7 +311,7 @@ void SCompiler::compiledefsym(int target, ValueT* symvt, ValueT* expr, ValueT* l
 
 void SCompiler::compilelambda0(int target, int line, ValueT* param, ValueT* body)
 {
-  Sgcvar2(vm, newlambdavt, name2hy);
+  Sgcvar1(vm, newlambdavt);
   LambdaPtr newlambda = NULL;
   setref(newlambdavt, newlambda = Sr0(vm, LambdaObj));
   int k = lambda->addl(vm, newlambda);
@@ -319,7 +319,7 @@ void SCompiler::compilelambda0(int target, int line, ValueT* param, ValueT* body
   newlambda->vars = Sr0(vm, LambdaVarsObj);
   newlambda->source = lambda->source;
   newlambda->defline = line;
-  SCompiler compiler(vm, newlambda, this, name2hy);
+  SCompiler compiler(vm, newlambda, this);
   compiler.prevline = newlambda->defline;
   initlambdaparam(vm, newlambda, param);
   compiler.compileseqpre(body);
@@ -920,6 +920,7 @@ bool SCompiler::finddef(SymPtr sym)
 
 void SCompiler::sym2hygiene(ValueT* name, ValueT* out)
 {
+  ValueT* name2hy = &name2hystk.val;
   PAIR_FOR(p, name2hy)
   {
     ValueT* pcar = Scar(p);

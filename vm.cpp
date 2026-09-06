@@ -2521,7 +2521,7 @@ bool VM::dolex(Lexer* lex, StrPtr source)
 {
   ReserveStack _reservestk_(this);
   Stack* stk = Stk(this);
-  Sgcvar3(this, expr, lambdavt, _dummy);
+  Sgcvar2(this, expr, lambdavt);
   LambdaPtr lambda = NULL;
   setlambda(lambdavt, lambda = Sr0(this, LambdaObj));
   lambda->source = source;
@@ -2537,7 +2537,7 @@ bool VM::dolex(Lexer* lex, StrPtr source)
     Print("\n");
 #endif
 
-    SCompiler compiler(this, lambda, NULL, _dummy);
+    SCompiler compiler(this, lambda, NULL);
     compiler.prevline = lambda->defline;
     compiler.compile(1, expr, Sreturn, true);
 
