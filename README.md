@@ -6,7 +6,7 @@ A portable, embeddable Scheme implementation based on a register-oriented byteco
 
 - Bytecode compiler with register-based instruction set
 - tail-call optimization
-- First-class continuations (`call/cc`)
+- First-class continuations (`call/cc`) (currently it's unlimited, but delimited will be supported in the near future)
 - Flattened upvalue design for closures, inspired by Lua
 - Stack segment technique for continuation capture and chain walking, inspired by Chez Scheme
 - Two-halves incremental generational GC (partially implemented)
