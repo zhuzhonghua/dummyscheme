@@ -140,9 +140,21 @@ void ArrayObj::finz(VM* vm)
   vec_finz(ValueT, vm, &array);
 }
 
-StkGCVar::~StkGCVar()
+StkVar::StkVar(VM* v):vm(v), prev(NULL), next(NULL)
 {
-  Stk(vm)->sv = sv->next;
+  Stack* stk = Stk(vm);
+  this->prev = stk->sv;
+  if (stk->sv) stk->sv->next = this;
+  stk->sv = this;
+}
+
+StkVar::~StkVar()
+{
+  Stack* stk = Stk(vm);
+  StkVar* next = this->next, *prev = this->prev;
+  if (next) next->prev = prev;
+  if (prev) prev->next = next;
+  if (stk->sv == this) stk->sv = prev;
 }
 
 void StackSegment::finz(VM* vm)
@@ -197,8 +209,8 @@ void Stack::fullmark()
   StkVar *ptr = sv;
   while (ptr)
   {
-    Check(ptr->var);
-    ptr = ptr->next;
+    Check(ptr->val);
+    ptr = ptr->prev;
   }
   Check(curfrm);
 }

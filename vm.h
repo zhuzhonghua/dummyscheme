@@ -844,39 +844,26 @@ struct PairObj : public RefObject {
 
 #define CONCAT(A, B) A##B
 #define VARNAME(NAME) CONCAT(NAME, _stk_)
-#define VARNAME2(NAME) CONCAT(NAME, _gc_)
-#define VARNAME3(NAME) CONCAT(NAME, __LINE__)
+//#define VARNAME2(NAME) CONCAT(NAME, _gc_)
+//#define VARNAME3(NAME) CONCAT(NAME, __LINE__)
 
-#define __s_gcvar(vm, NAME, y)                                    \
-  ValueT VARNAME(NAME); ValueT* NAME = &VARNAME(NAME);            \
-  StkVar VARNAME(y)(NAME, Stk(vm)->sv); StkVar* y = &VARNAME(y);  \
-  Stk(vm)->sv = y;
+#define Sgcvar1(vm, NAME) __s_gcvar(vm, NAME)
+#define Sgcvar2(vm, a, b) Sgcvar1(vm,a);__s_gcvar(vm,b);
+#define Sgcvar3(vm, a, b, c) Sgcvar2(vm,a,b);__s_gcvar(vm,c);
+#define Sgcvar4(vm, a, b, c, d) Sgcvar3(vm,a,b,c);__s_gcvar(vm,d);
+#define Sgcvar5(vm, a, b, c, d, e) Sgcvar4(vm,a,b,c,d);__s_gcvar(vm,e);
+#define Sgcvar6(vm, a, b, c, d, e, f) Sgcvar5(vm,a,b,c,d,e);__s_gcvar(vm,f);
 
-#define Sgcvar1(vm, NAME)                                               \
-  __s_gcvar(vm, NAME, __stack_var_gc_reserve1);                         \
-  StkGCVar VARNAME2(__stack_var_gc_reserve1)(vm, __stack_var_gc_reserve1);
-
-#define Sgcvar2(vm, a, b) Sgcvar1(vm,a);__s_gcvar(vm,b,__stack_var_gc_reserve2);
-#define Sgcvar3(vm, a, b, c) Sgcvar2(vm,a,b);__s_gcvar(vm,c,__stack_var_gc_reserve3);
-#define Sgcvar4(vm, a, b, c, d) Sgcvar3(vm,a,b,c);__s_gcvar(vm,d,__stack_var_gc_reserve4);
-#define Sgcvar5(vm, a, b, c, d, e) Sgcvar4(vm,a,b,c,d);__s_gcvar(vm,e,__stack_var_gc_reserve5);
-#define Sgcvar6(vm, a, b, c, d, e, f) Sgcvar5(vm,a,b,c,d,e);__s_gcvar(vm,f,__stack_var_gc_reserve6);
+#define __s_gcvar(vm, NAME) StkVar VARNAME(NAME)(vm); ValueT* NAME = &(VARNAME(NAME) .val);
 
 struct StkVar {
-  ValueT* var;
+  ValueT val;
+  StkVar* prev;
   StkVar* next;
-  StkVar():var(NULL),next(NULL) {}
-  StkVar(ValueT* v, StkVar* n):
-    var(v),next(n) {}
-};
-
-struct StkGCVar {
-  StkVar* sv;
   VM* vm;
 
-  StkGCVar(VM* v, StkVar* v1):
-    vm(v), sv(v1) {}
-  ~StkGCVar();
+  StkVar(VM* v);
+  ~StkVar();
 };
 
 #define SEGMENT_SLOTS_SIZE 128
