@@ -75,6 +75,15 @@
 
 (define letrec* letrec)
 
+(define-syntax let-syntax
+  (syntax-rules ()
+    ((_ ((k spec) ...) body ...)
+     (let ()
+       (define-syntax k spec) ...
+       body ...))))
+
+(define letrec-syntax let-syntax)
+
 (define-syntax and
   (syntax-rules ()
     ((_) #t)
