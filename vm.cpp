@@ -927,6 +927,8 @@ void SCM::list2vector(VM* vm, ValueT* lst, ValueT* out)
 
 void SCM::copystripanno(VM* vm, ValueT* out, ValueT* annos)
 {
+  AssertVT(vm, isnull(annos) || isannotate(annos), annos,
+           "internal error, not annotate %d", vttype(annos));
   if (isnull(annos))
   {
     setnull(out);

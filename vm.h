@@ -410,6 +410,7 @@ struct NumBigObj;
 
 /* AnnotationObj */
 #define setannotate(VT, e) settyperef(VT, VT_REF_ANNOTATION, e)
+#define isannotate(VT) istype(VT, VT_REF_ANNOTATION)
 #define annotateref(VT) toref(VT, AnnotationObj*)
 #define annotatevt(VT) (&(annotateref(VT)->vt))
 #define annotateline(VT) (annotateref(VT)->line)
