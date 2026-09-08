@@ -2191,33 +2191,33 @@ void VM::execute(CallFrame* frm)
         if (callstate.unwind) callstate.unwind(this, frm);
       }
     afternative:
-        if (icode == OP_CALLAPP)
-          break;
-      }
-    else  if (isclosure(proc))
-      {
-        frm = ctorclosurefrm(this, i, frm, proc, len, &callstate);
-        base = frm->base;
-        call = closureref(base);
-        lambda = call->lambda;
-        pc = lambda->getcodestart();
-        goto loop;
-      }
-      else if (iscontinuation(proc))
-      {
-        ContinuationPtr cont = continuationref(proc);
-        frm = stk->curfrm = cont->frm;
-        ac0 = *cont->base = proc+1;
-        base = frm->base;
-        call = closureref(base);
-        lambda = call->lambda;
-        pc = frm->getpc();
-        Assert(this, len == 1, "return error in call continuation, len=%d", len);
+      if (icode == OP_CALLAPP)
         break;
-      }
-      else
-        ErrorVT(this, proc, "not a procedure");
     }
+    else  if (isclosure(proc))
+    {
+      frm = ctorclosurefrm(this, i, frm, proc, len, &callstate);
+      base = frm->base;
+      call = closureref(base);
+      lambda = call->lambda;
+      pc = lambda->getcodestart();
+      goto loop;
+    }
+    else if (iscontinuation(proc))
+    {
+      ContinuationPtr cont = continuationref(proc);
+      frm = stk->curfrm = cont->frm;
+      ac0 = *cont->base = proc+1;
+      base = frm->base;
+      call = closureref(base);
+      lambda = call->lambda;
+      pc = frm->getpc();
+      Assert(this, len == 1, "return error in call continuation, len=%d", len);
+      break;
+    }
+    else
+      ErrorVT(this, proc, "not a procedure");
+  }
   case OP_RETURN: {
     ac0 = *frm->start = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
     frm->seg->closeouterval(this, frm->base);

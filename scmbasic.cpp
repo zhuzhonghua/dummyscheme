@@ -32,9 +32,9 @@ static ValueT scm_stub_set_car(VM* vm, ValueT* p, ValueT* pd)
 
 #define CARCDR2(NAME, A, B)                           \
 static ValueT scm_stub_ ## NAME (VM* vm, ValueT* p) { \
-  AssertArgPair(vm, p, #NAME);                            \
+  AssertArgPair(vm, p, #NAME);                        \
   p = B (p);                                          \
-  AssertArgPair(vm, p, #NAME);                            \
+  AssertArgPair(vm, p, #NAME);                        \
   return A (p);                                       \
 }
 

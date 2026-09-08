@@ -150,6 +150,8 @@ public:
   bool finddef(SymPtr sym);
   void adddef(SymPtr sym);
 
+  bool isboundvar(SymPtr sym);
+
   void sym2hygiene(ValueT* name, ValueT* out);
 
   SyntaxPtr getsyntax0(SymPtr symtype);

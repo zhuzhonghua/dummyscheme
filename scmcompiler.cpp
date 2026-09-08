@@ -910,6 +910,15 @@ void SCompiler::adddef(SymPtr sym)
   setpair(&defs, SCM::cons(vm, &symvt, &defs));
 }
 
+bool SCompiler::isboundvar(SymPtr sym)
+{
+  for (SCompiler* l = this; l && l->lambda->vars; l = l->enclose)
+    if (l->lambda->vars->looklocal(sym) >= 0 ||
+        l->lambda->vars->lookovar(sym) >= 0)
+      return true;
+  return false;
+}
+
 bool SCompiler::finddef(SymPtr sym)
 {
   PAIR_FOR(p, &defs)
@@ -1233,6 +1242,8 @@ bool PatnTmpl::trymatch(ValueT* expr, ValueT* ptn, int depth, MatchState* state)
     SymPtr ptnsym = symref(ptn);
     if (isliteral(state->literals, ptnsym))
     {
+      if (state->lstate->isboundvar(ptnsym))
+        return false;
       ValueT* expr0 = annotatevt(expr);
       return (issym(expr0) && ptnsym == symref(expr0)) ||
         (ishygienesym(expr0) && ptnsym == hygienesymref(expr0)->sym);
