@@ -2886,7 +2886,9 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
     oport->writestr("#<output-port>");
     break;
   default:
-    Error(this, "printvalue unknown type %d", vttype(val));
+    fprintf(stderr, "printvalue unknown type %d\n", vttype(val));
+    *((int*)0) = 0;
+    //Error(this, "printvalue unknown type %d", vttype(val));
   }
 }
 
