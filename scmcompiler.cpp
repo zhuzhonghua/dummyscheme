@@ -159,26 +159,6 @@ static void vectorannotate2cons(VM* vm, ValueT* out, ArrayObj* arr)
   }
 }
 
-static void stripannotate(ValueT* annos)
-{
-  if (isnull(annos))
-    return;
-  ValueT* annovt = annotatevt(annos);
-  *annos = annovt;
-  if (ispair(annovt))
-  {
-    stripannotate(Scar(annovt));
-    stripannotate(Scdr(annovt));
-  }
-  else if (isarray(annovt))
-  {
-    ArrayObj* arr = arrayref(annovt);
-    VecT<ValueT>* array = &arr->array;
-    VEC_FOR(i, array)
-      stripannotate(array->getptr(i));
-  }
-}
-
 static void stripannotateliterals(VM* vm, ValueT* literals)
 {
   if (isnull(literals))
@@ -1072,8 +1052,12 @@ void PatnTmpl::init(VM* vm, ValueT* literals, ValueT* expr)
   compileassert(vm, isnull(expr0), expr0, "%s", whatsyntaxr);
   initpatn(vm, literals, &patn);
   inittmpl(vm, literals, &tmpl, NULL, 0);
-  stripannotate(&patn);
-  stripannotate(&tmpl);
+  Sgcvar1(vm, patn2);
+  Sgcvar1(vm, tmpl2);
+  SCM::copystripanno(vm, patn2, &patn);
+  SCM::copystripanno(vm, tmpl2, &tmpl);
+  patn = *patn2;
+  tmpl = *tmpl2;
 }
 
 void PatnTmpl::checktmplsym(VM* vm, ValueT* literals, ValueT* expr, ValueT* usedpvd, int depth)

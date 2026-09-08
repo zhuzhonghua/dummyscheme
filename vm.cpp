@@ -2852,11 +2852,7 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
   case VT_REF_ANNOTATION: {
     AnnotationObj* anno = annotateref(val);
     if (stripanno)
-    {
-      Sgcvar1(this, out);
-      SCM::copystripanno(this, out, val);
-      printvalue0(oport, out);
-    }
+      printvalue0(oport, &anno->vt, true);
     else
     {
       oport->writestr("(annotation line:");
