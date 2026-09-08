@@ -77,6 +77,35 @@ static bool isformannotate(ValueT* vt, ValueT* formkey)
   return iskeyword(annotatevt(&dummy1), formkey);
 }
 
+bool isboundvar(SCompiler* compiler, SymPtr sym)
+{
+  for (SCompiler* l = compiler; l && l->lambda->vars; l = l->enclose)
+    if (l->lambda->vars->looklocal(sym) >= 0 ||
+        l->lambda->vars->lookovar(sym) >= 0)
+      return true;
+  return false;
+}
+
+static bool isformannoshadow(SCompiler* compiler, ValueT* vt, ValueT* formkey)
+{
+  ValueT dummy1, dummy2;
+  ValueT* vt0 = quietsplitannotate(vt, 2, &dummy1, &dummy2);
+  if (vt0 == NULL) return false;
+  if (!isnull(vt0)) return false;
+  ValueT* keyvt = annotatevt(&dummy1);
+  if (issym(keyvt))
+  {
+    SymPtr symkey = symref(keyvt);
+    return symkey == symref(formkey) && !isboundvar(compiler, symkey);
+  }
+  else if ishygienesym(keyvt)
+  {
+    HygieneSymPtr hysymkey = hygienesymref(keyvt);
+    return hysymkey->sym == symref(formkey) && !isboundvar(compiler, hysymkey->hysym);
+  }
+  return false;
+}
+
 static int annotatelistlen(VM* vm, const char* what, ValueT* expr)
 {
   if (isnull(expr))
@@ -645,7 +674,7 @@ void SCompiler::compileqquote(int target, ValueT* expr, int depth)
   if (ispair(expr0))
   {
     ValueT dummy, vt;
-    if (isformannotate(expr, &vm->uquotevt))
+    if (isformannoshadow(this, expr, &vm->uquotevt))
     {
       splitannotatelist(vm, expr, whatqq1, 2, &dummy, &vt);
       if (depth == 0)
@@ -666,7 +695,7 @@ void SCompiler::compileqquote(int target, ValueT* expr, int depth)
     {
       ValueT* head = Scar(expr0);
       ValueT* tail = Scdr(expr0);
-      if (isformannotate(head, &vm->uquotesvt))
+      if (isformannoshadow(this, head, &vm->uquotesvt))
       {
         splitannotatelist(vm, head, whatqq1, 2, &dummy, &vt);
         if (depth == 0)
@@ -716,7 +745,7 @@ void SCompiler::compileqquotearray(int target, ValueT* expr, int depth)
     for(int i = 0; i < array->n-1; i++)
     {
       item = array->getptr(i);
-      if (isformannotate(item, &vm->uquotesvt))
+      if (isformannoshadow(this, item, &vm->uquotesvt))
       {
         splitannotatelist(vm, item, whatqq1, 2, &dummy, &vt);
         if (depth == 0)
@@ -741,7 +770,7 @@ void SCompiler::compileqquotearray(int target, ValueT* expr, int depth)
       }
     }
     item = array->getptr(array->n-1);
-    if (isformannotate(item, &vm->uquotesvt))
+    if (isformannoshadow(this, item, &vm->uquotesvt))
     {
       splitannotatelist(vm, item, whatqq1, 2, &dummy, &vt);
       if (depth == 0)
@@ -908,15 +937,6 @@ void SCompiler::adddef(SymPtr sym)
   ValueT symvt;
   setsym(&symvt, sym);
   setpair(&defs, SCM::cons(vm, &symvt, &defs));
-}
-
-bool SCompiler::isboundvar(SymPtr sym)
-{
-  for (SCompiler* l = this; l && l->lambda->vars; l = l->enclose)
-    if (l->lambda->vars->looklocal(sym) >= 0 ||
-        l->lambda->vars->lookovar(sym) >= 0)
-      return true;
-  return false;
 }
 
 bool SCompiler::finddef(SymPtr sym)
@@ -1242,7 +1262,7 @@ bool PatnTmpl::trymatch(ValueT* expr, ValueT* ptn, int depth, MatchState* state)
     SymPtr ptnsym = symref(ptn);
     if (isliteral(state->literals, ptnsym))
     {
-      if (state->lstate->isboundvar(ptnsym))
+      if (isboundvar(state->lstate, ptnsym))
         return false;
       ValueT* expr0 = annotatevt(expr);
       return (issym(expr0) && ptnsym == symref(expr0)) ||
