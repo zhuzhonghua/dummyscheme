@@ -2,6 +2,12 @@
 
 A portable, embeddable Scheme implementation based on a register-oriented bytecode vm
 
+# Thoughts
+
+I'm making a scheme implementation that's like lua, a vm register and bytecode-based with line level debug info
+
+To embed dummyscheme to a host program, just copy source files under src, and write some plugin methods to register them to dummyscheme'vm easily as lua
+
 ## Features
 
 - Bytecode compiler with register-based instruction set
