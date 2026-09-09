@@ -14,6 +14,8 @@
 
 namespace Scheme {
 
+//#define SCHEME_STD_R4RS
+
 static void *salloc(void *ptr, size_t nsize) {
   if (nsize == 0) {
     free(ptr);
@@ -60,7 +62,7 @@ typedef double scm_float;
 #define Debug(x)
 #define DebugMem(x)
 #define DebugReg(x)
-#define DebugVT
+//#define DebugVT
 //#define DebugSRule
 //#define DebugCCode
 //#define DebugQQuote

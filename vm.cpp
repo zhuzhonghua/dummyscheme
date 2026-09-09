@@ -533,12 +533,20 @@ void Interns::checkResize()
   }
 }
 
+static void symputbufchar(Lbuffer* buf, char c)
+{
+#ifdef SCHEME_STD_R4RS
+  buf->put(toupper(c));
+#else
+  buf->put(c);
+#endif
+}
+
 SymPtr Interns::internsym(const char* str, int n)
 {
   buf.count = 0;
   for (int i = 0; i < n; i++)
-    //buf.put(toupper(str[i]));
-    buf.put(str[i]);
+    symputbufchar(&buf, str[i]);
   return intern(buf.buf, n);
 }
 
@@ -1725,6 +1733,7 @@ static void checkcallcc(VM* vm, CallFrame* oldfrm, ValueT* base, int len, CallAp
 static void closeiport(VM* vm, CallFrame* frm)
 {
   ValueT* val = frm->base + 1;
+  AssertVT(vm, isiport(val), val, "internal error, not a iport in close");
   InputPortObj* iport = iportref(val);
   iport->close();
 }
@@ -1732,6 +1741,7 @@ static void closeiport(VM* vm, CallFrame* frm)
 static void closeoport(VM* vm, CallFrame* frm)
 {
   ValueT* val = frm->base + 1;
+  AssertVT(vm, isoport(val), val, "internal error, not a oport in close");
   OutputPortObj* oport = oportref(val);
   oport->close();
 }
@@ -2190,7 +2200,13 @@ void VM::execute(CallFrame* frm)
       {
         ensurearity(this, proc, len, nproc->argnum, nproc->argrest, Ssstr(nproc->var), callstate.fromapply);
         *proc = scmcallcproc(this, nproc, proc+1);
-        if (callstate.unwind) callstate.unwind(this, frm);
+        if (callstate.unwind)
+        {
+          ValueT* oldbase = frm->base;
+          frm->base = proc;
+          callstate.unwind(this, frm);
+          frm->base = oldbase;
+        }
       }
     afternative:
       if (icode == OP_CALLAPP)
