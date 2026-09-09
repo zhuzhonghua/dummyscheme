@@ -670,6 +670,7 @@ public:
   ArrayObj() {}
   ArrayObj(VM* vm, int c);
   void set(int i, ValueT* ele) { array.set(i, *ele); }
+  int arrayn() { return array.n; }
   ValueT* get(int i) { return array.getptr(i); }
   void shrink(VM* vm);
   int add(VM* vm, ValueT* ele);

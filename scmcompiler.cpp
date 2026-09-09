@@ -159,23 +159,17 @@ static void vectorannotate2cons(VM* vm, ValueT* out, ArrayObj* arr)
   }
 }
 
-static void stripannotateliterals(VM* vm, ValueT* literals)
+static void copystripannotateliterals(VM* vm, ValueT* target, ValueT* literals)
 {
-  if (isnull(literals))
-    return;
-  static const char* what = "syntax-rules: bad syntax, not a sym in literals";
+  if (isnull(literals)) return;
+  static const char* what = "syntax-rules: bad syntax, ";
   ValueT* literals0 = annotatevt(literals);
-  if (ispair(literals0))
-  {
+  compileassert(vm, ispair(literals0), literals0, "%s, literals needs symbol list", what);
     ValueT* symvt = Scar(literals0);
     ValueT* symvt0 = annotatevt(symvt);
-    compileassert(vm, issym(symvt0), symvt, "%s", what);
-    *symvt = symvt0;
-    stripannotateliterals(vm, Scdr(literals0));
-  }
-  else
-    compileassert(vm, isnull(literals0), literals, "%s", what);
-  *literals = literals0;
+  compileassert(vm, issym(symvt0), symvt0, "%s, not a symbol in literals", what);
+  setpair(target, SCM::cons(vm, symvt0, Snullref));
+  copystripannotateliterals(vm, Scdr(target), Scdr(literals0));
 }
 
 static void addlambdaparam(VM* vm, LambdaPtr lambda, ValueT* expr)
@@ -541,14 +535,11 @@ void SCompiler::compilesyntaxrules(ValueT* expr, ValueT* out)
   static const char* what = "syntax-rules: bad syntax";
   ValueT _dummy_, literals, vt;
   ValueT* expr0 = splitannotatelist(vm, expr, what, 2, &_dummy_, &literals);
-  SyntaxRules* syntaxr = Sr0(vm, SyntaxRules);
+  SyntaxRules* syntaxr = Sr1(vm, SyntaxRules, vm);
   setsyntaxrules(out, syntaxr);
   ValueT* literals0 = annotatevt(&literals);
   if (ispair(literals0))
-  {
-    syntaxr->literals = literals;
-    stripannotateliterals(vm, &syntaxr->literals);
-  }
+    copystripannotateliterals(vm, &syntaxr->literals, &literals);
   else
     compileassert(vm, isnull(literals0), &literals, "%s, not null or list in literals", what);
   compileassert(vm, !isnull(expr0), &literals, "%s, not null or list in literals", what);
@@ -560,7 +551,7 @@ void SCompiler::compilesyntaxrules(ValueT* expr, ValueT* out)
       ValueT* vt0 = annotatevt(&vt);
       compileassert(vm, ispair(vt0), &vt, "%s", what);
       PatnTmpl* pt = syntaxr->newsrule(vm);
-      pt->init(vm, &syntaxr->literals, &vt);
+      pt->init(vm, syntaxr, &vt);
     } while (!isnull(expr0));
   }
   else
@@ -1046,12 +1037,12 @@ PairPtr MatchObj::getsymmatch(SymPtr sym)
   return NULL;
 }
 
-void PatnTmpl::init(VM* vm, ValueT* literals, ValueT* expr)
+void PatnTmpl::init(VM* vm, SyntaxRules* syntaxr, ValueT* expr)
 {
   ValueT* expr0 = splitannotatelist(vm, expr, whatsyntaxr, 2, &patn, &tmpl);
   compileassert(vm, isnull(expr0), expr0, "%s", whatsyntaxr);
-  initpatn(vm, literals, &patn);
-  inittmpl(vm, literals, &tmpl, NULL, 0);
+  initpatn(vm, syntaxr, &patn);
+  inittmpl(vm, syntaxr, &tmpl, NULL, 0);
   Sgcvar1(vm, patn2);
   Sgcvar1(vm, tmpl2);
   SCM::copystripanno(vm, patn2, &patn);
@@ -1060,11 +1051,11 @@ void PatnTmpl::init(VM* vm, ValueT* literals, ValueT* expr)
   tmpl = *tmpl2;
 }
 
-void PatnTmpl::checktmplsym(VM* vm, ValueT* literals, ValueT* expr, ValueT* usedpvd, int depth)
+void PatnTmpl::checktmplsym(VM* vm, SyntaxRules* syntaxr, ValueT* expr, ValueT* usedpvd, int depth)
 {
   ValueT* sym = annotatevt(expr);
   SymPtr symtmpl = symref(sym);
-  if (isliteral(literals, symtmpl))
+  if (syntaxr->isliteral(symtmpl))
     return;
   PatnVarDepth* pvd = ispatnvar(symtmpl);
   if (pvd)
@@ -1077,59 +1068,59 @@ void PatnTmpl::checktmplsym(VM* vm, ValueT* literals, ValueT* expr, ValueT* used
   }
 }
 
-void PatnTmpl::inittmpl(VM* vm, ValueT* literals, ValueT* expr, ValueT* usedpvd, int depth)
+void PatnTmpl::inittmpl(VM* vm, SyntaxRules* syntaxr, ValueT* expr, ValueT* usedpvd, int depth)
 {
   ValueT* expr0 = annotatevt(expr);
   if (issym(expr0))
-    checktmplsym(vm, literals, expr, usedpvd, depth);
+    checktmplsym(vm, syntaxr, expr, usedpvd, depth);
   else if(ispair(expr0))
   {
     ValueT* paira = Scar(expr0), * paird = Scdr(expr0);
     ValueT* paira0 = annotatevt(paira);
-    compileassert(vm, !iskwellipsis(vm, paira0), paira, "%s, ellipsis is first", whatsyntaxr);
+    compileassert(vm, !syntaxr->isellipsis(vm, paira0), paira, "%s, ellipsis is first", whatsyntaxr);
     if (isnull(paird))
-      inittmpl(vm, literals, paira, usedpvd, depth);
+      inittmpl(vm, syntaxr, paira, usedpvd, depth);
     else
     {
       ValueT* paird0 = annotatevt(paird);
-      compileassert(vm, !iskwellipsis(vm, paird0), paird, "%s, ellipsis is in a improper list", whatsyntaxr);
+      compileassert(vm, !syntaxr->isellipsis(vm, paird0), paird, "%s, ellipsis is in a improper list", whatsyntaxr);
       // (a ... b)
-      if (ispair(paird0) && iskwellipsis(vm, annotatevt(Scar(paird0))))
+      if (ispair(paird0) && syntaxr->isellipsis(vm, annotatevt(Scar(paird0))))
       {
         Sgcvar1(vm, expectpvd);
         ValueT* usedpvd0 = usedpvd ? usedpvd : expectpvd;
-        inittmpl(vm, literals, paira, usedpvd0, depth + 1);
+        inittmpl(vm, syntaxr, paira, usedpvd0, depth + 1);
         compileassert(vm, !isnull(usedpvd0), paira, "%s, no pattern variable before ...", whatsyntaxr);
         paird = Scdr(paird0);
         if (!isnull(paird))
-          inittmpl(vm, literals, paird, usedpvd, depth);
+          inittmpl(vm, syntaxr, paird, usedpvd, depth);
       }
       else
       {
-        inittmpl(vm, literals, paira, usedpvd, depth);
-        inittmpl(vm, literals, paird, usedpvd, depth);
+        inittmpl(vm, syntaxr, paira, usedpvd, depth);
+        inittmpl(vm, syntaxr, paird, usedpvd, depth);
       }
     }
   }
 }
 
-void PatnTmpl::initpatn(VM* vm, ValueT* literals, ValueT* expr)
+void PatnTmpl::initpatn(VM* vm, SyntaxRules* syntaxr, ValueT* expr)
 {
   ValueT key;
   splitannotatelist(vm, expr, whatsyntaxr, 1, &key);
   ValueT* key0 = annotatevt(&key);
   compileassert(vm, issym(key0), &key, "%s, not a symbol", whatsyntaxr);
-  compileassert(vm, !isliteral(literals, symref(key0)), &key, "%s, cannot be in literals", whatsyntaxr);
-  initpatn(vm, literals, expr, 0);
+  compileassert(vm, !syntaxr->isliteral(symref(key0)), &key, "%s, cannot be in literals", whatsyntaxr);
+  initpatn(vm, syntaxr, expr, 0);
 }
 
-void PatnTmpl::initpatn(VM* vm, ValueT* literals, ValueT* expr, int depth)
+void PatnTmpl::initpatn(VM* vm, SyntaxRules* syntaxr, ValueT* expr, int depth)
 {
   ValueT* expr0 = annotatevt(expr);
   if (issym(expr0))
   {
     SymPtr sym = symref(expr0);
-    if (isliteral(literals, sym))
+    if (syntaxr->isliteral(sym))
       return;
     compileassert(vm, ispatnvar(sym) == NULL, expr, "%s, multi var %s", whatsyntaxr, Ssstr(sym));
     addvar(vm, sym, depth);
@@ -1138,22 +1129,22 @@ void PatnTmpl::initpatn(VM* vm, ValueT* literals, ValueT* expr, int depth)
   {
     ValueT* paira = Scar(expr0), * paird = Scdr(expr0);
     ValueT* paira0 = annotatevt(paira);
-    compileassert(vm, !iskwellipsis(vm, paira0), paira, "%s, ellipsis is the car", whatsyntaxr);
+    compileassert(vm, !syntaxr->isellipsis(vm, paira0), paira, "%s, ellipsis is the car", whatsyntaxr);
     if (isnull(paird))
-      initpatn(vm, literals, paira, depth);
+      initpatn(vm, syntaxr, paira, depth);
     else
     {
       ValueT* paird0 = annotatevt(paird);
-      compileassert(vm, !iskwellipsis(vm, paird0), paird, "%s, ellipsis is in a improper list", whatsyntaxr);
-      if (ispair(paird0) && iskwellipsis(vm, annotatevt(Scar(paird0))))
+      compileassert(vm, !syntaxr->isellipsis(vm, paird0), paird, "%s, ellipsis is in a improper list", whatsyntaxr);
+      if (ispair(paird0) && syntaxr->isellipsis(vm, annotatevt(Scar(paird0))))
       {
         compileassert(vm, isnull(Scdr(paird0)), paird, "%s, don't support items after ellipsis", whatsyntaxr);
-        initpatn(vm, literals, paira, depth + 1);
+        initpatn(vm, syntaxr, paira, depth + 1);
       }
       else
       {
-        initpatn(vm, literals, paira, depth);
-        initpatn(vm, literals, paird, depth);
+        initpatn(vm, syntaxr, paira, depth);
+        initpatn(vm, syntaxr, paird, depth);
       }
     }
   }
@@ -1217,7 +1208,7 @@ bool PatnTmpl::trymatchrepeat1(ValueT* expr, ValueT* tomatch, int depth, MatchSt
 bool PatnTmpl::trymatchpair(ValueT* expr, ValueT* ptncar, ValueT* ptncdr, int depth, MatchState* state)
 {
   VM* vm = state->lstate->vm;
-  if (ispair(ptncdr) && iskwellipsis(vm, Scar(ptncdr)))
+  if (ispair(ptncdr) && state->syntaxr->isellipsis(vm, Scar(ptncdr)))
   {
     if (!isnull(Scdr(ptncdr)))
       Serrorvt(vm, ptncdr, "internal error, ellipsis not the last");
@@ -1244,7 +1235,7 @@ bool PatnTmpl::trymatch(ValueT* expr, ValueT* ptn, int depth, MatchState* state)
   {
     if (isnull(expr)) return false;
     SymPtr ptnsym = symref(ptn);
-    if (isliteral(state->literals, ptnsym))
+    if (state->syntaxr->isliteral(ptnsym))
     {
       if (isboundvar(state->lstate, ptnsym))
         return false;
@@ -1263,19 +1254,19 @@ bool PatnTmpl::trymatch(ValueT* expr, ValueT* ptn, int depth, MatchState* state)
     if (!isarray(expr0)) return false;
     ArrayObj* arr = arrayref(expr0);
     ArrayObj* ptnarr = arrayref(ptn);
-    for (int i = 0; i < arr->array.n; i++)
+    for (int i = 0; i < arr->arrayn(); i++)
     {
-      if (i+1 < ptnarr->array.n)
+      if (i+1 < ptnarr->arrayn())
       {
-        ValueT* nextvt = ptnarr->array.getptr(i+1);
-        if (iskwellipsis(vm, nextvt))
+        ValueT* nextvt = ptnarr->get(i+1);
+        if (state->syntaxr->isellipsis(vm, nextvt))
         {
-          if (i+1 != ptnarr->array.n-1)
+          if (i+1 != ptnarr->arrayn()-1)
             Serrorvt(vm, ptn, "internal error, ellipsis not the last");
-          return trymatchrepeat2(arr, i, ptnarr->array.getptr(i), depth, state);
+          return trymatchrepeat2(arr, i, ptnarr->get(i), depth, state);
         }
       }
-      else if (!trymatch(arr->array.getptr(i), ptnarr->array.getptr(i), depth, state))
+      if (!trymatch(arr->get(i), ptnarr->get(i), depth, state))
         return false;
     }
     return true;
@@ -1291,7 +1282,7 @@ bool PatnTmpl::trymatch(ValueT* expr, ValueT* ptn, int depth, MatchState* state)
 void PatnTmpl::expandpair(ValueT* out, ValueT* atpl, ValueT* dtpl, int depth, MatchState* state)
 {
   VM* vm = state->lstate->vm;
-  if (ispair(dtpl) && iskwellipsis(vm, Scar(dtpl)))
+  if (ispair(dtpl) && state->syntaxr->isellipsis(vm, Scar(dtpl)))
   {
     Sgcvar3(vm, elloutvt, repeat, next);
     ArrayObj* ellout = NULL;
@@ -1341,7 +1332,7 @@ void PatnTmpl::expandarray(ValueT* out, ValueT* tpl, int i, int depth, MatchStat
   if (i + 1 < n)
   {
     ValueT* rep = arro->get(i+1);
-    if (iskwellipsis(vm, rep))
+    if (state->syntaxr->isellipsis(vm, rep))
       repeat = true;
   }
   if (repeat)
@@ -1388,7 +1379,7 @@ void PatnTmpl::expand(ValueT* out, ValueT* tpl, int depth, MatchState* state)
   else if (issym(tpl))
   {
     SymPtr symtpl = symref(tpl);
-    if (isliteral(state->literals, symtpl))
+    if (state->syntaxr->isliteral(symtpl))
     {
       *out = tpl;
       SCM::toAnnotation(vm, out, annotateline(state->expr));
@@ -1462,6 +1453,16 @@ void PatnTmpl::addvar(VM* vm, SymPtr sym, int d)
   pd->depth = d;
 }
 
+SyntaxRules::SyntaxRules(VM* vm)
+{
+  ellipsis = &vm->ellipsisvt;
+}
+
+bool SyntaxRules::isellipsis(VM* vm, ValueT* vt)
+{
+  return iskwellipsis(vm, vt);
+}
+
 PatnTmpl* SyntaxRules::newsrule(VM* vm)
 {
   vec_ensure(PatnTmpl, vm, &rules, vec_fill2(PatnTmpl()));
@@ -1504,9 +1505,9 @@ PatnTmpl* SyntaxRules::expand(SCompiler* lstate, ValueT* out, ValueT* expr)
   MatchState mstate;
   mstate.expr = expr;
   mstate.lstate = lstate;
-  mstate.literals = &literals;
   mstate.idxarr = &arr;
   mstate.matches = &match;
+  mstate.syntaxr = this;
   VEC_FOR(i, &rules)
   {
     PatnTmpl* pt = rules.getptr(i);

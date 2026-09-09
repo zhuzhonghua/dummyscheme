@@ -30,21 +30,22 @@ struct PatnVarDepth {
   PatnVarDepth():sym(NULL), depth(-1) {}
 };
 
+class SyntaxRules;
 struct MatchState {
   SCompiler* lstate;
-  ValueT* literals;
   ValueT* expr;
   IntArray* idxarr;
   MatchObj* matches;
+  SyntaxRules* syntaxr;
 };
 
 class PatnTmpl {
 public:
-  void init(VM* vm, ValueT* literals, ValueT* );
-  void initpatn(VM* vm, ValueT* literals, ValueT*);
-  void initpatn(VM* vm, ValueT* literals, ValueT* , int);
-  void inittmpl(VM* vm, ValueT* literals, ValueT*, ValueT*, int);
-  void checktmplsym(VM* vm, ValueT* literals, ValueT* sym, ValueT*, int depth);
+  void init(VM* vm, SyntaxRules*, ValueT* );
+  void initpatn(VM* vm, SyntaxRules*, ValueT*);
+  void initpatn(VM* vm, SyntaxRules*, ValueT* , int);
+  void inittmpl(VM* vm, SyntaxRules*, ValueT*, ValueT*, int);
+  void checktmplsym(VM* vm, SyntaxRules*, ValueT* sym, ValueT*, int depth);
 
   bool trymatchrepeat2(ArrayObj* arr, int idx, ValueT* tomatch, int depth, MatchState* state);
   bool trymatchrepeat1(ValueT* expr, ValueT* tomatch, int depth, MatchState* state);
@@ -55,12 +56,6 @@ public:
   void expandpair(ValueT* out, ValueT* atpl, ValueT* dtpl, int depth, MatchState* state);
   void expand(ValueT* out, ValueT* tpl, int depth, MatchState* state);
 
-  bool isliteral(ValueT* literals, SymPtr sym) {
-    PAIR_FOR(p, literals)
-      if (sym == symref(Scar(p)))
-        return true;
-    return false;
-  }
   void addvar(VM* vm, SymPtr sym, int d);
   PatnVarDepth* ispatnvar(SymPtr sym);
   void visit(VM* vm) {
@@ -82,6 +77,7 @@ public:
 
 class SyntaxRules : public RefObject {
 public:
+  SyntaxRules(VM*);
   PatnTmpl* expand(SCompiler* state, ValueT* out, ValueT* expr);
   PatnTmpl* newsrule(VM* vm);
   void addlits(VM* vm, SymPtr lit, ValueT* expr);
@@ -90,11 +86,19 @@ public:
     VEC_FOR(i, &rules)
       rules.get(i).visit(vm);
   }
+  bool isliteral(SymPtr sym) {
+    PAIR_FOR(p, &literals)
+      if (sym == symref(Scar(p)))
+        return true;
+    return false;
+  }
+  bool isellipsis(VM*, ValueT* vt);
   virtual void finz(VM* vm);
   void shrink(VM* vm);
 
   GetSize(SyntaxRules)
 
+  ValueT* ellipsis;
   ValueT literals;
   VecT<PatnTmpl> rules;
 };
