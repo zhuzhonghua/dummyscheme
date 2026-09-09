@@ -537,6 +537,8 @@ void SCompiler::compilesyntaxrules(ValueT* expr, ValueT* out)
   ValueT* expr0 = splitannotatelist(vm, expr, what, 2, &_dummy_, &literals);
   SyntaxRules* syntaxr = Sr1(vm, SyntaxRules, vm);
   setsyntaxrules(out, syntaxr);
+  if (isboundvar(this, symref(&vm->ellipsisvt)))
+    syntaxr->ellipsis = Snullref;
   ValueT* literals0 = annotatevt(&literals);
   if (ispair(literals0))
     copystripannotateliterals(vm, &syntaxr->literals, &literals);
@@ -1460,7 +1462,7 @@ SyntaxRules::SyntaxRules(VM* vm)
 
 bool SyntaxRules::isellipsis(VM* vm, ValueT* vt)
 {
-  return iskwellipsis(vm, vt);
+  return issym(vt) && issym(ellipsis) && symref(vt) == symref(ellipsis);
 }
 
 PatnTmpl* SyntaxRules::newsrule(VM* vm)
