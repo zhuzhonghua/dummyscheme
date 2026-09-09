@@ -2818,13 +2818,16 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
       do {
         printvalue0(oport, Scar(hare), stripanno);
         hare = Scdr(hare);
+        if (stripanno && isannotate(hare)) hare = annotatevt(hare);
         if (!ispair(hare)) break;
         oport->writechar(' ');
         printvalue0(oport, Scar(hare), stripanno);
         hare = Scdr(hare);
+        if (stripanno && isannotate(hare)) hare = annotatevt(hare);
         if (!ispair(hare)) break;
         oport->writechar(' ');
         tortoise = Scdr(tortoise);
+        if (stripanno && isannotate(tortoise)) tortoise = annotatevt(tortoise);
       } while (tortoise != hare);
       if (tortoise == hare)
         Serror("cycle list");
