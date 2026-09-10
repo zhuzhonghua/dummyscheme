@@ -2632,13 +2632,14 @@ void VM::printvalue(ValueT* val)
   printvalue0(this->oport, val);
 }
 
-static bool checkpairform(VM* vm, bool strip, ValueT* val, ValueT* form, const char* what)
+static bool checkpairform(VM* vm, bool strip, ValueT* val, ValueT* form, ValueT* out, const char* what)
 {
   ValueT* carvt = Scar(val);
   if (iskeyword(carvt, form))
   {
     ValueT* cdrvt = Scdr(val);
     AssertVT(vm, ispair(cdrvt) && isnull(Scdr(cdrvt)), val, "%s, bad syntax", what);
+    *out = Scar(cdrvt);
     return true;
   }
   else if (strip && isannotate(carvt))
@@ -2650,6 +2651,7 @@ static bool checkpairform(VM* vm, bool strip, ValueT* val, ValueT* form, const c
       AssertVT(vm, isannotate(cdrvt), val, "%s, bad syntax", what);
       cdrvt = annotatevt(cdrvt);
       AssertVT(vm, ispair(cdrvt) && isnull(Scdr(cdrvt)), val, "%s, bad syntax", what);
+      *out = Scar(cdrvt);
       return true;
     }
   }
@@ -2830,26 +2832,27 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
   case VT_REF_SYM:
     oport->writestr(Ssstr(symref(val)));
     break;
-  case VT_REF_PAIR:
-    if (checkpairform(this, stripanno, val, &quotevt, "quote"))
+  case VT_REF_PAIR: {
+    ValueT out;
+    if (checkpairform(this, stripanno, val, &quotevt, &out, "quote"))
     {
       oport->writechar('\'');
-      printvalue0(oport, Scadr(val), stripanno);
+      printvalue0(oport, &out, stripanno);
     }
-    else if (checkpairform(this, stripanno, val, &qquotevt, "quasiquote"))
+    else if (checkpairform(this, stripanno, val, &qquotevt, &out, "quasiquote"))
     {
       oport->writechar('`');
-      printvalue0(oport, Scadr(val), stripanno);
+      printvalue0(oport, &out, stripanno);
     }
-    else if (checkpairform(this, stripanno, val, &uquotevt, "unquote"))
+    else if (checkpairform(this, stripanno, val, &uquotevt, &out, "unquote"))
     {
       oport->writechar(',');
-      printvalue0(oport, Scadr(val), stripanno);
+      printvalue0(oport, &out, stripanno);
     }
-    else if (checkpairform(this, stripanno, val, &uquotesvt, "unquote-splicing"))
+    else if (checkpairform(this, stripanno, val, &uquotesvt, &out, "unquote-splicing"))
     {
       oport->writestr(",@");
-      printvalue0(oport, Scadr(val), stripanno);
+      printvalue0(oport, &out, stripanno);
     }
     else
     {
@@ -2879,6 +2882,7 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
       oport->writechar(')');
     }
     break;
+  }
   case VT_REF_ARRAY:{
     oport->writestr("#(");
     ArrayObj* arr = arrayref(val);

@@ -77,6 +77,10 @@
 
 (define-syntax let-syntax
   (syntax-rules ()
+
+    ((_ () body ...)
+     (begin body ...))
+
     ((_ ((k spec) ...) body ...)
      (let ()
        (define-syntax k spec) ...
