@@ -2632,6 +2632,30 @@ void VM::printvalue(ValueT* val)
   printvalue0(this->oport, val);
 }
 
+static bool checkpairform(VM* vm, bool strip, ValueT* val, ValueT* form, const char* what)
+{
+  ValueT* carvt = Scar(val);
+  if (iskeyword(carvt, form))
+  {
+    ValueT* cdrvt = Scdr(val);
+    AssertVT(vm, ispair(cdrvt) && isnull(Scdr(cdrvt)), val, "%s, bad syntax", what);
+    return true;
+  }
+  else if (strip && isannotate(carvt))
+  {
+    carvt = annotatevt(carvt);
+    if (iskeyword(carvt, form))
+    {
+      ValueT* cdrvt = Scdr(val);
+      AssertVT(vm, isannotate(cdrvt), val, "%s, bad syntax", what);
+      cdrvt = annotatevt(cdrvt);
+      AssertVT(vm, ispair(cdrvt) && isnull(Scdr(cdrvt)), val, "%s, bad syntax", what);
+      return true;
+    }
+  }
+  return false;
+}
+
 void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
 {
   switch(vttype(val)) {
@@ -2807,22 +2831,22 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
     oport->writestr(Ssstr(symref(val)));
     break;
   case VT_REF_PAIR:
-    if (isformquote(this, val))
+    if (checkpairform(this, stripanno, val, &quotevt, "quote"))
     {
       oport->writechar('\'');
       printvalue0(oport, Scadr(val), stripanno);
     }
-    else if (isformqquote(this, val))
+    else if (checkpairform(this, stripanno, val, &qquotevt, "quasiquote"))
     {
       oport->writechar('`');
       printvalue0(oport, Scadr(val), stripanno);
     }
-    else if (isformuquote(this, val))
+    else if (checkpairform(this, stripanno, val, &uquotevt, "unquote"))
     {
       oport->writechar(',');
       printvalue0(oport, Scadr(val), stripanno);
     }
-    else if (isformuquotes(this, val))
+    else if (checkpairform(this, stripanno, val, &uquotesvt, "unquote-splicing"))
     {
       oport->writestr(",@");
       printvalue0(oport, Scadr(val), stripanno);

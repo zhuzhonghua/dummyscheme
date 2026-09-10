@@ -448,12 +448,6 @@ struct NumBigObj;
 #define iskwuquote(vm, VT) (iskeyword(VT, &vm->uquotevt))
 #define iskwuquotes(vm, VT) (iskeyword(VT, &vm->uquotesvt))
 
-#define iskwform(VT, kw) (ispair(VT) && iskeyword(Scar(VT), (kw)) && ispair(Scdr(VT)) && isnull(Scddr(VT)))
-#define isformquote(vm, VT) (iskwform(VT, &vm->quotevt))
-#define isformuquote(vm, VT) (iskwform(VT, &vm->uquotevt))
-#define isformuquotes(vm, VT) (iskwform(VT, &vm->uquotesvt))
-#define isformqquote(vm, VT) (iskwform(VT, &vm->qquotevt))
-
 enum ValueTEnum {
   VT_UNDEFINED = 0, // internal use
   VT_VOID, // the unspecified value
