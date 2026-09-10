@@ -439,7 +439,6 @@ void SCompiler::compileset(int target, ValueT* expr, ValueT* link)
 
 void SCompiler::compileseqpre0(ValueT* vt)
 {
-  static const char* what = "begin: bad syntax, last not an expression";
   ValueT* vt0 = annotatevt(vt);
   if (ispair(vt0))
   {
@@ -453,6 +452,20 @@ void SCompiler::compileseqpre0(ValueT* vt)
     {
       if (!isnull(Scdr(vt0)))
         compileseqpre(Scdr(vt0));
+    }
+    else
+    {
+      ValueT typeout;
+      SyntaxPtr syntax = getsyntax(type, &typeout);
+      if (syntax)
+      {
+        if (ishygienesym(type)) *type = typeout;
+        SyntaxRules* proc = syntax->proc;
+        Sgcvar1(vm, out);
+        proc->expand(this, out, vt);
+        *vt = out;
+        compileseqpre(vt);
+      }
     }
   }
 }
