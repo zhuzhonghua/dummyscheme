@@ -814,7 +814,7 @@ void SCompiler::compilepair(int target, ValueT* expr, ValueT* link, bool defok)
     int line = annotateline(&dummy);
     Sgcvar1(vm, dummy0);
     SCM::copystripanno(vm, dummy0, &dummy);
-    //ValueT* dummy0 = annotatevt(&dummy);
+    checkhygienesym(dummy0, dummy0);
     compilelink(link, line);
     int k = lambda->addk(vm, dummy0);
     putcode(code_assign(target, k), line);
