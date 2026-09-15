@@ -1634,9 +1634,7 @@ struct PromiseObj : public RefObject {
 #define DW_AFTER  3
 
 struct DynamicWindObj : public RefObject {
-  DynamicWindObj(): state(-1),
-    parent(NULL), before(NULL), body(NULL), after(NULL) {
-  }
+  DynamicWindObj(): state(-1), parent(NULL) {}
 
   Visit4(parent, before, body, after)
   GetSize(DynamicWindObj)

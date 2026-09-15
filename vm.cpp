@@ -2256,7 +2256,7 @@ void VM::execute(CallFrame* frm)
             goto afternative;
         }
         case NATIVE_COMPLEX_DYNAMIC_WIND: {
-          calldynamicwind(this, frm, proc, &len, &callstate))
+          calldynamicwind(this, frm, proc, &len, &callstate);
           goto recallapp;
         }
         default:
@@ -2458,7 +2458,7 @@ void VM::init()
   regComplex("call-with-output-file", NATIVE_COMPLEX_CALL_WITH_OUT_FILE);
   regComplex("call-with-output-string", NATIVE_COMPLEX_CALL_WITH_OUT_STR);
   regComplex("force", NATIVE_COMPLEX_FORCE);
-  regComplex("dynamic-wind", NATIVE_COMPLEX_DYNAMIC_WIND);
+  //regComplex("dynamic-wind", NATIVE_COMPLEX_DYNAMIC_WIND);
 }
 
 void VM::getuniquesym(SymPtr sym, ValueT* out)
