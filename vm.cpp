@@ -1968,13 +1968,13 @@ static void calldynamicwind(VM* vm, CallFrame* frm, ValueT* base, int* olen, Cal
   {
     AssertVT(vm, ispair(cw), cw, "%s: internal error in apply", METHOD);
     before = Scar(cw);
-    cw = Scdr(cw)
+    cw = Scdr(cw);
     AssertVT(vm, ispair(cw), cw, "%s: need 3 arguments", METHOD);
     body = Scar(cw);
-    cw = Scdr(cw)
+    cw = Scdr(cw);
     AssertVT(vm, ispair(cw), cw, "%s: need 3 arguments", METHOD);
     after = Scar(cw);
-    cw = Scdr(cw)
+    cw = Scdr(cw);
     AssertVT(vm, isnull(cw), cw, "%s: two much arguments", METHOD);
     state->fromapply = false;
   }
@@ -2275,6 +2275,25 @@ void VM::execute(CallFrame* frm)
           callstate.unwind(this, frm);
           frm->base = oldbase;
         }
+        if (callstate.dywind)
+        {
+          switch (callstate.dywind->state) {
+          case DW_BEFORE:
+            callstate.dywind->state = DW_BODY;
+            *proc = callstate.dywind->body;
+            goto recallapp;
+          case DW_BODY:
+            callstate.dywind->state = DW_AFTER;
+            *proc = callstate.dywind->after;
+            callstate.dywind->retval = proc;
+            goto recallapp;
+          case DW_AFTER:
+            callstate.dywind->state = -1;
+            goto afternative;
+          default:
+            Error(this, "internal error, dynamic-wind state error %d", callstate.dywind->state);
+          }
+        }
       }
     afternative:
       if (icode == OP_CALLAPP)
@@ -2283,6 +2302,8 @@ void VM::execute(CallFrame* frm)
     else  if (isclosure(proc))
     {
       frm = ctorclosurefrm(this, i, frm, proc, len, &callstate);
+      if (callstate.dywind)
+        frm->dynwind = callstate.dywind;
       base = frm->base;
       call = closureref(base);
       lambda = call->lambda;
@@ -3235,7 +3256,8 @@ void ContinuationObj::finz(VM* vm)
   RefObject::finz(vm);
 }
 
-ContinuationObj::ContinuationObj(CallFrame* s, ValueT* b):frm(s), base(b)
+ContinuationObj::ContinuationObj(CallFrame* s, ValueT* b)
+  :frm(s), base(b), dywind(NULL)
 {
   for (s = frm; s != NULL; s = s->prev)
     s->seg->frozen++;

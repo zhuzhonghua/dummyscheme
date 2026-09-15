@@ -885,6 +885,7 @@ public:
 };
 
 typedef void (*UnWindFrame)(VM*, CallFrame*);
+struct DynamicWindObj;
 struct PromiseObj;
 struct CallFrame : public RefObject {
   CallFrame():unwind(NULL), force(NULL),
@@ -903,6 +904,7 @@ struct CallFrame : public RefObject {
   ValueT* top; // not included
   UnWindFrame unwind;
   PromiseObj* force;
+  DynamicWindObj* dynwind;
 };
 
 struct DynamicWindObj;
@@ -1627,11 +1629,13 @@ struct PromiseObj : public RefObject {
   PromiseCellObj* cell;
 };
 
+#define DW_BEFORE 1
+#define DW_BODY   2
+#define DW_AFTER  3
+
 struct DynamicWindObj : public RefObject {
-  DynamicWindObj():
-    parent(NULL), before(NULL), body(NULL),
-    after(NULL) {
-    state = -1;
+  DynamicWindObj(): state(-1),
+    parent(NULL), before(NULL), body(NULL), after(NULL) {
   }
 
   Visit4(parent, before, body, after)
@@ -1639,20 +1643,22 @@ struct DynamicWindObj : public RefObject {
 
   DynamicWindObj* parent;
 
-  ClosureObj* before;
-  ClosureObj* body;
-  ClosureObj* after;
+  ValueT before;
+  ValueT body;
+  ValueT after;
 
   int state;
+  ValueT retval;
 };
 
 struct ContinuationObj : public RefObject {
   ContinuationObj(CallFrame* s, ValueT* base);
   virtual void finz(VM* vm);
-  Visit2(frm, base)
+  Visit3(frm, base, dywind)
   GetSize(ContinuationObj)
   CallFrame* frm;
   ValueT* base;
+  DynamicWindObj* dywind;
 };
 
 class Reader {
