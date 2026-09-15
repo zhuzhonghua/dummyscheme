@@ -165,8 +165,8 @@ static void copystripannotateliterals(VM* vm, ValueT* target, ValueT* literals)
   static const char* what = "syntax-rules: bad syntax, ";
   ValueT* literals0 = annotatevt(literals);
   compileassert(vm, ispair(literals0), literals0, "%s, literals needs symbol list", what);
-    ValueT* symvt = Scar(literals0);
-    ValueT* symvt0 = annotatevt(symvt);
+  ValueT* symvt = Scar(literals0);
+  ValueT* symvt0 = annotatevt(symvt);
   compileassert(vm, issym(symvt0), symvt0, "%s, not a symbol in literals", what);
   setpair(target, SCM::cons(vm, symvt0, Snullref));
   copystripannotateliterals(vm, Scdr(target), Scdr(literals0));
