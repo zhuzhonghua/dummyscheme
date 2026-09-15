@@ -1592,6 +1592,14 @@ void VM::printframe()
   }
 }
 
+enum CallAct {
+  CALLACT_NONE,
+  CALLACT_DONE,
+  CALLACT_ENTER,
+  CALLACT_RESUME_CC,
+  CALLACT_TAILRET
+};
+
 struct CallAppState {
   CallAppState():dywind(NULL),
     force(false), callcc(false), unwind(NULL), fromapply(false) {}
@@ -2013,12 +2021,12 @@ static CallFrame* recallforce(VM* vm, CallFrame* frm, ValueT* base)
   return frm;
 }
 
-static CallFrame* ctorclosurefrm(VM* vm, Instruction i, CallFrame* frm, ValueT* base, int len, CallAppState* callstate)
+static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* base, int len, CallAppState* callstate)
 {
   Stack* stk = Stk(vm);
   ClosurePtr newcall = closureref(base);
   ensurearity(vm, base, len, newcall->lambda->argnum, newcall->lambda->argrest, "", callstate->fromapply);
-  if (GET_OP(i) == OP_CALLAPP || callstate->callcc || callstate->unwind || callstate->force)
+  if (!istail || callstate->callcc || callstate->unwind || callstate->force || callstate->dywind)
   {
     frm = stk->newfrm(frm, base, newcall->lambda->argnum, newcall->lambda->top);
     frm->start = base;
@@ -2029,6 +2037,7 @@ static CallFrame* ctorclosurefrm(VM* vm, Instruction i, CallFrame* frm, ValueT* 
       frm->force = promiseref(prom);
     }
     if (callstate->unwind) frm->unwind = callstate->unwind;
+    if (callstate->dywind) frm->dynwind = callstate->dywind;
   }
   else
   {
@@ -2048,6 +2057,109 @@ static CallFrame* ctorclosurefrm(VM* vm, Instruction i, CallFrame* frm, ValueT* 
   }
   stk->setvoid(frm->base+newcall->lambda->argnum+1, frm->top-1);
   return frm;
+}
+
+static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len,  bool istail)
+{
+  Stack* stk = Stk(vm);
+  CallAppState state;
+ recallapp:
+  if (isnativeproc(proc))
+  {
+    NativeProcObj* nproc = nativeprocref(proc);
+    if (nproc->iscomplex())
+    {
+      switch(nproc->complexid) {
+      case NATIVE_COMPLEX_APPLY: {
+        if (state.fromapply)
+          flatshrinkapplyarity(vm, proc, proc+len);
+        else
+        {
+          shrinkapplyarity(vm, proc, &len);
+          state.fromapply = true;
+        }
+        goto recallapp;
+      }
+      case NATIVE_COMPLEX_CALLCC: {
+        checkcallcc(vm, *frm, proc, len, &state);
+        goto recallapp;
+      }
+      case NATIVE_COMPLEX_CALL_WITH_IN_FILE: {
+        callwithinputfile(vm, *frm, proc, &len, &state);
+        goto recallapp;
+      }
+      case NATIVE_COMPLEX_CALL_WITH_OUT_FILE: {
+        callwithoutputfile(vm, *frm, proc, &len, &state);
+        goto recallapp;
+      }
+      case NATIVE_COMPLEX_CALL_WITH_OUT_STR: {
+        callwithoutputstr(vm, *frm, proc, &len, &state);
+        goto recallapp;
+      }
+      case NATIVE_COMPLEX_FORCE: {
+        if (callforce(vm, *frm, proc, &len, &state))
+          goto recallapp;
+        else
+          goto afternative;
+      }
+      case NATIVE_COMPLEX_DYNAMIC_WIND: {
+        calldynamicwind(vm, *frm, proc, &len, &state);
+        goto recallapp;
+      }
+      default:
+        Error(vm, "not supported complex native proc %d yet\n", nproc->complexid);
+      }
+    }
+    else
+    {
+      ensurearity(vm, proc, len, nproc->argnum, nproc->argrest, Ssstr(nproc->var), state.fromapply);
+      *proc = scmcallcproc(vm, nproc, proc+1);
+      if (state.unwind)
+      {
+        ValueT* oldbase = (*frm)->base;
+        (*frm)->base = proc;
+        state.unwind(vm, *frm);
+        (*frm)->base = oldbase;
+      }
+      if (state.dywind)
+      {
+        switch (state.dywind->state) {
+        case DW_BEFORE:
+          state.dywind->state = DW_BODY;
+          *proc = state.dywind->body;
+          goto recallapp;
+        case DW_BODY:
+          state.dywind->state = DW_AFTER;
+          *proc = state.dywind->after;
+          state.dywind->retval = proc;
+          goto recallapp;
+        case DW_AFTER:
+          state.dywind->state = -1;
+          goto afternative;
+        default:
+          Error(vm, "internal error, dynamic-wind state error %d", state.dywind->state);
+        }
+      }
+    }
+  afternative:
+    return istail ? CALLACT_TAILRET : CALLACT_DONE;
+  }
+  else  if (isclosure(proc))
+  {
+    *frm = ctorclosurefrm(vm, istail, *frm, proc, len, &state);
+    return CALLACT_ENTER;
+  }
+  else if (iscontinuation(proc))
+  {
+    Assert(vm, len == 1, "return error in call continuation, len=%d", len);
+    ContinuationPtr cont = continuationref(proc);
+    *frm = stk->curfrm = cont->frm;
+    vm->ac0 = *cont->base = proc+1;
+    return CALLACT_RESUME_CC;
+  }
+  else
+    ErrorVT(vm, proc, "not a procedure");
+  return CALLACT_DONE;
 }
 
 void VM::execute(CallFrame* frm)
@@ -2215,116 +2327,30 @@ void VM::execute(CallFrame* frm)
   case OP_CALLAPP: {
     int k, len;GET_OPAB(i, k, len);
     ValueT* proc = stkvt(k);
-    CallAppState callstate;
-    recallapp:
-    if (isnativeproc(proc))
-    {
-      NativeProcObj* nproc = nativeprocref(proc);
-      if (nproc->iscomplex())
-      {
-        switch(nproc->complexid) {
-        case NATIVE_COMPLEX_APPLY: {
-          if (callstate.fromapply)
-            flatshrinkapplyarity(this, proc, proc+len);
-          else
-          {
-            shrinkapplyarity(this, proc, &len);
-            callstate.fromapply = true;
-          }
-          goto recallapp;
-        }
-        case NATIVE_COMPLEX_CALLCC: {
-          checkcallcc(this, frm, proc, len, &callstate);
-          goto recallapp;
-        }
-        case NATIVE_COMPLEX_CALL_WITH_IN_FILE: {
-          callwithinputfile(this, frm, proc, &len, &callstate);
-          goto recallapp;
-        }
-        case NATIVE_COMPLEX_CALL_WITH_OUT_FILE: {
-          callwithoutputfile(this, frm, proc, &len, &callstate);
-          goto recallapp;
-        }
-        case NATIVE_COMPLEX_CALL_WITH_OUT_STR: {
-          callwithoutputstr(this, frm, proc, &len, &callstate);
-          goto recallapp;
-        }
-        case NATIVE_COMPLEX_FORCE: {
-          if (callforce(this, frm, proc, &len, &callstate))
-            goto recallapp;
-          else
-            goto afternative;
-        }
-        case NATIVE_COMPLEX_DYNAMIC_WIND: {
-          calldynamicwind(this, frm, proc, &len, &callstate);
-          goto recallapp;
-        }
-        default:
-          Error(this, "not supported complex native proc %d yet\n", nproc->complexid);
-          break;
-        }
-      }
-      else
-      {
-        ensurearity(this, proc, len, nproc->argnum, nproc->argrest, Ssstr(nproc->var), callstate.fromapply);
-        *proc = scmcallcproc(this, nproc, proc+1);
-        if (callstate.unwind)
-        {
-          ValueT* oldbase = frm->base;
-          frm->base = proc;
-          callstate.unwind(this, frm);
-          frm->base = oldbase;
-        }
-        if (callstate.dywind)
-        {
-          switch (callstate.dywind->state) {
-          case DW_BEFORE:
-            callstate.dywind->state = DW_BODY;
-            *proc = callstate.dywind->body;
-            goto recallapp;
-          case DW_BODY:
-            callstate.dywind->state = DW_AFTER;
-            *proc = callstate.dywind->after;
-            callstate.dywind->retval = proc;
-            goto recallapp;
-          case DW_AFTER:
-            callstate.dywind->state = -1;
-            goto afternative;
-          default:
-            Error(this, "internal error, dynamic-wind state error %d", callstate.dywind->state);
-          }
-        }
-      }
-    afternative:
-      if (icode == OP_CALLAPP)
-        break;
-    }
-    else  if (isclosure(proc))
-    {
-      frm = ctorclosurefrm(this, i, frm, proc, len, &callstate);
-      if (callstate.dywind)
-        frm->dynwind = callstate.dywind;
+    CallAct act = callproc(this, &frm, proc, len, icode == OP_TAILCALLAPP);
+    switch (act) {
+    case CALLACT_RESUME_CC:
+      base = frm->base;
+      call = closureref(base);
+      lambda = call->lambda;
+      pc = frm->getpc();
+      break;
+    case CALLACT_ENTER:
       base = frm->base;
       call = closureref(base);
       lambda = call->lambda;
       pc = lambda->getcodestart();
       goto loop;
-    }
-    else if (iscontinuation(proc))
-    {
-      ContinuationPtr cont = continuationref(proc);
-      frm = stk->curfrm = cont->frm;
-      ac0 = *cont->base = proc+1;
-      base = frm->base;
-      call = closureref(base);
-      lambda = call->lambda;
-      pc = frm->getpc();
-      Assert(this, len == 1, "return error in call continuation, len=%d", len);
+    case CALLACT_TAILRET:
+      goto retlab;
+    case CALLACT_DONE:
       break;
+    default:
+      Error(this, "internal error, state wrong %d", act);
     }
-    else
-      ErrorVT(this, proc, "not a procedure");
+    break;
   }
+  retlab:
   case OP_RETURN: {
     ac0 = *frm->start = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
     frm->seg->closeouterval(this, frm->base);
