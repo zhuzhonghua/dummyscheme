@@ -557,7 +557,8 @@ private:
 
 #define Visit1(a) virtual void visit(VM* vm) {Check(a);}
 #define Visit2(a, b) virtual void visit(VM* vm) {Check(a);Check(b);}
-#define Visit3(a, b, c) virtual void visit(VM* vm) {Check(a);Check(b);Check(3);}
+#define Visit3(a, b, c) virtual void visit(VM* vm) {Check(a);Check(b);Check(c);}
+#define Visit4(a, b, c, d) virtual void visit(VM* vm) {Check(a);Check(b);Check(c);Check(d);}
 #define GetSize(T) virtual int getsize() { return sizeof(T); }
 
 struct RefObject {
@@ -904,6 +905,7 @@ struct CallFrame : public RefObject {
   PromiseObj* force;
 };
 
+struct DynamicWindObj;
 class Stack {
 public:
   Stack(VM* v);
@@ -919,6 +921,7 @@ public:
 
   VM* vm;
   StkVar* sv;
+  DynamicWindObj* dywind;
   CallFrame* curfrm;
   CallFrame basefrm;
   StackSegment baseseg;
@@ -1209,6 +1212,7 @@ enum NATIVE_COMPLEX_PROC {
   NATIVE_COMPLEX_CALL_WITH_OUT_FILE,
   NATIVE_COMPLEX_CALL_WITH_OUT_STR,
   NATIVE_COMPLEX_FORCE,
+  NATIVE_COMPLEX_DYNAMIC_WIND,
   NATIVE_COMPLEX_EVAL,
   NATIVE_COMPLEX_MAX,
 };
@@ -1621,6 +1625,25 @@ struct PromiseObj : public RefObject {
   GetSize(PromiseObj)
 
   PromiseCellObj* cell;
+};
+
+struct DynamicWindObj : public RefObject {
+  DynamicWindObj():
+    parent(NULL), before(NULL), body(NULL),
+    after(NULL) {
+    state = -1;
+  }
+
+  Visit4(parent, before, body, after)
+  GetSize(DynamicWindObj)
+
+  DynamicWindObj* parent;
+
+  ClosureObj* before;
+  ClosureObj* body;
+  ClosureObj* after;
+
+  int state;
 };
 
 struct ContinuationObj : public RefObject {

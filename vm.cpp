@@ -213,9 +213,10 @@ void Stack::fullmark()
     ptr = ptr->prev;
   }
   Check(curfrm);
+  Check(dywind);
 }
 
-Stack::Stack(VM* v):vm(v),sv(NULL)
+Stack::Stack(VM* v):vm(v),sv(NULL),dywind(NULL)
 {
   curfrm = &basefrm;
   curfrm->seg = &baseseg;
@@ -1592,11 +1593,13 @@ void VM::printframe()
 }
 
 struct CallAppState {
-  CallAppState(): force(false), callcc(false), unwind(NULL), fromapply(false) {}
+  CallAppState():dywind(NULL),
+    force(false), callcc(false), unwind(NULL), fromapply(false) {}
   bool callcc;
   UnWindFrame unwind;
   bool fromapply;
   bool force;
+  DynamicWindObj* dywind;
 };
 
 static void shrinkarity(VM* vm, ValueT* base, int len, int argnum)
@@ -1936,6 +1939,67 @@ static bool callforce(VM* vm, CallFrame* frm, ValueT* base, int* olen, CallAppSt
   }
 }
 
+static void checkdywindlambda(VM* vm, ValueT* proc, const char* what)
+{
+  if (isnativeproc(proc))
+  {
+    NativeProcObj* ccproc = nativeprocref(proc);
+    Assert(vm, ccproc->argnum == 0 || (ccproc->argnum == 1 && ccproc->argrest),
+           "%s: need a closure obj", what);
+  }
+  else if (isclosure(proc))
+  {
+    ClosurePtr ccc = closureref(proc);
+    Assert(vm, ccc->lambda->argnum == 0 || (ccc->lambda->argnum == 1 && ccc->lambda->argrest),
+           "%s: need a closure obj", what);
+  }
+  else
+    ErrorVT(vm, proc, "%s, need a closure obj", what);
+}
+
+static void calldynamicwind(VM* vm, CallFrame* frm, ValueT* base, int* olen, CallAppState* state)
+{
+  int len = *olen;
+  const static char* METHOD = "dynamic-wind";
+  Stack* stk = Stk(vm);
+  ValueT* cw = stkvt(1);
+  ValueT* before = NULL, *body = NULL, *after = NULL;
+  if (state->fromapply)
+  {
+    AssertVT(vm, ispair(cw), cw, "%s: internal error in apply", METHOD);
+    before = Scar(cw);
+    cw = Scdr(cw)
+    AssertVT(vm, ispair(cw), cw, "%s: need 3 arguments", METHOD);
+    body = Scar(cw);
+    cw = Scdr(cw)
+    AssertVT(vm, ispair(cw), cw, "%s: need 3 arguments", METHOD);
+    after = Scar(cw);
+    cw = Scdr(cw)
+    AssertVT(vm, isnull(cw), cw, "%s: two much arguments", METHOD);
+    state->fromapply = false;
+  }
+  else
+  {
+    Assert(vm, len==3, "%s: needs 3 arguments, not %d", METHOD, len);
+    before = stkvt(1);
+    body = stkvt(2);
+    after = stkvt(3);
+  }
+  checkdywindlambda(vm, before, METHOD);
+  checkdywindlambda(vm, body, METHOD);
+  checkdywindlambda(vm, after, METHOD);
+  DynamicWindObj* dywind = Sr0(vm, DynamicWindObj);
+  dywind->parent = Stk(vm)->dywind;
+  Stk(vm)->dywind = dywind;
+  dywind->before = before;
+  dywind->body = body;
+  dywind->after = after;
+  dywind->state = 1;
+  state->dywind = dywind;
+  *stkvt(0) = before;
+  *olen = 0;
+}
+
 static CallFrame* recallforce(VM* vm, CallFrame* frm, ValueT* base)
 {
   Stack* stk = Stk(vm);
@@ -2191,6 +2255,10 @@ void VM::execute(CallFrame* frm)
           else
             goto afternative;
         }
+        case NATIVE_COMPLEX_DYNAMIC_WIND: {
+          calldynamicwind(this, frm, proc, &len, &callstate))
+          goto recallapp;
+        }
         default:
           Error(this, "not supported complex native proc %d yet\n", nproc->complexid);
           break;
@@ -2369,6 +2437,7 @@ void VM::init()
   regComplex("call-with-output-file", NATIVE_COMPLEX_CALL_WITH_OUT_FILE);
   regComplex("call-with-output-string", NATIVE_COMPLEX_CALL_WITH_OUT_STR);
   regComplex("force", NATIVE_COMPLEX_FORCE);
+  regComplex("dynamic-wind", NATIVE_COMPLEX_DYNAMIC_WIND);
 }
 
 void VM::getuniquesym(SymPtr sym, ValueT* out)
