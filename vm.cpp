@@ -2206,6 +2206,39 @@ static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len,  bool is
   return CALLACT_DONE;
 }
 
+enum RtnFrmAct {
+  RTN_NONE,
+  RTN_ENTER,
+  RTN_RESUME,
+  RTN_DONE,
+};
+
+static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lambda)
+{
+  Stack* stk = Stk(vm);
+  vm->ac0 = *(*frm)->start = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
+  (*frm)->seg->closeouterval(vm, (*frm)->base);
+  if ((*frm)->force)
+  {
+    if (ispromise((*frm)->start))
+    {
+      *frm = recallforce(vm, *frm, (*frm)->start);
+      return RTN_ENTER;
+    }
+    else
+    {
+      (*frm)->force->cell->val = vm->ac0;
+      (*frm)->force->cell->state = PROMISE_EAGER;
+      (*frm)->force = NULL;
+    }
+  }
+  *frm = stk->rtnfrm(*frm);
+  if (!stk->isbasefrm(*frm))
+    return RTN_RESUME;
+  else
+    return RTN_DONE;
+}
+
 void VM::execute(CallFrame* frm)
 {
   Stack* stk = Stk(this);
@@ -2396,36 +2429,26 @@ void VM::execute(CallFrame* frm)
   }
   retlab:
   case OP_RETURN: {
-    ac0 = *frm->start = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
-    frm->seg->closeouterval(this, frm->base);
-    if (frm->force)
-    {
-      if (ispromise(frm->start))
-      {
-        frm = recallforce(this, frm, frm->start);
+    RtnFrmAct act = callrtnfrm(this, &frm, base, lambda);
+    switch(act) {
+    case RTN_DONE:
+      pc = -1;
+      break;
+    case RTN_RESUME:
         base = frm->base;
         call = closureref(base);
         lambda = call->lambda;
-        pc = lambda->getcodestart();
-        goto loop;
-      }
-      else
-      {
-        frm->force->cell->val = ac0;
-        frm->force->cell->state = PROMISE_EAGER;
-        frm->force = NULL;
-      }
-    }
-    frm = stk->rtnfrm(frm);
-    if (!stk->isbasefrm(frm))
-    {
+      pc = frm->getpc();
+      break;
+    case RTN_ENTER:
       base = frm->base;
       call = closureref(base);
       lambda = call->lambda;
-      pc = frm->getpc();
+      pc = lambda->getcodestart();
+      goto loop;
+    default:
+      Error(this, "intern error, return state %d", act);
     }
-    else
-      pc = -1;
     break;
   }
   default:
