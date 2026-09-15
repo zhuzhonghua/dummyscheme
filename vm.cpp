@@ -2059,6 +2059,98 @@ static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* ba
   return frm;
 }
 
+enum CallComplexAct {
+  CALL_COMPLEX_NONE,
+  CALL_COMPLEX_RECALL,
+  CALL_COMPLEX_AFTER,
+};
+
+static CallComplexAct callcomplexproc(VM* vm, CallFrame* frm, ValueT* proc, int* len, CallAppState* state)
+{
+  NativeProcObj* nproc = nativeprocref(proc);
+  switch(nproc->complexid) {
+  case NATIVE_COMPLEX_APPLY: {
+    if (state->fromapply)
+      flatshrinkapplyarity(vm, proc, proc+(*len));
+    else
+    {
+      shrinkapplyarity(vm, proc, len);
+      state->fromapply = true;
+    }
+    return CALL_COMPLEX_RECALL;
+  }
+  case NATIVE_COMPLEX_CALLCC: {
+    checkcallcc(vm, frm, proc, *len, state);
+    return CALL_COMPLEX_RECALL;
+  }
+  case NATIVE_COMPLEX_CALL_WITH_IN_FILE: {
+    callwithinputfile(vm, frm, proc, len, state);
+    return CALL_COMPLEX_RECALL;
+  }
+  case NATIVE_COMPLEX_CALL_WITH_OUT_FILE: {
+    callwithoutputfile(vm, frm, proc, len, state);
+    return CALL_COMPLEX_RECALL;
+  }
+  case NATIVE_COMPLEX_CALL_WITH_OUT_STR: {
+    callwithoutputstr(vm, frm, proc, len, state);
+    return CALL_COMPLEX_RECALL;
+  }
+  case NATIVE_COMPLEX_FORCE: {
+    if (callforce(vm, frm, proc, len, state))
+      return CALL_COMPLEX_RECALL;
+    else
+      return CALL_COMPLEX_AFTER;
+  }
+  case NATIVE_COMPLEX_DYNAMIC_WIND: {
+    calldynamicwind(vm, frm, proc, len, state);
+    return CALL_COMPLEX_RECALL;
+  }
+  default:
+    Error(vm, "not supported complex native proc %d yet\n", nproc->complexid);
+  }
+  return CALL_COMPLEX_NONE;
+}
+
+enum CallNativeAct {
+  CALL_NATIVE_NONE,
+  CALL_NATIVE_RECALL,
+  CALL_NATIVE_AFTER,
+};
+
+static CallNativeAct callnativeproc(VM* vm, CallFrame* frm, ValueT* proc, int len, CallAppState* state)
+{
+  NativeProcObj* nproc = nativeprocref(proc);
+  ensurearity(vm, proc, len, nproc->argnum, nproc->argrest, Ssstr(nproc->var), state->fromapply);
+  *proc = scmcallcproc(vm, nproc, proc+1);
+  if (state->unwind)
+  {
+    ValueT* oldbase = frm->base;
+    frm->base = proc;
+    state->unwind(vm, frm);
+    frm->base = oldbase;
+  }
+  if (state->dywind)
+  {
+    switch (state->dywind->state) {
+    case DW_BEFORE:
+      state->dywind->state = DW_BODY;
+      *proc = state->dywind->body;
+      return CALL_NATIVE_RECALL;
+    case DW_BODY:
+      state->dywind->state = DW_AFTER;
+      *proc = state->dywind->after;
+      state->dywind->retval = proc;
+      return CALL_NATIVE_RECALL;
+    case DW_AFTER:
+      state->dywind->state = -1;
+      return CALL_NATIVE_AFTER;
+    default:
+      Error(vm, "internal error, dynamic-wind state error %d", state->dywind->state);
+    }
+  }
+  return CALL_NATIVE_NONE;
+}
+
 static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len,  bool istail)
 {
   Stack* stk = Stk(vm);
@@ -2069,76 +2161,28 @@ static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len,  bool is
     NativeProcObj* nproc = nativeprocref(proc);
     if (nproc->iscomplex())
     {
-      switch(nproc->complexid) {
-      case NATIVE_COMPLEX_APPLY: {
-        if (state.fromapply)
-          flatshrinkapplyarity(vm, proc, proc+len);
-        else
-        {
-          shrinkapplyarity(vm, proc, &len);
-          state.fromapply = true;
-        }
+      CallComplexAct act = callcomplexproc(vm, *frm, proc, &len, &state);
+      switch(act) {
+      case CALL_COMPLEX_RECALL:
         goto recallapp;
-      }
-      case NATIVE_COMPLEX_CALLCC: {
-        checkcallcc(vm, *frm, proc, len, &state);
-        goto recallapp;
-      }
-      case NATIVE_COMPLEX_CALL_WITH_IN_FILE: {
-        callwithinputfile(vm, *frm, proc, &len, &state);
-        goto recallapp;
-      }
-      case NATIVE_COMPLEX_CALL_WITH_OUT_FILE: {
-        callwithoutputfile(vm, *frm, proc, &len, &state);
-        goto recallapp;
-      }
-      case NATIVE_COMPLEX_CALL_WITH_OUT_STR: {
-        callwithoutputstr(vm, *frm, proc, &len, &state);
-        goto recallapp;
-      }
-      case NATIVE_COMPLEX_FORCE: {
-        if (callforce(vm, *frm, proc, &len, &state))
-          goto recallapp;
-        else
-          goto afternative;
-      }
-      case NATIVE_COMPLEX_DYNAMIC_WIND: {
-        calldynamicwind(vm, *frm, proc, &len, &state);
-        goto recallapp;
-      }
+      case CALL_COMPLEX_AFTER:
+        goto afternative;
       default:
-        Error(vm, "not supported complex native proc %d yet\n", nproc->complexid);
+        Error(vm, "internal error, after callcomplex %d", act);
       }
     }
     else
     {
-      ensurearity(vm, proc, len, nproc->argnum, nproc->argrest, Ssstr(nproc->var), state.fromapply);
-      *proc = scmcallcproc(vm, nproc, proc+1);
-      if (state.unwind)
-      {
-        ValueT* oldbase = (*frm)->base;
-        (*frm)->base = proc;
-        state.unwind(vm, *frm);
-        (*frm)->base = oldbase;
-      }
-      if (state.dywind)
-      {
-        switch (state.dywind->state) {
-        case DW_BEFORE:
-          state.dywind->state = DW_BODY;
-          *proc = state.dywind->body;
-          goto recallapp;
-        case DW_BODY:
-          state.dywind->state = DW_AFTER;
-          *proc = state.dywind->after;
-          state.dywind->retval = proc;
-          goto recallapp;
-        case DW_AFTER:
-          state.dywind->state = -1;
-          goto afternative;
-        default:
-          Error(vm, "internal error, dynamic-wind state error %d", state.dywind->state);
-        }
+      CallNativeAct act = callnativeproc(vm, *frm, proc, len, &state);
+      switch(act) {
+      case CALL_NATIVE_RECALL:
+        goto recallapp;
+      case CALL_NATIVE_AFTER:
+        goto afternative;
+      case CALL_NATIVE_NONE:
+        break;
+      default:
+        Error(vm, "internal error, unknown callnative state %d", act);
       }
     }
   afternative:
