@@ -2435,9 +2435,9 @@ void VM::execute(CallFrame* frm)
       pc = -1;
       break;
     case RTN_RESUME:
-        base = frm->base;
-        call = closureref(base);
-        lambda = call->lambda;
+      base = frm->base;
+      call = closureref(base);
+      lambda = call->lambda;
       pc = frm->getpc();
       break;
     case RTN_ENTER:
