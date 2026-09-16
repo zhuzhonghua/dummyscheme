@@ -2278,7 +2278,79 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
     return RTN_DONE;
 }
 
+static void runthunk(VM* vm, ValueT* proc)
+{
+  Stack* stk = Stk(vm);
+  if (isnativeproc(proc))
+  {
+    NativeProcObj* nproc = nativeprocref(proc);
+    ValueT dummy;
+    scmcallcproc(vm, nproc, &dummy);
+    return;
+  }
+  ClosurePtr c = closureref(proc);
+  int argnum = c->lambda->argnum;
+  int arity = c->lambda->top;
+  CallFrame* basef = &stk->basefrm;
+  CallFrame* nf = stk->newfrm(basef, basef->top, argnum, arity);
+  *nf->base = *proc;
+  stk->setvoid(nf->base + argnum + 1, nf->top - 1);
+  stk->curfrm = nf;
+  vm->execute(nf);
+}
+
+static void unwinddynamichain(VM* vm)
+{
+  while (Stk(vm)->dywind != NULL)
+  {
+    DynamicWindObj* dy = Stk(vm)->dywind;
+    int dwstate = dy->state;
+    Sgcvar1(vm, after);
+    *after = dy->after;
+    Stk(vm)->dywind = dy->parent;
+    if (dwstate != DW_BODY)
+      continue;
+    TRY {
+      runthunk(vm, after);
+    }
+    CATCH(e) {
+      Print("\ndynamic-wind: after thunk raised: %s\n", e);
+    }
+  }
+  Stk(vm)->curfrm = &Stk(vm)->basefrm;
+}
+
+static void teardowndeadframes(VM* vm)
+{
+  Stack* stk = Stk(vm);
+  CallFrame* f = stk->curfrm;
+  while (f != NULL && !stk->isbasefrm(f))
+  {
+    if (f->unwind)
+    {
+      UnWindFrame u = f->unwind;
+      f->unwind = NULL;
+      u(vm, f);
+    }
+    f->seg->closeouterval(vm, f->base);
+    f = f->prev;
+  }
+}
+
 void VM::execute(CallFrame* frm)
+{
+  TRY {
+    execute0(frm);
+  }
+  CATCH(err) {
+    (void)err;
+    teardowndeadframes(this);
+    unwinddynamichain(this);
+    throw;
+  }
+}
+
+void VM::execute0(CallFrame* frm)
 {
   Stack* stk = Stk(this);
   ValueT* base = frm->base;

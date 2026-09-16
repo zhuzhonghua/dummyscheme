@@ -1288,6 +1288,7 @@ public:
   void printframe();
 
   void execute(CallFrame* frm);
+  void execute0(CallFrame* frm);
   void printccode0(FILE *f, LambdaPtr lambda, int pc);
   void printccode(FILE *f, LambdaPtr lambda);
   void printccode(LambdaObj* lambda) { printccode(stderr, lambda); }
