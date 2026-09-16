@@ -1463,7 +1463,7 @@ struct NativeProcObj : public RefObject {
     var(s), cf(f), complexid(-1), argnum(n), argrest(rest) {}
 
   NativeProcObj(SymPtr s, int i):
-    var(s), complexid(i), argnum(0), argrest(false) { cf.cp0 = NULL; }
+    var(s), complexid(i), argnum(-1), argrest(false) { cf.cp0 = NULL; }
 
   bool iscomplex() { return cf.cp0 == NULL; }
 
