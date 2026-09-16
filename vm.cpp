@@ -1601,13 +1601,14 @@ enum CallAct {
 };
 
 struct CallAppState {
-  CallAppState():dywind(NULL),
+  CallAppState():dywind(NULL), istail(false),
     force(false), callcc(false), unwind(NULL), fromapply(false) {}
   bool callcc;
   UnWindFrame unwind;
   bool fromapply;
   bool force;
   DynamicWindObj* dywind;
+  bool istail;
 };
 
 static void shrinkarity(VM* vm, ValueT* base, int len, int argnum)
@@ -2002,10 +2003,39 @@ static void calldynamicwind(VM* vm, CallFrame* frm, ValueT* base, int* olen, Cal
   dywind->before = before;
   dywind->body = body;
   dywind->after = after;
-  dywind->state = 1;
+  dywind->state = DW_BEFORE;
+  dywind->istail = state->istail;
   state->dywind = dywind;
   *stkvt(0) = before;
   *olen = 0;
+}
+
+enum DyWindStep {
+  DYWIND_STEP_CALL,
+  DYWIND_STEP_DONE,
+};
+
+static DyWindStep dywindadvance(VM* vm, DynamicWindObj* dywind, ValueT* slot)
+{
+  switch (dywind->state) {
+  case DW_BEFORE:
+    dywind->state = DW_BODY;
+    *slot = dywind->body;
+    return DYWIND_STEP_CALL;
+  case DW_BODY:
+    dywind->retval = slot;
+    dywind->state = DW_AFTER;
+    *slot = dywind->after;
+    return DYWIND_STEP_CALL;
+  case DW_AFTER:
+    dywind->state = -1;
+    Stk(vm)->dywind = dywind->parent;
+    *slot = dywind->retval;
+    return DYWIND_STEP_DONE;
+  default:
+    Error(vm, "internal error, dynamic-wind state %d", dywind->state);
+  }
+  return DYWIND_STEP_DONE;
 }
 
 static CallFrame* recallforce(VM* vm, CallFrame* frm, ValueT* base)
@@ -2112,9 +2142,8 @@ static CallComplexAct callcomplexproc(VM* vm, CallFrame* frm, ValueT* proc, int*
 }
 
 enum CallNativeAct {
-  CALL_NATIVE_NONE,
+  CALL_NATIVE_DONE,
   CALL_NATIVE_RECALL,
-  CALL_NATIVE_AFTER,
 };
 
 static CallNativeAct callnativeproc(VM* vm, CallFrame* frm, ValueT* proc, int len, CallAppState* state)
@@ -2131,30 +2160,18 @@ static CallNativeAct callnativeproc(VM* vm, CallFrame* frm, ValueT* proc, int le
   }
   if (state->dywind)
   {
-    switch (state->dywind->state) {
-    case DW_BEFORE:
-      state->dywind->state = DW_BODY;
-      *proc = state->dywind->body;
+    if (dywindadvance(vm, state->dywind, proc) == DYWIND_STEP_CALL)
       return CALL_NATIVE_RECALL;
-    case DW_BODY:
-      state->dywind->state = DW_AFTER;
-      *proc = state->dywind->after;
-      state->dywind->retval = proc;
-      return CALL_NATIVE_RECALL;
-    case DW_AFTER:
-      state->dywind->state = -1;
-      return CALL_NATIVE_AFTER;
-    default:
-      Error(vm, "internal error, dynamic-wind state error %d", state->dywind->state);
     }
-  }
-  return CALL_NATIVE_NONE;
+  return CALL_NATIVE_DONE;
 }
 
-static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len,  bool istail)
+static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len, bool istail, DynamicWindObj* dywind)
 {
   Stack* stk = Stk(vm);
   CallAppState state;
+  state.dywind = dywind;
+  state.istail = istail;
  recallapp:
   if (isnativeproc(proc))
   {
@@ -2177,9 +2194,7 @@ static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len,  bool is
       switch(act) {
       case CALL_NATIVE_RECALL:
         goto recallapp;
-      case CALL_NATIVE_AFTER:
-        goto afternative;
-      case CALL_NATIVE_NONE:
+      case CALL_NATIVE_DONE:
         break;
       default:
         Error(vm, "internal error, unknown callnative state %d", act);
@@ -2210,6 +2225,7 @@ enum RtnFrmAct {
   RTN_NONE,
   RTN_ENTER,
   RTN_RESUME,
+  RTN_RETURN,
   RTN_DONE,
 };
 
@@ -2232,7 +2248,30 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
       (*frm)->force = NULL;
     }
   }
+  DynamicWindObj* dywind = (*frm)->dynwind;
+  ValueT* slot = (*frm)->start;
+  (*frm)->dynwind = NULL;
   *frm = stk->rtnfrm(*frm);
+  if (dywind != NULL)
+  {
+    if (dywindadvance(vm, dywind, slot) == DYWIND_STEP_CALL)
+    {
+      CallAct act = callproc(vm, frm, slot, 0, dywind->istail, dywind);
+      switch (act) {
+      case CALLACT_ENTER:
+        return RTN_ENTER;
+      case CALLACT_TAILRET:
+        return RTN_RETURN;
+      case CALLACT_RESUME_CC:
+      case CALLACT_DONE:
+        break;
+      default:
+        Error(vm, "internal error, dw thunk call state %d", act);
+      }
+    }
+    if (dywind->istail)
+      return RTN_RETURN;
+  }
   if (!stk->isbasefrm(*frm))
     return RTN_RESUME;
   else
@@ -2404,7 +2443,7 @@ void VM::execute(CallFrame* frm)
   case OP_CALLAPP: {
     int k, len;GET_OPAB(i, k, len);
     ValueT* proc = stkvt(k);
-    CallAct act = callproc(this, &frm, proc, len, icode == OP_TAILCALLAPP);
+    CallAct act = callproc(this, &frm, proc, len, icode == OP_TAILCALLAPP, NULL);
     switch (act) {
     case CALLACT_RESUME_CC:
       base = frm->base;
@@ -2446,6 +2485,11 @@ void VM::execute(CallFrame* frm)
       lambda = call->lambda;
       pc = lambda->getcodestart();
       goto loop;
+    case RTN_RETURN:
+      base = frm->base;
+      call = closureref(base);
+      lambda = call->lambda;
+      goto retlab;
     default:
       Error(this, "intern error, return state %d", act);
     }

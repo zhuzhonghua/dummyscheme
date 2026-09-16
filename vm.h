@@ -85,6 +85,7 @@ typedef double scm_float;
 #define Assert(vm, cond, fmt, ...) do{                  \
     if (!(cond)) {Print("\nException\n");               \
       Print(fmt, ##__VA_ARGS__);                        \
+      vm->printframe();                                 \
       DebugAssert(vm);                                  \
       throw STR(cond);                                  \
     }}while(0)
@@ -93,6 +94,7 @@ typedef double scm_float;
     if (!(cond)) {Print("\nException\n");               \
       vm->printvalue0(vt);Print("\n");                  \
       Print(fmt, ##__VA_ARGS__);                        \
+      vm->printframe();                                 \
       DebugAssert(vm);                                  \
       throw STR(cond);                                  \
     }}while(0)
@@ -102,6 +104,7 @@ typedef double scm_float;
       vm->printvalue0(vt);Print("\n");                  \
       vm->printvalue0(vt2);Print("\n");                 \
       Print(fmt, ##__VA_ARGS__);                        \
+      vm->printframe();                                 \
       DebugAssert(vm);                                  \
       throw STR(cond);                                  \
     }}while(0)
@@ -112,12 +115,14 @@ typedef double scm_float;
     if (!(cond)) {Print("\nException in %s: ", op); \
       vm->printvalue0(vt);                          \
       Print(fmt, ##__VA_ARGS__);                    \
+      vm->printframe();                             \
       DebugAssert(vm);                              \
       throw STR(cond);                              \
     }}while(0)
 
 #define Error(vm, fmt, ...) do{                   \
     Print(fmt, ##__VA_ARGS__);                    \
+    vm->printframe();                             \
     DebugAssert(vm);                              \
     throw "Error ";                               \
   }while(0)
@@ -127,6 +132,7 @@ typedef double scm_float;
     vm->printvalue0(vt);                          \
     Print("\n");                                  \
     Print(fmt, ##__VA_ARGS__);                    \
+    vm->printframe();                             \
     DebugAssert(vm);                              \
     throw "Error ";                               \
   }while(0)
@@ -559,6 +565,7 @@ private:
 #define Visit2(a, b) virtual void visit(VM* vm) {Check(a);Check(b);}
 #define Visit3(a, b, c) virtual void visit(VM* vm) {Check(a);Check(b);Check(c);}
 #define Visit4(a, b, c, d) virtual void visit(VM* vm) {Check(a);Check(b);Check(c);Check(d);}
+#define Visit5(a, b, c, d, e) virtual void visit(VM* vm) {Check(a);Check(b);Check(c);Check(d);Check(e);}
 #define GetSize(T) virtual int getsize() { return sizeof(T); }
 
 struct RefObject {
@@ -888,7 +895,7 @@ typedef void (*UnWindFrame)(VM*, CallFrame*);
 struct DynamicWindObj;
 struct PromiseObj;
 struct CallFrame : public RefObject {
-  CallFrame():unwind(NULL), force(NULL),
+  CallFrame():unwind(NULL), force(NULL), dynwind(NULL),
     pc(-1),prev(NULL),seg(NULL),start(NULL),base(NULL),top(NULL) {}
 
   void setpc(int p) { pc = p; }
@@ -1634,9 +1641,9 @@ struct PromiseObj : public RefObject {
 #define DW_AFTER  3
 
 struct DynamicWindObj : public RefObject {
-  DynamicWindObj(): state(-1), parent(NULL) {}
+  DynamicWindObj(): state(-1), istail(false), parent(NULL) {}
 
-  Visit4(parent, before, body, after)
+  Visit5(parent, before, body, after, retval);
   GetSize(DynamicWindObj)
 
   DynamicWindObj* parent;
@@ -1646,6 +1653,7 @@ struct DynamicWindObj : public RefObject {
   ValueT after;
 
   int state;
+  bool istail;
   ValueT retval;
 };
 
