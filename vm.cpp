@@ -1732,11 +1732,12 @@ static CallFrame* cowfrm(VM* vm, CallFrame* src)
   return dst;
 }
 
-static void checkcallcc(VM* vm, CallFrame** frm, ValueT* base, int len, CallAppState* callstate)
+static void checkcallcc(VM* vm, CallFrame** frm, ValueT** procp, int len, CallAppState* callstate)
 {
   CallFrame* oldfrm = *frm;
   static const char* METHOD = "call-with-current-continuation";
   Stack* stk = Stk(vm);
+  ValueT* base = *procp;
   ValueT* cc = stkvt(1);
   if (callstate->fromapply)
   {
@@ -1769,6 +1770,7 @@ static void checkcallcc(VM* vm, CallFrame** frm, ValueT* base, int len, CallAppS
   if (argrest) *stkvt(2) = Snullref;
   callstate->callcc = true;
   stk->curfrm = *frm = cowfrm(vm, oldfrm);
+  *procp = (*frm)->base + (base - oldfrm->base);
 }
 
 static void closeiport(VM* vm, CallFrame* frm)
@@ -2124,44 +2126,44 @@ enum CallComplexAct {
   CALL_COMPLEX_AFTER,
 };
 
-static CallComplexAct callcomplexproc(VM* vm, CallFrame** frm, ValueT* proc, int* len, CallAppState* state)
+static CallComplexAct callcomplexproc(VM* vm, CallFrame** frm, ValueT** procp, int* len, CallAppState* state)
 {
-  NativeProcObj* nproc = nativeprocref(proc);
+  NativeProcObj* nproc = nativeprocref(*procp);
   switch(nproc->complexid) {
   case NATIVE_COMPLEX_APPLY: {
     if (state->fromapply)
-      flatshrinkapplyarity(vm, proc, proc+(*len));
+      flatshrinkapplyarity(vm, *procp, *procp+(*len));
     else
     {
-      shrinkapplyarity(vm, proc, len);
+      shrinkapplyarity(vm, *procp, len);
       state->fromapply = true;
     }
     return CALL_COMPLEX_RECALL;
   }
   case NATIVE_COMPLEX_CALLCC: {
-    checkcallcc(vm, frm, proc, *len, state);
+    checkcallcc(vm, frm, procp, *len, state);
     return CALL_COMPLEX_RECALL;
   }
   case NATIVE_COMPLEX_CALL_WITH_IN_FILE: {
-    callwithinputfile(vm, *frm, proc, len, state);
+    callwithinputfile(vm, *frm, *procp, len, state);
     return CALL_COMPLEX_RECALL;
   }
   case NATIVE_COMPLEX_CALL_WITH_OUT_FILE: {
-    callwithoutputfile(vm, *frm, proc, len, state);
+    callwithoutputfile(vm, *frm, *procp, len, state);
     return CALL_COMPLEX_RECALL;
   }
   case NATIVE_COMPLEX_CALL_WITH_OUT_STR: {
-    callwithoutputstr(vm, *frm, proc, len, state);
+    callwithoutputstr(vm, *frm, *procp, len, state);
     return CALL_COMPLEX_RECALL;
   }
   case NATIVE_COMPLEX_FORCE: {
-    if (callforce(vm, *frm, proc, len, state))
+    if (callforce(vm, *frm, *procp, len, state))
       return CALL_COMPLEX_RECALL;
     else
       return CALL_COMPLEX_AFTER;
   }
   case NATIVE_COMPLEX_DYNAMIC_WIND: {
-    calldynamicwind(vm, *frm, proc, len, state);
+    calldynamicwind(vm, *frm, *procp, len, state);
     return CALL_COMPLEX_RECALL;
   }
   default:
@@ -2207,7 +2209,7 @@ static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len, bool ist
     NativeProcObj* nproc = nativeprocref(proc);
     if (nproc->iscomplex())
     {
-      CallComplexAct act = callcomplexproc(vm, frm, proc, &len, &state);
+      CallComplexAct act = callcomplexproc(vm, frm, &proc, &len, &state);
       switch(act) {
       case CALL_COMPLEX_RECALL:
         goto recallapp;
@@ -2557,6 +2559,7 @@ void VM::execute0(CallFrame* frm)
   case OP_CALLAPP: {
     int k, len;GET_OPAB(i, k, len);
     ValueT* proc = stkvt(k);
+    CallFrame* before = frm;
     CallAct act = callproc(this, &frm, proc, len, icode == OP_TAILCALLAPP, NULL);
     switch (act) {
     case CALLACT_RESUME_CC:
@@ -2574,6 +2577,12 @@ void VM::execute0(CallFrame* frm)
     case CALLACT_TAILRET:
       goto retlab;
     case CALLACT_DONE:
+      if (frm != before)
+      {
+        base = frm->base;
+        call = closureref(base);
+        lambda = call->lambda;
+      }
       break;
     default:
       Error(this, "internal error, state wrong %d", act);
