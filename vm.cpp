@@ -2275,7 +2275,7 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
   if (owner == NULL)
     vm->ac0 = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
   else
-  vm->ac0 = *(*frm)->start = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
+    vm->ac0 = *(*frm)->start = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
   (*frm)->seg->closeouterval(vm, (*frm)->base);
   if ((*frm)->force)
   {

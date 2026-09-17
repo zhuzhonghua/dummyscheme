@@ -928,7 +928,6 @@ public:
 
   CallFrame* rtnfrm(CallFrame*);
   CallFrame* newfrm(CallFrame*, ValueT* base, int argnum, int arity);
-  bool isbasefrm(CallFrame* frm) { return frm == NULL; }
 
   VM* vm;
   StkVar* sv;
