@@ -2660,6 +2660,7 @@ void VM::init()
   SCMVector::init(this);
   regComplex("apply", NATIVE_COMPLEX_APPLY);
   regComplex("call-with-current-continuation", NATIVE_COMPLEX_CALLCC);
+  regComplex("call/cc", NATIVE_COMPLEX_CALLCC);
   regComplex("call-with-input-file", NATIVE_COMPLEX_CALL_WITH_IN_FILE);
   regComplex("call-with-output-file", NATIVE_COMPLEX_CALL_WITH_OUT_FILE);
   regComplex("call-with-output-string", NATIVE_COMPLEX_CALL_WITH_OUT_STR);
