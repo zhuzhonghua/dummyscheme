@@ -233,9 +233,7 @@ void Stack::fullmark()
 
 Stack::Stack(VM* v):vm(v),sv(NULL),dywind(NULL)
 {
-  curfrm = &basefrm;
-  curfrm->seg = &baseseg;
-  curfrm->base = curfrm->start = curfrm->top = curfrm->seg->first();
+  curfrm = NULL;
 }
 
 void Stack::setvoid(ValueT* s, ValueT* e)
@@ -256,22 +254,21 @@ CallFrame* Stack::rtnfrm(CallFrame* frm)
 
 CallFrame* Stack::newfrm(CallFrame* frm, ValueT* base, int argnum, int arity)
 {
-  StackSegment* seg = frm->seg;
+  StackSegment* seg = frm != NULL ? frm->seg : NULL;
   CallFrame* newfrm = curfrm = Sr0(vm, CallFrame);
   newfrm->prev = frm;
   newfrm->seg = seg;
-  newfrm->base = newfrm->start = base;
+  newfrm->base = newfrm->start = frm != NULL ? base : NULL;
   newfrm->top = newfrm->base + 1 + arity;
-  if (seg->frozen > 0 || newfrm->top >= seg->end())
+  if (frm == NULL || seg->frozen > 0 || newfrm->top >= seg->end())
   {
     seg = Sr0(vm, StackSegment);
     newfrm->seg = seg;
-    newfrm->base = seg->first();
+    newfrm->base = newfrm->start = seg->first();
     newfrm->top = newfrm->base + 1 + arity;
     Assert(vm, newfrm->top < seg->end(), "alloc stack seg error in newfrm, arity: %d too big", arity);
-    int i = 0;
-    for (; i <= argnum; i++)
-      *(newfrm->base + i) = base + i;
+    for (int i = 0; i <= argnum; i++)
+      *(newfrm->base + i) = frm != NULL ? *(base + i) : Svoidref;
   }
   return newfrm;
 }
@@ -1590,7 +1587,7 @@ void VM::printframe()
   Stack* stk = Stk(this);
   int n = 0;
   CallFrame* frm  = stk->curfrm;
-  while (!stk->isbasefrm(frm))
+  while (frm != NULL)
   {
     ValueT* base = frm->base;
     ValueT* basevt = stkvt(0);
@@ -1732,8 +1729,6 @@ static CallFrame* cowfrm(VM* vm, CallFrame* src)
     for (int i = 0; i < n; i++)
       *(nbase + i) = *(src->base + i);
   }
-  else
-    fprintf(stderr, "[REUSE] cowfrm aliasing src %p base %p slot %p t=%d\n", src, src->base, src->base, *(int*)src->base);
   return dst;
 }
 
@@ -2250,8 +2245,6 @@ static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len, bool ist
     ValueT* rebased = top->base + (cont->base - cont->frm->base);
     *frm = stk->curfrm = top;
     vm->ac0 = *rebased = proc+1;
-    fprintf(stderr, "[RESUME] cont->frm=%p cont->frm->base=%p top->base=%p top->top=%p rebased=%p val t=%d, top->prev=%p top->prev->base=%p top->start=%p\n",
-      cont->frm, cont->frm->base, top->base, top->top, rebased, *(int*)rebased, top->prev, (top->prev?top->prev->base:0), top->start);
     return CALLACT_RESUME_CC;
   }
   else
@@ -2272,18 +2265,16 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
   Stack* stk = Stk(vm);
   CallFrame* owner = (*frm)->prev;
   ValueT* retslot = (*frm)->start;
-  fprintf(stderr, "[RET] returning frm=%p retslot=%p owner=%p owner==basefrm=%d owner->base=%p owner->top=%d owner->seg->frozen=%d inrange=%d\n",
-    *frm, retslot, owner, (owner==&stk->basefrm), (owner?owner->base:0), (owner?(int)(owner->top-owner->base):-1),
-    (owner?owner->seg->frozen:-1), (owner? (retslot>=owner->base&&retslot<owner->top) : 0));
-  if (owner != NULL && owner != &stk->basefrm && owner->seg->frozen > 0 &&
+  if (owner != NULL && owner->seg->frozen > 0 &&
       retslot >= owner->base && retslot < owner->top)
   {
     CallFrame* newowner = cowfrm(vm, owner);
     (*frm)->start = newowner->base + (retslot - owner->base);
     (*frm)->prev = newowner;
-    fprintf(stderr, "[RTN-COW] frm=%p owner=%p owner->base slot t=%d owner->top=%d startle=%d retslot=%p newowner=%p newowner->base slot t=%d\n",
-      *frm, owner, owner->base?*(int*)owner->base:0, (int)(owner->top-owner->base), (int)(retslot-owner->base), retslot, newowner, newowner->base?*(int*)newowner->base:0);
   }
+  if (owner == NULL)
+    vm->ac0 = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
+  else
   vm->ac0 = *(*frm)->start = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
   (*frm)->seg->closeouterval(vm, (*frm)->base);
   if ((*frm)->force)
@@ -2324,7 +2315,7 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
     if (dywind->istail)
       return RTN_RETURN;
   }
-  if (!stk->isbasefrm(*frm))
+  if (*frm != NULL)
     return RTN_RESUME;
   else
     return RTN_DONE;
@@ -2343,8 +2334,7 @@ static void runthunk(VM* vm, ValueT* proc)
   ClosurePtr c = closureref(proc);
   int argnum = c->lambda->argnum;
   int arity = c->lambda->top;
-  CallFrame* basef = &stk->basefrm;
-  CallFrame* nf = stk->newfrm(basef, basef->top, argnum, arity);
+  CallFrame* nf = stk->newfrm(NULL, NULL, argnum, arity);
   *nf->base = *proc;
   stk->setvoid(nf->base + argnum + 1, nf->top - 1);
   stk->curfrm = nf;
@@ -2369,14 +2359,14 @@ static void unwinddynamichain(VM* vm)
       Print("\ndynamic-wind: after thunk raised: %s\n", e);
     }
   }
-  Stk(vm)->curfrm = &Stk(vm)->basefrm;
+  Stk(vm)->curfrm = NULL;
 }
 
 static void teardowndeadframes(VM* vm)
 {
   Stack* stk = Stk(vm);
   CallFrame* f = stk->curfrm;
-  while (f != NULL && !stk->isbasefrm(f))
+  while (f != NULL)
   {
     if (f->unwind)
     {
@@ -2599,8 +2589,6 @@ void VM::execute0(CallFrame* frm)
       break;
     case RTN_RESUME:
       base = frm->base;
-      fprintf(stderr, "[RESUME-PT] frm=%p base=%p slot t=%d pc=%d frm->start=%p frm->prev=%p frm->seg->frozen=%d\n",
-        frm, frm->base, *(int*)frm->base, frm->pc, frm->start, frm->prev, (frm->seg?frm->seg->frozen:0));
       call = closureref(base);
       lambda = call->lambda;
       pc = frm->getpc();
@@ -2921,7 +2909,7 @@ bool VM::dolex(Lexer* lex, StrPtr source)
 
     ac0 = Sundefined;
     CallFrame* frm = stk->curfrm;
-    frm = stk->newfrm(frm, frm->top, 0, lambda->top);
+    frm = stk->newfrm(frm, frm != NULL ? frm->top : NULL, 0, lambda->top);
     ClosurePtr closure = newclosure(0);
     setclosure(frm->base, closure);
     closure->lambda = lambda;
