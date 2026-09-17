@@ -820,8 +820,9 @@ bool SCM::equalp(ValueT* p1, ValueT* p2)
   if (isstr(p1)) return strref(p1)->equalp(strref(p2));
   if (ispair(p1))
   {
-    for (ValueT* p1p = p1, *p2p = p2;
-         !isnull(p1p) && !isnull(p2p); p1p = Scdr(p1p), p2p = Scdr(p2p))
+    ValueT* p1p = p1, *p2p = p2;
+    for (;!isnull(p1p) && !isnull(p2p);
+         p1p = Scdr(p1p), p2p = Scdr(p2p))
     {
       if (vttype(p1p) != vttype(p2p))
         return false;
@@ -837,7 +838,7 @@ bool SCM::equalp(ValueT* p1, ValueT* p2)
         break;
       }
     }
-    return true;
+    return (isnull(p1p) && isnull(p2p)) ? true : false;
   }
   if (isarray(p1))
   {
