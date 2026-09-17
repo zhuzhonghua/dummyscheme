@@ -199,6 +199,21 @@ void CallFrame::visit(VM* vm)
     Check(b);
 }
 
+CallFrame* CallFrame::copy(VM* vm)
+{
+  CallFrame* newfrm = Sr0(vm, CallFrame);
+  newfrm->pc = pc;
+  newfrm->seg = seg;
+  newfrm->prev = prev;
+  newfrm->start = start;
+  newfrm->base = base;
+  newfrm->top = top;
+  newfrm->unwind = unwind;
+  newfrm->force = force;
+  newfrm->dynwind = dynwind;
+  return newfrm;
+}
+
 void Stack::stepmark()
 {
   fullmark();
@@ -1702,8 +1717,29 @@ static void flatshrinkapplyarity(VM* vm, ValueT* base, ValueT* arg)
   *stkvt(1) = arr->get(1);
 }
 
-static void checkcallcc(VM* vm, CallFrame* oldfrm, ValueT* base, int len, CallAppState* callstate)
+static CallFrame* cowfrm(VM* vm, CallFrame* src)
 {
+  Sgcvar1(vm, hold);
+  CallFrame* dst = src->copy(vm);
+  setref(hold, dst);
+  if (src->seg->frozen > 0)
+  {
+    dst->seg = Sr0(vm, StackSegment);
+    ValueT* nbase = dst->seg->first();
+    int n = (int) (src->top - src->base);
+    dst->base = nbase;
+    dst->top = nbase + n;
+    for (int i = 0; i < n; i++)
+      *(nbase + i) = *(src->base + i);
+  }
+  else
+    fprintf(stderr, "[REUSE] cowfrm aliasing src %p base %p slot %p t=%d\n", src, src->base, src->base, *(int*)src->base);
+  return dst;
+}
+
+static void checkcallcc(VM* vm, CallFrame** frm, ValueT* base, int len, CallAppState* callstate)
+{
+  CallFrame* oldfrm = *frm;
   static const char* METHOD = "call-with-current-continuation";
   Stack* stk = Stk(vm);
   ValueT* cc = stkvt(1);
@@ -1737,6 +1773,7 @@ static void checkcallcc(VM* vm, CallFrame* oldfrm, ValueT* base, int len, CallAp
   setcontinuation(stkvt(1), Sr2(vm, ContinuationObj, oldfrm, base));
   if (argrest) *stkvt(2) = Snullref;
   callstate->callcc = true;
+  stk->curfrm = *frm = cowfrm(vm, oldfrm);
 }
 
 static void closeiport(VM* vm, CallFrame* frm)
@@ -2092,7 +2129,7 @@ enum CallComplexAct {
   CALL_COMPLEX_AFTER,
 };
 
-static CallComplexAct callcomplexproc(VM* vm, CallFrame* frm, ValueT* proc, int* len, CallAppState* state)
+static CallComplexAct callcomplexproc(VM* vm, CallFrame** frm, ValueT* proc, int* len, CallAppState* state)
 {
   NativeProcObj* nproc = nativeprocref(proc);
   switch(nproc->complexid) {
@@ -2111,25 +2148,25 @@ static CallComplexAct callcomplexproc(VM* vm, CallFrame* frm, ValueT* proc, int*
     return CALL_COMPLEX_RECALL;
   }
   case NATIVE_COMPLEX_CALL_WITH_IN_FILE: {
-    callwithinputfile(vm, frm, proc, len, state);
+    callwithinputfile(vm, *frm, proc, len, state);
     return CALL_COMPLEX_RECALL;
   }
   case NATIVE_COMPLEX_CALL_WITH_OUT_FILE: {
-    callwithoutputfile(vm, frm, proc, len, state);
+    callwithoutputfile(vm, *frm, proc, len, state);
     return CALL_COMPLEX_RECALL;
   }
   case NATIVE_COMPLEX_CALL_WITH_OUT_STR: {
-    callwithoutputstr(vm, frm, proc, len, state);
+    callwithoutputstr(vm, *frm, proc, len, state);
     return CALL_COMPLEX_RECALL;
   }
   case NATIVE_COMPLEX_FORCE: {
-    if (callforce(vm, frm, proc, len, state))
+    if (callforce(vm, *frm, proc, len, state))
       return CALL_COMPLEX_RECALL;
     else
       return CALL_COMPLEX_AFTER;
   }
   case NATIVE_COMPLEX_DYNAMIC_WIND: {
-    calldynamicwind(vm, frm, proc, len, state);
+    calldynamicwind(vm, *frm, proc, len, state);
     return CALL_COMPLEX_RECALL;
   }
   default:
@@ -2175,7 +2212,7 @@ static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len, bool ist
     NativeProcObj* nproc = nativeprocref(proc);
     if (nproc->iscomplex())
     {
-      CallComplexAct act = callcomplexproc(vm, *frm, proc, &len, &state);
+      CallComplexAct act = callcomplexproc(vm, frm, proc, &len, &state);
       switch(act) {
       case CALL_COMPLEX_RECALL:
         goto recallapp;
@@ -2209,8 +2246,12 @@ static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len, bool ist
   {
     Assert(vm, len == 1, "return error in call continuation, len=%d", len);
     ContinuationPtr cont = continuationref(proc);
-    *frm = stk->curfrm = cont->frm;
-    vm->ac0 = *cont->base = proc+1;
+    CallFrame* top = cowfrm(vm, cont->frm);
+    ValueT* rebased = top->base + (cont->base - cont->frm->base);
+    *frm = stk->curfrm = top;
+    vm->ac0 = *rebased = proc+1;
+    fprintf(stderr, "[RESUME] cont->frm=%p cont->frm->base=%p top->base=%p top->top=%p rebased=%p val t=%d, top->prev=%p top->prev->base=%p top->start=%p\n",
+      cont->frm, cont->frm->base, top->base, top->top, rebased, *(int*)rebased, top->prev, (top->prev?top->prev->base:0), top->start);
     return CALLACT_RESUME_CC;
   }
   else
@@ -2229,6 +2270,20 @@ enum RtnFrmAct {
 static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lambda)
 {
   Stack* stk = Stk(vm);
+  CallFrame* owner = (*frm)->prev;
+  ValueT* retslot = (*frm)->start;
+  fprintf(stderr, "[RET] returning frm=%p retslot=%p owner=%p owner==basefrm=%d owner->base=%p owner->top=%d owner->seg->frozen=%d inrange=%d\n",
+    *frm, retslot, owner, (owner==&stk->basefrm), (owner?owner->base:0), (owner?(int)(owner->top-owner->base):-1),
+    (owner?owner->seg->frozen:-1), (owner? (retslot>=owner->base&&retslot<owner->top) : 0));
+  if (owner != NULL && owner != &stk->basefrm && owner->seg->frozen > 0 &&
+      retslot >= owner->base && retslot < owner->top)
+  {
+    CallFrame* newowner = cowfrm(vm, owner);
+    (*frm)->start = newowner->base + (retslot - owner->base);
+    (*frm)->prev = newowner;
+    fprintf(stderr, "[RTN-COW] frm=%p owner=%p owner->base slot t=%d owner->top=%d startle=%d retslot=%p newowner=%p newowner->base slot t=%d\n",
+      *frm, owner, owner->base?*(int*)owner->base:0, (int)(owner->top-owner->base), (int)(retslot-owner->base), retslot, newowner, newowner->base?*(int*)newowner->base:0);
+  }
   vm->ac0 = *(*frm)->start = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
   (*frm)->seg->closeouterval(vm, (*frm)->base);
   if ((*frm)->force)
@@ -2544,6 +2599,8 @@ void VM::execute0(CallFrame* frm)
       break;
     case RTN_RESUME:
       base = frm->base;
+      fprintf(stderr, "[RESUME-PT] frm=%p base=%p slot t=%d pc=%d frm->start=%p frm->prev=%p frm->seg->frozen=%d\n",
+        frm, frm->base, *(int*)frm->base, frm->pc, frm->start, frm->prev, (frm->seg?frm->seg->frozen:0));
       call = closureref(base);
       lambda = call->lambda;
       pc = frm->getpc();

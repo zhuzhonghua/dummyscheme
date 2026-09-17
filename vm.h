@@ -68,8 +68,8 @@ typedef double scm_float;
 //#define DebugQQuote
 #define DebugPrintLine Print("\n%s:%d\n", __FILE__, __LINE__);
 
-#define DebugAssertStop(x) DebugPrintLine; x
-//#define DebugAssertStop(x)
+//#define DebugAssertStop(x) DebugPrintLine; x
+#define DebugAssertStop(x)
 
 #define DebugAssert(vm) DebugAssertStop(vm->printframe();*((int*)0) = 0)
 
@@ -903,6 +903,8 @@ struct CallFrame : public RefObject {
 
   GetSize(CallFrame)
   virtual void visit(VM* vm);
+  CallFrame* copy(VM* vm);
+
   int pc;
   StackSegment* seg;
   CallFrame* prev;
