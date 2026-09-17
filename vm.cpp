@@ -832,13 +832,9 @@ bool SCM::equalp(ValueT* p1, ValueT* p2)
           return false;
       }
       else
-      {
-        if (!equalp(p1p, p2p))
-          return false;
-        break;
+        return equalp(p1p, p2p);  /* dotted tail: compare and finish */
       }
-    }
-    return (isnull(p1p) && isnull(p2p)) ? true : false;
+    return isnull(p1p) && isnull(p2p);
   }
   if (isarray(p1))
   {
