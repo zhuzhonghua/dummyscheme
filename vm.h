@@ -249,8 +249,6 @@ class SCompiler;
 
 struct NativeProcObj;
 
-struct BoxObj;
-
 struct CallFrame;
 
 //#define checkexp(c, e) (Util::assert((c), STR(c), "\nEXE FAIL\n%s", STR(e)), (e))
@@ -358,11 +356,6 @@ struct CallFrame;
 #define issyntaxrules(VT) istype(VT, VT_REF_SYNTAX_RULES)
 #define setsyntaxrules(VT, e) settyperef(VT, VT_REF_SYNTAX_RULES, e)
 #define syntaxrules(VT) toref(VT, SyntaxRules*)
-
-/* Box */
-#define isbox(VT) istype(VT, VT_REF_BOX)
-#define setbox(VT, e) settyperef(VT, VT_REF_BOX, e)
-#define boxref(VT) toref(VT, BoxObj*)
 
 /* Num */
 #define isnumber(VT)                                                  \
@@ -490,7 +483,6 @@ enum ValueTEnum {
   VT_REF_MACRO,
   VT_REF_SYNTAX,
   VT_REF_SYNTAX_RULES,
-  VT_REF_BOX,
   VT_REF_ANNOTATION,
   VT_REF_STACKSEG,
   VT_REF_FRAMESEG,
@@ -881,17 +873,22 @@ struct StkVar {
 };
 
 #define SEGMENT_SLOTS_SIZE 128
+struct OuterVal;
 class StackSegment : public RefObject {
 public:
-  StackSegment() { frozen = 0; }
+  StackSegment() { outers = NULL; frozen = 0; }
   ValueT slots[SEGMENT_SLOTS_SIZE];
 
   ValueT* first() { return &slots[0]; }
   ValueT* end() { return &slots[SEGMENT_SLOTS_SIZE]; }
+  OuterVal* findouterval(VM*, ValueT* level);
+  void closeouterval(VM* vm, ValueT* level);
 
+  virtual void finz(VM* vm);
   GetSize(StackSegment)
 
   int frozen;
+  OuterVal* outers;
 };
 
 typedef void (*UnWindFrame)(VM*, CallFrame*);
@@ -1227,6 +1224,8 @@ enum NATIVE_COMPLEX_PROC {
   NATIVE_COMPLEX_EVAL,
   NATIVE_COMPLEX_MAX,
 };
+
+struct OuterVal;
 
 enum EKConst {
   K_NULL,
@@ -1586,13 +1585,16 @@ struct AnnotationObj : public RefObject {
   int line;
 };
 
-struct BoxObj : public RefObject {
-  BoxObj() {}
-
-  Visit1(val)
-  GetSize(BoxObj)
-
+struct OuterVal : public RefObject {
+  OuterVal() {
+    valp = NULL;
+    next = NULL;
+  }
+  GetSize(OuterVal)
+  void close(VM*);
+  ValueT* valp;
   ValueT val;
+  OuterVal* next;
 };
 
 struct ClosureObj : public RefObject {
@@ -1602,15 +1604,15 @@ struct ClosureObj : public RefObject {
   }
 
   static int totalsize(int n) {
-    return (offsetof(ClosureObj, outers) + sizeof(BoxObj*) * n);
+    return (offsetof(ClosureObj, outers) + sizeof(OuterVal*) * n);
   }
   virtual int getsize() { return totalsize(n); }
   virtual void visit(VM* vm);
-  void initouters(VM*, StackSegment* seg, ValueT* base, BoxObj** encouter);
+  void initouters(VM*, StackSegment* seg, ValueT* base, OuterVal** encouter);
 
   LambdaPtr lambda;
   short n;
-  BoxObj* outers[1];
+  OuterVal* outers[1];
 };
 
 typedef enum PromiseState { PROMISE_NONE, PROMISE_LAZY, PROMISE_EAGER };

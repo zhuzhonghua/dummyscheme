@@ -157,6 +157,40 @@ StkVar::~StkVar()
   if (stk->sv == this) stk->sv = prev;
 }
 
+void StackSegment::finz(VM* vm)
+{
+  closeouterval(vm, NULL);
+  RefObject::finz(vm);
+}
+
+void StackSegment::closeouterval(VM* vm, ValueT* level)
+{
+  OuterVal** p = &outers;
+  while ((*p) != NULL && (*p)->valp >= level)
+  {
+    OuterVal* next = (*p)->next;
+    (*p)->close(vm);
+    *p = next;
+  }
+}
+
+OuterVal* StackSegment::findouterval(VM* vm, ValueT* level)
+{
+  OuterVal** pp = &outers;
+  OuterVal* p = NULL;
+  while ((p = *pp) != NULL && p->valp >= level)
+  {
+    if (p->valp == level)
+      return p;
+    pp = &p->next;
+  }
+  p = Sr0(vm, OuterVal);
+  p->valp = level;
+  p->next = *pp;
+  *pp = p;
+  return p;
+}
+
 void CallFrame::visit(VM* vm)
 {
   Check(prev);
@@ -1698,11 +1732,6 @@ static CallFrame* cowfrm(VM* vm, CallFrame* src)
   return dst;
 }
 
-static ValueT* refboxval(VM* vm, ValueT* slot)
-{
-  return isbox(slot) ? &(boxref(slot)->val) : slot;
-}
-
 static void checkcallcc(VM* vm, CallFrame** frm, ValueT** procp, int len, CallAppState* callstate)
 {
   CallFrame* oldfrm = *frm;
@@ -2073,6 +2102,7 @@ static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* ba
   }
   else
   {
+    frm->seg->closeouterval(vm, frm->base);
     frm->top = frm->base + 1 + newcall->lambda->top;
     if (frm->seg->frozen > 0 || frm->top >= frm->seg->end())
     {
@@ -2244,9 +2274,11 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
     (*frm)->start = newowner->base + (retslot - owner->base);
     (*frm)->prev = newowner;
   }
+  if (owner == NULL)
     vm->ac0 = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
-  if (owner)
-    *refboxval(vm, (*frm)->start) = vm->ac0;
+  else
+    vm->ac0 = *(*frm)->start = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
+  (*frm)->seg->closeouterval(vm, (*frm)->base);
   if ((*frm)->force)
   {
     if (ispromise((*frm)->start))
@@ -2344,6 +2376,7 @@ static void teardowndeadframes(VM* vm)
       f->unwind = NULL;
       u(vm, f);
     }
+    f->seg->closeouterval(vm, f->base);
     f = f->prev;
   }
 }
@@ -2380,26 +2413,22 @@ void VM::execute0(CallFrame* frm)
   switch(icode) {
   case OP_CONSEXT: {
     int A, B, C; getcode_cons2(i, A, B, C);
-    ValueT* tgt = refboxval(this, stkvt(A));
-    setpair(tgt, SCM::cons(this, stkvt(B), stkvt(C)));
+    setpair(stkvt(A), SCM::cons(this, stkvt(B), stkvt(C)));
     break;
   }
   case OP_CONS: {
     int A; getcode_cons(i, A);
-    ValueT* tgt = refboxval(this, stkvt(A));
-    setpair(tgt, SCM::cons(this, stkvt(A), stkvt(A+1)));
+    setpair(stkvt(A), SCM::cons(this, stkvt(A), stkvt(A+1)));
     break;
   }
   case OP_LIST: {
     int A; getcode_list(i, A);
-    ValueT* tgt = refboxval(this, stkvt(A));
-    setpair(tgt, SCM::list(this, tgt));
+    setpair(stkvt(A), SCM::list(this, stkvt(A)));
     break;
   }
   case OP_LISTK: {
     int A, B; getcode_listk(i, A, B);
-    ValueT* tgt = refboxval(this, stkvt(A));
-    setpair(tgt, SCM::list(this, this->kconst[B], tgt));
+    setpair(stkvt(A), SCM::list(this, this->kconst[B], stkvt(A)));
     break;
   }
   case OP_LIST2VEC: {
@@ -2407,7 +2436,7 @@ void VM::execute0(CallFrame* frm)
     Sgcvar1(this, out);
     SCM::list2vector(this, stkvt(A), out);
     arrayref(out)->setimmutable();
-    *refboxval(this, stkvt(A)) = out;
+    *stkvt(A) = out;
     break;
   }
   case OP_APPEND0: {
@@ -2423,13 +2452,12 @@ void VM::execute0(CallFrame* frm)
   case OP_APPENDEXT: {
     int A, B, C; getcode_append2(i, A, B, C);
     SCM::append(this, stkvt(B), stkvt(C));
-    *refboxval(this, stkvt(A)) = stkvt(B);
+    *stkvt(A) = stkvt(B);
     break;
   }
   case OP_ASSIGN: {
     int target, from;getcode_assign(i, target, from);
-    ValueT* tgt = refboxval(this, stkvt(target));
-    *tgt = lambda->getk(from);
+    *stkvt(target) = lambda->getk(from);
     break;
   }
   case OP_JUMPLABEL:
@@ -2442,24 +2470,24 @@ void VM::execute0(CallFrame* frm)
     ValueT val;
     GEnv(this)->getval(name, &val);
     Assert(this, !isundefined(&val), "undefined global var %s", Ssstr(name));
-    *refboxval(this, stkvt(target)) = val;
+    *stkvt(target) = val;
     break;
   }
   case OP_VARREFLOCAL: {
     int target, from;getcode_varreflocal(i, target, from);
-    ValueT* val = refboxval(this, stkvt(1 + from));
+    ValueT* val = stkvt(1 + from);
     SymPtr var = lambda->vars->reflocal(from);
     Assert(this, !isundefined(val), "undefined local variable %s", Ssstr(var));
-    *refboxval(this, stkvt(target)) = val;
+    *stkvt(target) = val;
     break;
   }
   case OP_VARREFOVAR: {
     int target, from;getcode_varrefovar(i, target, from);
     OuterVar* ov = lambda->vars->refovar(from);
-    BoxObj* box = call->outers[from];
-    ValueT* val = &box->val;
+    OuterVal* ovl = call->outers[from];
+    ValueT* val = ovl->valp;
     Assert(this, !isundefined(val), "undefined ref var %s", Ssstr(ov->name));
-    *refboxval(this, stkvt(target)) = val;
+    *stkvt(target) = val;
     break;
   }
   case OP_DEFGLOBAL: {
@@ -2477,7 +2505,7 @@ void VM::execute0(CallFrame* frm)
     ValueT* val = stkvt(B);
     SymPtr var = lambda->vars->reflocal(A);
     Assert(this, !isundefined(val), "undefined val for var %s", Ssstr(var));
-    *refboxval(this, stkvt(A+1)) = val;
+    *stkvt(A+1) = val;
     break;
   }
   case OP_SETOVAR: {
@@ -2485,8 +2513,8 @@ void VM::execute0(CallFrame* frm)
     OuterVar* ov = lambda->vars->refovar(A);
     ValueT* val = stkvt(B);
     Assert(this, !isundefined(val), "undefined val for var %s", Ssstr(ov->name));
-    BoxObj* box = call->outers[ov->idx];
-    box->val = val;
+    OuterVal* ovl = call->outers[ov->idx];
+    *ovl->valp = val;
     break;
   }
   case OP_SETGLOBAL: {
@@ -2513,7 +2541,7 @@ void VM::execute0(CallFrame* frm)
     int target, k;getcode_lambda(i, target, k);
     LambdaPtr newlambda = lambda->getl(k);
     int on = newlambda->vars->ovar.n;
-    ValueT* tval = refboxval(this, stkvt(target));
+    ValueT* tval = stkvt(target);
     ClosurePtr clo = NULL;
     setclosure(tval, clo = newclosure(on));
     clo->lambda = newlambda;
@@ -2522,7 +2550,7 @@ void VM::execute0(CallFrame* frm)
   }
   case OP_PROMISE: {
     int target;getcode_promise(i, target);
-    ValueT* proc = refboxval(this, stkvt(target));
+    ValueT* proc = stkvt(target);
     AssertVT(this, isclosure(proc), proc, "internal error, not a closure in delay");
     setpromise(proc, newpromise(this, closureref(proc)));
     break;
@@ -3253,9 +3281,6 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
   case VT_REF_OPORT:
     oport->writestr("#<output-port>");
     break;
-  case VT_REF_BOX:
-    printvalue0(oport, &(boxref(val)->val), stripanno);
-    break;
   default:
     fprintf(stderr, "printvalue unknown type %d\n", vttype(val));
     *((int*)0) = 0;
@@ -3443,6 +3468,12 @@ int OutputPortStrObj::write(VM* vm, ValueT* vt)
   return 0;
 }
 
+void OuterVal::close(VM* vm)
+{
+  val = *valp;
+  valp = &val;
+}
+
 void ClosureObj::visit(VM* vm)
 {
   Check(lambda);
@@ -3451,24 +3482,14 @@ void ClosureObj::visit(VM* vm)
       Check(outers[i]);
 }
 
-void ClosureObj::initouters(VM* vm, StackSegment* seg, ValueT* base, BoxObj** encouter)
+void ClosureObj::initouters(VM* vm, StackSegment* seg, ValueT* base, OuterVal** encouter)
 {
   LambdaVarsObj* vars = lambda->vars;
   for (int i = 0; i < n; i++)
   {
     OuterVar* ov = vars->refovar(i);
     if (ov->islocal)
-    {
-      ValueT* slot = base + 1 + ov->idx;
-      if (!isbox(slot))
-      {
-        BoxObj* box = Sr0(vm, BoxObj);
-        box->val = *slot;
-        setbox(slot, box);
-        GC(vm)->checkBarrier(box);
-      }
-      outers[i] = boxref(slot);
-    }
+      outers[i] = seg->findouterval(vm, base + 1 + ov->idx);
     else
       outers[i] = encouter[ov->idx];
   }
