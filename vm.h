@@ -1591,6 +1591,7 @@ struct OuterVal : public RefObject {
     valp = NULL;
     next = NULL;
   }
+  Visit1(valp)
   GetSize(OuterVal)
   void close(VM*);
   ValueT* valp;
