@@ -1401,6 +1401,7 @@ public:
   GetSize(LambdaVarsObj)
 
   VecT<SymPtr> local;
+  VecT<bool> capture;
   VecT<OuterVar> ovar;
   VecT<SyntaxObj*> syntax;
 };

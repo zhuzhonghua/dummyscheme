@@ -2513,7 +2513,7 @@ void VM::execute0(CallFrame* frm)
     OuterVar* ov = lambda->vars->refovar(A);
     ValueT* val = stkvt(B);
     Assert(this, !isundefined(val), "undefined val for var %s", Ssstr(ov->name));
-    OuterVal* ovl = call->outers[ov->idx];
+    OuterVal* ovl = call->outers[A];
     *ovl->valp = val;
     break;
   }
@@ -3368,6 +3368,7 @@ void LambdaVarsObj::visit(VM* vm)
 void LambdaVarsObj::shrink(VM* vm)
 {
   vec_shrink(SymPtr, vm, &local);
+  vec_shrink(bool, vm, &capture);
   vec_shrink(OuterVar, vm, &ovar);
   vec_shrink(SyntaxPtr, vm, &syntax);
 }
@@ -3375,6 +3376,7 @@ void LambdaVarsObj::shrink(VM* vm)
 void LambdaVarsObj::finz(VM* vm)
 {
   vec_finz(SymPtr, vm, &local);
+  vec_finz(bool, vm, &capture);
   vec_finz(OuterVar, vm, &ovar);
   vec_finz(SyntaxPtr, vm, &syntax);
 }
@@ -3414,6 +3416,7 @@ int LambdaVarsObj::looklocal(SymPtr sym)
 int LambdaVarsObj::addlocal(VM* vm, SymPtr sym)
 {
   vec_add1(SymPtr, vm, local, sym);
+  vec_add1(bool, vm, capture, false);
   return local.n - 1;
 }
 
