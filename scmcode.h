@@ -47,6 +47,7 @@ enum OPCode {
   OP_SETOVAR,
   OP_SETGLOBAL,
   OP_DEFGLOBAL,
+  OP_DEFLOCAL,
   OP_REFLOCAL,
   OP_REFGLOBAL,
   OP_REFOVAR,
@@ -102,6 +103,9 @@ enum OPCode {
 
 #define code_defglobal(A, B) CREATE_OPAB(OP_DEFGLOBAL, A, B)
 #define getcode_defglobal(i, A, B) GET_OPAB(i, A, B)
+
+#define code_deflocal(A, B) CREATE_OPAB(OP_DEFLOCAL, A, B)
+#define getcode_deflocal(i, A, B) GET_OPAB(i, A, B)
 
 #define code_setlocal(A, B) CREATE_OPAB(OP_SETLOCAL, A, B)
 #define getcode_setlocal(i, A, B) GET_OPAB(i, A, B)

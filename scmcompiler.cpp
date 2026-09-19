@@ -292,7 +292,8 @@ int SCompiler::compiledefsym0(int target, ValueT* symvt)
     SymPtr sym = symref(symvt0);
     int offset = vars->looklocal(sym);
     compileassert(vm, offset>=0, symvt, "internal error, no binding for %s", Ssstr(sym));
-    target = offset+1;
+    int line = annotateline(symvt);
+    putcode(code_deflocal(offset, target), line);
   }
   else
   {

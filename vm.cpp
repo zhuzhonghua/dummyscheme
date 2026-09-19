@@ -1527,6 +1527,14 @@ void VM::printccode0(FILE *f, LambdaPtr lambda, int pc)
       fprintf(f, "\t; %s", Ssstr(sym));
       break;
     }
+    case OP_DEFLOCAL: {
+      int target, from;getcode_deflocal(i, target, from);
+      SymPtr var = lambda->vars->reflocal(target-1);
+      PrintCode(DEFLOCAL);
+      PrintOffset2(target, from);
+      fprintf(f, "\t; def %s(%d) from %d", Ssstr(var), target, from);
+      break;
+    }
     case OP_SETLOCAL: {
       int target, from;getcode_setlocal(i, target, from);
       PrintCode(SETLOCAL);
@@ -2524,6 +2532,13 @@ void VM::execute0(CallFrame* frm)
     *val = Svoidref;
     break;
   }
+  case OP_DEFLOCAL: {
+    int target, from;getcode_deflocal(i, target, from);
+    ValueT* val = stkvt(from);
+    Assert(this, !isundefined(val), "undefined value to define local variable");
+    *stkvt(target+1) = val;
+    break;
+  }
   case OP_SETLOCAL: {
     int A, B;getcode_setlocal(i, A, B);
     ValueT* val = stkvt(B);
@@ -3402,6 +3417,12 @@ void LambdaObj::patchinstruction(VM* vm)
       int target, from; getcode_reflocal(i, target, from);
       if (vars->local.get(from).capture)
         code.set(pc, code_refbox(target, from));
+      break;
+    }
+    case OP_DEFLOCAL: {
+      int target, from; getcode_deflocal(i, target, from);
+      if (vars->local.get(target).capture)
+        code.set(pc, code_setbox(target, from));
       break;
     }
     case OP_SETLOCAL: {
