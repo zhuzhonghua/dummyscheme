@@ -879,22 +879,18 @@ struct StkVar {
 };
 
 #define SEGMENT_SLOTS_SIZE 128
-struct OuterVal;
 class StackSegment : public RefObject {
 public:
-  StackSegment() { outers = NULL; frozen = 0; }
+  StackSegment() { frozen = 0; }
   ValueT slots[SEGMENT_SLOTS_SIZE];
 
   ValueT* first() { return &slots[0]; }
   ValueT* end() { return &slots[SEGMENT_SLOTS_SIZE]; }
-  OuterVal* findouterval(VM*, ValueT* level);
-  void closeouterval(VM* vm, ValueT* level);
 
   virtual void finz(VM* vm);
   GetSize(StackSegment)
 
   int frozen;
-  OuterVal* outers;
 };
 
 typedef void (*UnWindFrame)(VM*, CallFrame*);
@@ -1231,8 +1227,6 @@ enum NATIVE_COMPLEX_PROC {
   NATIVE_COMPLEX_MAX,
 };
 
-struct OuterVal;
-
 enum EKConst {
   K_NULL,
   K_UNDEFINED,
@@ -1382,7 +1376,7 @@ struct LocalVar {
   LocalVar(SymPtr s, bool c):sym(s), capture(c) {}
 };
 
-struct OuterVar {
+struct BoxVar {
   SymPtr name;
   short idx;
   bool islocal;
@@ -1390,7 +1384,7 @@ struct OuterVar {
   void visit(VM* vm) {
     Check(name);
   }
-  OuterVar():name(NULL),idx(-1),islocal(false) {}
+  BoxVar():name(NULL),idx(-1),islocal(false) {}
 };
 
 struct BoxObj : public RefObject {
@@ -1407,16 +1401,16 @@ public:
 
   SymPtr reflocal(int n) { return local.get(n).sym; }
   bool iscapture(int n) { return local.get(n).capture; }
-  OuterVar* refovar(int n) { return ovar.getptr(n); }
+  BoxVar* refbvar(int n) { return bvar.getptr(n); }
 
   bool isvalidloc(int n) { return n >= 0 && n < local.n; }
-  bool isvalidouter(int n) { return n >= 0 && n < ovar.n; }
+  bool isvalidboxvar(int n) { return n >= 0 && n < bvar.n; }
 
   int addlocal(VM* vm, SymPtr sym);
   int looklocal(SymPtr sym);
 
-  int addovar(VM* vm, SymPtr sym, int idx, bool islocal);
-  int lookovar(SymPtr sym);
+  int addbvar(VM* vm, SymPtr sym, int idx, bool islocal);
+  int lookbvar(SymPtr sym);
 
   void addsyntax(VM* vm, SyntaxObj*);
   int looksyntax(SymPtr sym, SyntaxPtr* sp);
@@ -1427,7 +1421,7 @@ public:
   GetSize(LambdaVarsObj)
 
   VecT<LocalVar> local;
-  VecT<OuterVar> ovar;
+  VecT<BoxVar> bvar;
   VecT<SyntaxObj*> syntax;
 };
 
@@ -1612,19 +1606,6 @@ struct AnnotationObj : public RefObject {
   int line;
 };
 
-struct OuterVal : public RefObject {
-  OuterVal() {
-    valp = NULL;
-    next = NULL;
-  }
-  Visit1(valp)
-  GetSize(OuterVal)
-  void close(VM*);
-  ValueT* valp;
-  ValueT val;
-  OuterVal* next;
-};
-
 struct ClosureObj : public RefObject {
   ClosureObj(int no): n(no), lambda(NULL) {
     for (int i = 0; i < n ; i++)
@@ -1636,7 +1617,7 @@ struct ClosureObj : public RefObject {
   }
   virtual int getsize() { return totalsize(n); }
   virtual void visit(VM* vm);
-  void initouters(VM*, StackSegment* seg, ValueT* base, BoxObj** encouter);
+  void initouters(VM*, StackSegment* seg, ValueT* base, BoxObj** encbox);
 
   LambdaPtr lambda;
   short n;

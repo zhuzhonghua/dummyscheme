@@ -81,7 +81,7 @@ bool isboundvar(SCompiler* compiler, SymPtr sym)
 {
   for (SCompiler* l = compiler; l && l->lambda->vars; l = l->enclose)
     if (l->lambda->vars->looklocal(sym) >= 0 ||
-        l->lambda->vars->lookovar(sym) >= 0)
+        l->lambda->vars->lookbvar(sym) >= 0)
       return true;
   return false;
 }
@@ -230,17 +230,17 @@ void SCompiler::compilesym(int target, ValueT* expr, ValueT* link)
   if (lambda->vars)
   {
     SymPtr symp = getsym(sym);
-    int local = -1, ovar = -1;
-    compilerefsym(&local, &ovar, symp);
+    int local = -1, bvar = -1;
+    compilerefsym(&local, &bvar, symp);
     if (local >= 0)
     {
       setsym(sym, symp);
       putcode(code_reflocal(target, local), line);
     }
-    else if (ovar >= 0)
+    else if (bvar >= 0)
     {
       setsym(sym, symp);
-      putcode(code_refovar(target, ovar), line);
+      putcode(code_refbvar(target, bvar), line);
     }
     else
     {
@@ -367,7 +367,7 @@ void SCompiler::compiledef(int target, ValueT* expr, ValueT* link)
   }
 }
 
-void SCompiler::compilerefsym(int* local, int* ovar, SymPtr sym)
+void SCompiler::compilerefsym(int* local, int* bvar, SymPtr sym)
 {
   LambdaVarsObj* vars = lambda->vars;
   if (vars)
@@ -375,19 +375,19 @@ void SCompiler::compilerefsym(int* local, int* ovar, SymPtr sym)
     *local = vars->looklocal(sym);
     if (*local < 0)
     {
-      *ovar = vars->lookovar(sym);
-      if (*ovar < 0)
+      *bvar = vars->lookbvar(sym);
+      if (*bvar < 0)
       {
         if (enclose)
-          enclose->compilerefsym(local, ovar, sym);
+          enclose->compilerefsym(local, bvar, sym);
         if (*local >= 0)
         {
-          *ovar = vars->addovar(vm, sym, *local, true);
+          *bvar = vars->addbvar(vm, sym, *local, true);
           enclose->lambda->vars->local.getptr(*local)->capture = true;
           *local = -1;
         }
-        else if (*ovar >= 0)
-          *ovar = vars->addovar(vm, sym, *ovar, false);
+        else if (*bvar >= 0)
+          *bvar = vars->addbvar(vm, sym, *bvar, false);
       }
     }
   }
@@ -406,19 +406,19 @@ void SCompiler::compileset(int target, ValueT* expr, ValueT* link)
   if (lambda->vars)
   {
     SymPtr symp = getsym(sym);
-    int local = -1, ovar = -1;
-    compilerefsym(&local, &ovar, symp);
+    int local = -1, bvar = -1;
+    compilerefsym(&local, &bvar, symp);
     if (local >= 0)
     {
       target += 1;
       line = annotateline(&symvt);
       putcode(code_setlocal(local, target), line);
     }
-    else if (ovar >= 0)
+    else if (bvar >= 0)
     {
       target += 1;
       line = annotateline(&symvt);
-      putcode(code_setovar(ovar, target), line);
+      putcode(code_setbvar(bvar, target), line);
     }
     else
     {

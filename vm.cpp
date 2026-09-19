@@ -159,36 +159,7 @@ StkVar::~StkVar()
 
 void StackSegment::finz(VM* vm)
 {
-  closeouterval(vm, NULL);
   RefObject::finz(vm);
-}
-
-void StackSegment::closeouterval(VM* vm, ValueT* level)
-{
-  OuterVal** p = &outers;
-  while ((*p) != NULL && (*p)->valp >= level)
-  {
-    OuterVal* next = (*p)->next;
-    (*p)->close(vm);
-    *p = next;
-  }
-}
-
-OuterVal* StackSegment::findouterval(VM* vm, ValueT* level)
-{
-  OuterVal** pp = &outers;
-  OuterVal* p = NULL;
-  while ((p = *pp) != NULL && p->valp >= level)
-  {
-    if (p->valp == level)
-      return p;
-    pp = &p->next;
-  }
-  p = Sr0(vm, OuterVal);
-  p->valp = level;
-  p->next = *pp;
-  *pp = p;
-  return p;
 }
 
 void CallFrame::visit(VM* vm)
@@ -1350,13 +1321,13 @@ void VM::printccode(FILE *f, LambdaPtr lambda)
         fprintf(f, "[%d,%s%s] ", (j+1), Ssstr(lambda->vars->local[j].sym), lambda->vars->local[j].capture?"*":"");
       fprintf(f, "\n");
     }
-    if (lambda->vars->ovar.n > 0)
+    if (lambda->vars->bvar.n > 0)
     {
       fprintf(f, "%-7s", "Out:");
-      VEC_FOR(j, &lambda->vars->ovar)
+      VEC_FOR(j, &lambda->vars->bvar)
       {
-        OuterVar* ov = lambda->vars->ovar.getptr(j);
-        fprintf(f, "[%s,%d,%s] ", Ssstr(ov->name), ov->idx, ov->islocal?"true":"false");
+        BoxVar* bv = lambda->vars->bvar.getptr(j);
+        fprintf(f, "[%s,%d,%s] ", Ssstr(bv->name), bv->idx, bv->islocal?"true":"false");
       }
       fprintf(f, "\n");
     }
@@ -1510,12 +1481,12 @@ void VM::printccode0(FILE *f, LambdaPtr lambda, int pc)
       fprintf(f, "\t; set %d as %s", target, Ssstr(var));
       break;
     }
-    case OP_REFOVAR: {
-      int target, from;getcode_refovar(i, target, from);
-      OuterVar* ovar = lambda->vars->refovar(from);
-      PrintCode(REFOVAR);
+    case OP_REFBVAR: {
+      int target, from;getcode_refbvar(i, target, from);
+      BoxVar* bv = lambda->vars->refbvar(from);
+      PrintCode(REFBVAR);
       PrintOffset2(target, from);
-      fprintf(f, "\t; set %d as %s", target, Ssstr(ovar->name));
+      fprintf(f, "\t; set %d as %s", target, Ssstr(bv->name));
       break;
     }
     case OP_DEFGLOBAL: {
@@ -1559,12 +1530,12 @@ void VM::printccode0(FILE *f, LambdaPtr lambda, int pc)
       fprintf(f, "\t; ref box %s(%d) to %d", Ssstr(var), from, target);
       break;
     }
-    case OP_SETOVAR: {
-      int target, from;getcode_setovar(i, target, from);
-      OuterVar* ovar = lambda->vars->refovar(target);
-      PrintCode(SETOVAR);
+    case OP_SETBVAR: {
+      int target, from;getcode_setbvar(i, target, from);
+      BoxVar* bv = lambda->vars->refbvar(target);
+      PrintCode(SETBVAR);
       PrintOffset2(target, from);
-      fprintf(f, "\t; set %s from %d", Ssstr(ovar->name), from);
+      fprintf(f, "\t; set %s from %d", Ssstr(bv->name), from);
       break;
     }
     case OP_SETGLOBAL: {
@@ -2140,7 +2111,6 @@ static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* ba
   }
   else
   {
-    frm->seg->closeouterval(vm, frm->base);
     frm->top = frm->base + 1 + newcall->lambda->top;
     if (frm->seg->frozen > 0 || frm->top >= frm->seg->end())
     {
@@ -2317,7 +2287,6 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
     vm->ac0 = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
   else
     vm->ac0 = *(*frm)->start = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
-  (*frm)->seg->closeouterval(vm, (*frm)->base);
   if ((*frm)->force)
   {
     if (ispromise((*frm)->start))
@@ -2415,7 +2384,6 @@ static void teardowndeadframes(VM* vm)
       f->unwind = NULL;
       u(vm, f);
     }
-    f->seg->closeouterval(vm, f->base);
     f = f->prev;
   }
 }
@@ -2520,12 +2488,12 @@ void VM::execute0(CallFrame* frm)
     *stkvt(target) = val;
     break;
   }
-  case OP_REFOVAR: {
-    int target, from;getcode_refovar(i, target, from);
-    OuterVar* ov = lambda->vars->refovar(from);
+  case OP_REFBVAR: {
+    int target, from;getcode_refbvar(i, target, from);
+    BoxVar* bv = lambda->vars->refbvar(from);
     BoxObj* box = call->outers[from];
     ValueT* val = &box->val;
-    Assert(this, !isundefined(val), "undefined ref var %s", Ssstr(ov->name));
+    Assert(this, !isundefined(val), "undefined ref var %s", Ssstr(bv->name));
     *stkvt(target) = val;
     break;
   }
@@ -2570,11 +2538,11 @@ void VM::execute0(CallFrame* frm)
     box->val = *val;
     break;
   }
-  case OP_SETOVAR: {
-    int A, B;getcode_setovar(i, A, B);
-    OuterVar* ov = lambda->vars->refovar(A);
+  case OP_SETBVAR: {
+    int A, B;getcode_setbvar(i, A, B);
+    BoxVar* bv = lambda->vars->refbvar(A);
     ValueT* val = stkvt(B);
-    Assert(this, !isundefined(val), "undefined val for var %s", Ssstr(ov->name));
+    Assert(this, !isundefined(val), "undefined val for var %s", Ssstr(bv->name));
     call->outers[A]->val = *val;
     break;
   }
@@ -2601,7 +2569,7 @@ void VM::execute0(CallFrame* frm)
   case OP_LAMBDA: {
     int target, k;getcode_lambda(i, target, k);
     LambdaPtr newlambda = lambda->getl(k);
-    int on = newlambda->vars->ovar.n;
+    int on = newlambda->vars->bvar.n;
     ValueT* tval = stkvt(target);
     ClosurePtr clo = NULL;
     setclosure(tval, clo = newclosure(on));
@@ -3458,37 +3426,37 @@ void LambdaVarsObj::visit(VM* vm)
 {
   VEC_FOR(i, &local) local.getptr(i)->visit(vm);
   VEC_FOR(i, &syntax) Check(syntax.get(i));
-  VEC_FOR(i, &ovar) ovar.getptr(i)->visit(vm);
+  VEC_FOR(i, &bvar) bvar.getptr(i)->visit(vm);
 }
 
 void LambdaVarsObj::shrink(VM* vm)
 {
   vec_shrink(LocalVar, vm, &local);
-  vec_shrink(OuterVar, vm, &ovar);
+  vec_shrink(BoxVar, vm, &bvar);
   vec_shrink(SyntaxPtr, vm, &syntax);
 }
 
 void LambdaVarsObj::finz(VM* vm)
 {
   vec_finz(LocalVar, vm, &local);
-  vec_finz(OuterVar, vm, &ovar);
+  vec_finz(BoxVar, vm, &bvar);
   vec_finz(SyntaxPtr, vm, &syntax);
 }
 
-int LambdaVarsObj::addovar(VM* vm, SymPtr sym, int idx, bool islocal)
+int LambdaVarsObj::addbvar(VM* vm, SymPtr sym, int idx, bool islocal)
 {
-  vec_ensure(OuterVar, vm, &ovar, vec_fill2(OuterVar()));
-  OuterVar* ov = ovar.getptr(ovar.n++);
-  ov->name = sym;
-  ov->idx = idx;
-  ov->islocal = islocal;
-  return ovar.n - 1;
+  vec_ensure(BoxVar, vm, &bvar, vec_fill2(BoxVar()));
+  BoxVar* bv = bvar.getptr(bvar.n++);
+  bv->name = sym;
+  bv->idx = idx;
+  bv->islocal = islocal;
+  return bvar.n - 1;
 }
 
-int LambdaVarsObj::lookovar(SymPtr sym)
+int LambdaVarsObj::lookbvar(SymPtr sym)
 {
-  VEC_FOR(i, &ovar)
-    if (ovar.get(i).name == sym)
+  VEC_FOR(i, &bvar)
+    if (bvar.get(i).name == sym)
       return i;
   return -1;
 }
@@ -3564,12 +3532,6 @@ int OutputPortStrObj::write(VM* vm, ValueT* vt)
   return 0;
 }
 
-void OuterVal::close(VM* vm)
-{
-  val = *valp;
-  valp = &val;
-}
-
 void ClosureObj::visit(VM* vm)
 {
   Check(lambda);
@@ -3578,16 +3540,16 @@ void ClosureObj::visit(VM* vm)
       Check(outers[i]);
 }
 
-void ClosureObj::initouters(VM* vm, StackSegment* seg, ValueT* base, BoxObj** encouter)
+void ClosureObj::initouters(VM* vm, StackSegment* seg, ValueT* base, BoxObj** encbox)
 {
   LambdaVarsObj* vars = lambda->vars;
   for (int i = 0; i < n; i++)
   {
-    OuterVar* ov = vars->refovar(i);
-    if (ov->islocal)
-      outers[i] = boxref(base + 1 + ov->idx);
+    BoxVar* bv = vars->refbvar(i);
+    if (bv->islocal)
+      outers[i] = boxref(base + 1 + bv->idx);
     else
-      outers[i] = encouter[ov->idx];
+      outers[i] = encbox[bv->idx];
   }
 }
 

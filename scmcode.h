@@ -44,13 +44,13 @@ enum OPCode {
   OP_PROMISE,
   OP_IFFALSEJUMP,
   OP_SETLOCAL,
-  OP_SETOVAR,
+  OP_SETBVAR,
   OP_SETGLOBAL,
   OP_DEFGLOBAL,
   OP_DEFLOCAL,
   OP_REFLOCAL,
   OP_REFGLOBAL,
-  OP_REFOVAR,
+  OP_REFBVAR,
   OP_SETBOX,
   OP_REFBOX,
   OP_ASSIGN,
@@ -92,8 +92,8 @@ enum OPCode {
 #define code_assign(target, from) CREATE_OPAB(OP_ASSIGN, target, from)
 #define getcode_assign(i, target, from) GET_OPAB(i, target, from)
 
-#define code_refovar(target, from) CREATE_OPAB(OP_REFOVAR, target, from)
-#define getcode_refovar(i, target, from) GET_OPAB(i, target, from)
+#define code_refbvar(target, from) CREATE_OPAB(OP_REFBVAR, target, from)
+#define getcode_refbvar(i, target, from) GET_OPAB(i, target, from)
 
 #define code_reflocal(target, from) CREATE_OPAB(OP_REFLOCAL, target, from)
 #define getcode_reflocal(i, target, from) GET_OPAB(i, target, from)
@@ -116,8 +116,8 @@ enum OPCode {
 #define code_refbox(A, B) CREATE_OPAB(OP_REFBOX, A, B)
 #define getcode_refbox(i, A, B) GET_OPAB(i, A, B)
 
-#define code_setovar(A, B) CREATE_OPAB(OP_SETOVAR, A, B)
-#define getcode_setovar(i, A, B) GET_OPAB(i, A, B)
+#define code_setbvar(A, B) CREATE_OPAB(OP_SETBVAR, A, B)
+#define getcode_setbvar(i, A, B) GET_OPAB(i, A, B)
 
 #define code_setglobal(A, B) CREATE_OPAB(OP_SETGLOBAL, A, B)
 #define getcode_setglobal(i, A, B) GET_OPAB(i, A, B)
