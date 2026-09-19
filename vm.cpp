@@ -1761,7 +1761,9 @@ static void checkcallcc(VM* vm, CallFrame** frm, ValueT** procp, int len, CallAp
   else
     Error(vm, "%s: needs closure object", METHOD);
   *stkvt(0) = cc;
-  setcontinuation(stkvt(1), Sr2(vm, ContinuationObj, oldfrm, base));
+  ContinuationObj* newcont = Sr2(vm, ContinuationObj, oldfrm, base);
+  newcont->dywind = Stk(vm)->dywind;
+  setcontinuation(stkvt(1), newcont);
   if (argrest) *stkvt(2) = Snullref;
   callstate->callcc = true;
   stk->curfrm = *frm = cowfrm(vm, oldfrm);
@@ -2206,6 +2208,29 @@ static CallNativeAct callnativeproc(VM* vm, CallFrame* frm, ValueT* proc, int le
   return CALL_NATIVE_DONE;
 }
 
+static void runthunk(VM* vm, ValueT* proc);
+
+static void unwinddywindchain(VM* vm, DynamicWindObj* stop)
+{
+  Stack* stk = Stk(vm);
+  while (stk->dywind != NULL && stk->dywind != stop)
+  {
+    DynamicWindObj* dy = stk->dywind;
+    int dwstate = dy->state;
+    Sgcvar1(vm, after);
+    *after = dy->after;
+    stk->dywind = dy->parent;
+    if (dwstate != DW_BODY)
+      continue;
+    TRY {
+      runthunk(vm, after);
+    }
+    CATCH(e) {
+      Print("\ndynamic-wind: after thunk raised: %s\n", e);
+    }
+  }
+}
+
 static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len, bool istail, DynamicWindObj* dywind)
 {
   Stack* stk = Stk(vm);
@@ -2252,6 +2277,7 @@ static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len, bool ist
   {
     Assert(vm, len == 1, "return error in call continuation, len=%d", len);
     ContinuationPtr cont = continuationref(proc);
+    unwinddywindchain(vm, cont->dywind);
     CallFrame* top = cowfrm(vm, cont->frm);
     ValueT* rebased = top->base + (cont->base - cont->frm->base);
     *frm = stk->curfrm = top;
