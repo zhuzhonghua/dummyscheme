@@ -1493,27 +1493,27 @@ void VM::printccode0(FILE *f, LambdaPtr lambda, int pc)
       PrintOffset(target);
       break;
     }
-    case OP_VARREFGLOBAL: {
-      int target, from;getcode_varrefglobal(i, target, from);
+    case OP_REFGLOBAL: {
+      int target, from;getcode_refglobal(i, target, from);
       ValueT* k = lambda->getk(from);
       SymPtr sym = symref(k);
-      PrintCode(VARREFGLOBAL);
+      PrintCode(REFGLOBAL);
       PrintOffset2(target, from);
       fprintf(f, "\t; set %d as %s", target, Ssstr(sym));
       break;
     }
-    case OP_VARREFLOCAL: {
-      int target, from;getcode_varreflocal(i, target, from);
+    case OP_REFLOCAL: {
+      int target, from;getcode_reflocal(i, target, from);
       SymPtr var = lambda->vars->reflocal(from);
-      PrintCode(VARREFLOCAL);
+      PrintCode(REFLOCAL);
       PrintOffset2(target, from);
       fprintf(f, "\t; set %d as %s", target, Ssstr(var));
       break;
     }
-    case OP_VARREFOVAR: {
-      int target, from;getcode_varrefovar(i, target, from);
+    case OP_REFOVAR: {
+      int target, from;getcode_refovar(i, target, from);
       OuterVar* ovar = lambda->vars->refovar(from);
-      PrintCode(VARREFOVAR);
+      PrintCode(REFOVAR);
       PrintOffset2(target, from);
       fprintf(f, "\t; set %d as %s", target, Ssstr(ovar->name));
       break;
@@ -2479,8 +2479,8 @@ void VM::execute0(CallFrame* frm)
   case OP_JUMPLABEL:
     getcode_jmplabel(i, pc);
     goto loop;
-  case OP_VARREFGLOBAL: {
-    int target, from;getcode_varrefglobal(i, target, from);
+  case OP_REFGLOBAL: {
+    int target, from;getcode_refglobal(i, target, from);
     ValueT* k = lambda->getk(from);
     SymPtr name = symref(k);
     ValueT val;
@@ -2489,16 +2489,16 @@ void VM::execute0(CallFrame* frm)
     *stkvt(target) = val;
     break;
   }
-  case OP_VARREFLOCAL: {
-    int target, from;getcode_varreflocal(i, target, from);
+  case OP_REFLOCAL: {
+    int target, from;getcode_reflocal(i, target, from);
     ValueT* val = stkvt(1 + from);
     SymPtr var = lambda->vars->reflocal(from);
     Assert(this, !isundefined(val), "undefined local variable %s", Ssstr(var));
     *stkvt(target) = val;
     break;
   }
-  case OP_VARREFOVAR: {
-    int target, from;getcode_varrefovar(i, target, from);
+  case OP_REFOVAR: {
+    int target, from;getcode_refovar(i, target, from);
     OuterVar* ov = lambda->vars->refovar(from);
     OuterVal* ovl = call->outers[from];
     ValueT* val = ovl->valp;
@@ -3398,8 +3398,8 @@ void LambdaObj::patchinstruction(VM* vm)
     byte op = GET_OP(i);
     switch (op)
     {
-    case OP_VARREFLOCAL: {
-      int target, from; getcode_varreflocal(i, target, from);
+    case OP_REFLOCAL: {
+      int target, from; getcode_reflocal(i, target, from);
       if (vars->local.get(from).capture)
         code.set(pc, code_refbox(target, from));
       break;

@@ -235,25 +235,25 @@ void SCompiler::compilesym(int target, ValueT* expr, ValueT* link)
     if (local >= 0)
     {
       setsym(sym, symp);
-      putcode(code_varreflocal(target, local), line);
+      putcode(code_reflocal(target, local), line);
     }
     else if (ovar >= 0)
     {
       setsym(sym, symp);
-      putcode(code_varrefovar(target, ovar), line);
+      putcode(code_refovar(target, ovar), line);
     }
     else
     {
       checkhygienesym(sym, sym);
       int k = lambda->addk(vm, sym);
-      putcode(code_varrefglobal(target, k), line);
+      putcode(code_refglobal(target, k), line);
     }
   }
   else
   {
     checkhygienesym(sym, sym);
     int k = lambda->addk(vm, sym);
-    putcode(code_varrefglobal(target, k), line);
+    putcode(code_refglobal(target, k), line);
   }
 }
 
