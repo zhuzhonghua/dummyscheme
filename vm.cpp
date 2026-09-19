@@ -2106,6 +2106,20 @@ static CallFrame* recallforce(VM* vm, CallFrame* frm, ValueT* base)
   return frm;
 }
 
+static void boxcapturedlocals(VM* vm, CallFrame* frm, LambdaPtr lambda)
+{
+  LambdaVarsObj* vars = lambda->vars;
+  for (int i = 0; i < vars->local.n; i++)
+  {
+    if (vars->local.get(i).capture)
+    {
+      ValueT* slot = frm->base + 1 + i;
+      BoxObj* box = Sr1(vm, BoxObj, *slot);
+      setbox(slot, box);
+    }
+  }
+}
+
 static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* base, int len, CallAppState* callstate)
 {
   Stack* stk = Stk(vm);
@@ -2141,6 +2155,7 @@ static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* ba
       *(frm->base+j) = base+j;
   }
   stk->setvoid(frm->base+newcall->lambda->argnum+1, frm->top-1);
+  boxcapturedlocals(vm, frm, newcall->lambda);
   return frm;
 }
 
@@ -2508,8 +2523,8 @@ void VM::execute0(CallFrame* frm)
   case OP_REFOVAR: {
     int target, from;getcode_refovar(i, target, from);
     OuterVar* ov = lambda->vars->refovar(from);
-    OuterVal* ovl = call->outers[from];
-    ValueT* val = ovl->valp;
+    BoxObj* box = call->outers[from];
+    ValueT* val = &box->val;
     Assert(this, !isundefined(val), "undefined ref var %s", Ssstr(ov->name));
     *stkvt(target) = val;
     break;
@@ -2560,8 +2575,7 @@ void VM::execute0(CallFrame* frm)
     OuterVar* ov = lambda->vars->refovar(A);
     ValueT* val = stkvt(B);
     Assert(this, !isundefined(val), "undefined val for var %s", Ssstr(ov->name));
-    OuterVal* ovl = call->outers[A];
-    *ovl->valp = val;
+    call->outers[A]->val = *val;
     break;
   }
   case OP_SETGLOBAL: {
@@ -3328,6 +3342,9 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
   case VT_REF_OPORT:
     oport->writestr("#<output-port>");
     break;
+  case VT_REF_BOX:
+    oport->writestr("#<box>");
+    break;
   default:
     fprintf(stderr, "printvalue unknown type %d\n", vttype(val));
     *((int*)0) = 0;
@@ -3561,30 +3578,16 @@ void ClosureObj::visit(VM* vm)
       Check(outers[i]);
 }
 
-void ClosureObj::initouters(VM* vm, StackSegment* seg, ValueT* base, OuterVal** encouter)
+void ClosureObj::initouters(VM* vm, StackSegment* seg, ValueT* base, BoxObj** encouter)
 {
   LambdaVarsObj* vars = lambda->vars;
   for (int i = 0; i < n; i++)
   {
     OuterVar* ov = vars->refovar(i);
     if (ov->islocal)
-      outers[i] = seg->findouterval(vm, base + 1 + ov->idx);
+      outers[i] = boxref(base + 1 + ov->idx);
     else
       outers[i] = encouter[ov->idx];
-  }
-}
-
-void ClosureObj::initbox(VM* vm, StackSegment* seg, ValueT* base)
-{
-  LambdaVarsObj* vars = lambda->vars;
-  for (int i = 0; i < vars->local.n; i++)
-  {
-    if (vars->local.get(i).capture)
-    {
-      ValueT* slot = base + 1 + i;
-      BoxObj* box = Sr1(vm, BoxObj, *slot);
-      setbox(slot, box);
-    }
   }
 }
 

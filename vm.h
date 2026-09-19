@@ -1632,16 +1632,15 @@ struct ClosureObj : public RefObject {
   }
 
   static int totalsize(int n) {
-    return (offsetof(ClosureObj, outers) + sizeof(OuterVal*) * n);
+    return (offsetof(ClosureObj, outers) + sizeof(BoxObj*) * n);
   }
   virtual int getsize() { return totalsize(n); }
   virtual void visit(VM* vm);
-  void initouters(VM*, StackSegment* seg, ValueT* base, OuterVal** encouter);
-  void initbox(VM* vm, StackSegment* seg, ValueT* base);
+  void initouters(VM*, StackSegment* seg, ValueT* base, BoxObj** encouter);
 
   LambdaPtr lambda;
   short n;
-  OuterVal* outers[1];
+  BoxObj* outers[1];
 };
 
 typedef enum PromiseState { PROMISE_NONE, PROMISE_LAZY, PROMISE_EAGER };

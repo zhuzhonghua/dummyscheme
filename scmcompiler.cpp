@@ -328,6 +328,7 @@ void SCompiler::compilelambda0(int target, int line, ValueT* param, ValueT* body
   initlambdaparam(vm, newlambda, param);
   compiler.compileseqpre(body);
   compiler.compileseq(newlambda->vars->local.n+1, body, Sreturn, 1);
+  newlambda->patchinstruction(vm);
 
 #ifdef DebugCCode
   Print("<--Compiled Code-->\n");
