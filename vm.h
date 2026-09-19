@@ -289,6 +289,11 @@ struct CallFrame;
 #define setpromise(VT, e) settyperef(VT, VT_REF_PROMISE, e)
 #define promiseref(VT) toref(VT, PromiseObj*)
 
+/* BoxObj */
+#define isbox(VT) istype(VT, VT_REF_BOX)
+#define setbox(VT, e) settyperef(VT, VT_REF_BOX, e)
+#define boxref(VT) toref(VT, BoxObj*)
+
 /* NativeProc */
 #define isnativeproc(VT) istype(VT, VT_REF_NATIVE)
 #define setnativeproc(VT, f) settyperef(VT, VT_REF_NATIVE, f)
@@ -486,6 +491,7 @@ enum ValueTEnum {
   VT_REF_ANNOTATION,
   VT_REF_STACKSEG,
   VT_REF_FRAMESEG,
+  VT_REF_BOX,
 };
 
 union BasicNum {
@@ -1365,6 +1371,17 @@ protected:
   GSymTable genv;
 };
 
+struct LocalVar {
+  SymPtr sym;
+  bool capture;
+
+  void visit(VM* vm) {
+    Check(sym);
+  }
+  LocalVar():sym(NULL), capture(false) {}
+  LocalVar(SymPtr s, bool c):sym(s), capture(c) {}
+};
+
 struct OuterVar {
   SymPtr name;
   short idx;
@@ -1376,11 +1393,20 @@ struct OuterVar {
   OuterVar():name(NULL),idx(-1),islocal(false) {}
 };
 
+struct BoxObj : public RefObject {
+  BoxObj(ValueT v): val(v) {}
+  Visit1(val)
+  GetSize(BoxObj)
+
+  ValueT val;
+};
+
 class LambdaVarsObj : public RefObject {
 public:
   LambdaVarsObj() {}
 
-  SymPtr reflocal(int n) { return local.get(n); }
+  SymPtr reflocal(int n) { return local.get(n).sym; }
+  bool iscapture(int n) { return local.get(n).capture; }
   OuterVar* refovar(int n) { return ovar.getptr(n); }
 
   bool isvalidloc(int n) { return n >= 0 && n < local.n; }
@@ -1400,8 +1426,7 @@ public:
   virtual void finz(VM* vm);
   GetSize(LambdaVarsObj)
 
-  VecT<SymPtr> local;
-  VecT<bool> capture;
+  VecT<LocalVar> local;
   VecT<OuterVar> ovar;
   VecT<SyntaxObj*> syntax;
 };
@@ -1431,6 +1456,7 @@ struct LambdaObj : public RefObject {
   virtual void visit(VM* vm);
   void shrink(VM* vm);
   virtual void finz(VM* vm);
+  void patchinstruction(VM* vm);
   GetSize(LambdaObj)
 
   int top;
@@ -1611,6 +1637,7 @@ struct ClosureObj : public RefObject {
   virtual int getsize() { return totalsize(n); }
   virtual void visit(VM* vm);
   void initouters(VM*, StackSegment* seg, ValueT* base, OuterVal** encouter);
+  void initbox(VM* vm, StackSegment* seg, ValueT* base);
 
   LambdaPtr lambda;
   short n;

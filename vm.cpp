@@ -1343,14 +1343,14 @@ void VM::printccode(FILE *f, LambdaPtr lambda)
 {
   if (lambda->vars)
   {
-    if (lambda->vars->local.size > 0)
+    if (lambda->vars->local.n > 0)
     {
       fprintf(f, "%-7s", "Local:");
       VEC_FOR(j, &lambda->vars->local)
-        fprintf(f, "[%d,%s] ", (j+1), Ssstr(lambda->vars->local[j]));
+        fprintf(f, "[%d,%s%s] ", (j+1), Ssstr(lambda->vars->local[j].sym), lambda->vars->local[j].capture?"*":"");
       fprintf(f, "\n");
     }
-    if (lambda->vars->ovar.size > 0)
+    if (lambda->vars->ovar.n > 0)
     {
       fprintf(f, "%-7s", "Out:");
       VEC_FOR(j, &lambda->vars->ovar)
@@ -1533,6 +1533,22 @@ void VM::printccode0(FILE *f, LambdaPtr lambda, int pc)
       PrintOffset2(target, from);
       SymPtr var = lambda->vars->reflocal(target);
       fprintf(f, "\t; set %s(%d) from %d", Ssstr(var), target, from);
+      break;
+    }
+    case OP_SETBOX: {
+      int target, from;getcode_setbox(i, target, from);
+      PrintCode(SETBOX);
+      PrintOffset2(target, from);
+      SymPtr var = lambda->vars->reflocal(target);
+      fprintf(f, "\t; set box %s(%d) from %d", Ssstr(var), target, from);
+      break;
+    }
+    case OP_REFBOX: {
+      int target, from;getcode_refbox(i, target, from);
+      PrintCode(REFBOX);
+      PrintOffset2(target, from);
+      SymPtr var = lambda->vars->reflocal(from);
+      fprintf(f, "\t; ref box %s(%d) to %d", Ssstr(var), from, target);
       break;
     }
     case OP_SETOVAR: {
@@ -2490,6 +2506,14 @@ void VM::execute0(CallFrame* frm)
     *stkvt(target) = val;
     break;
   }
+  case OP_REFBOX: {
+    int target, from;getcode_refbox(i, target, from);
+    ValueT* boxvt = stkvt(1 + from);
+    BoxObj* box = boxref(boxvt);
+    ValueT* val = &box->val;
+    *stkvt(target) = val;
+    break;
+  }
   case OP_DEFGLOBAL: {
     int target, from;getcode_defglobal(i, target, from);
     ValueT* k = lambda->getk(target);
@@ -2506,6 +2530,14 @@ void VM::execute0(CallFrame* frm)
     SymPtr var = lambda->vars->reflocal(A);
     Assert(this, !isundefined(val), "undefined val for var %s", Ssstr(var));
     *stkvt(A+1) = val;
+    break;
+  }
+  case OP_SETBOX: {
+    int A, B;getcode_setbox(i, A, B);
+    ValueT* val = stkvt(B);
+    ValueT* boxvt = stkvt(1 + A);
+    BoxObj* box = boxref(boxvt);
+    box->val = *val;
     break;
   }
   case OP_SETOVAR: {
@@ -3358,25 +3390,49 @@ void LambdaObj::finz(VM* vm)
   vec_finz(AbsLine, vm, &abslines);
 }
 
+void LambdaObj::patchinstruction(VM* vm)
+{
+  for (int pc = 0; pc < code.n; pc++)
+  {
+    Instruction i = code.get(pc);
+    byte op = GET_OP(i);
+    switch (op)
+    {
+    case OP_VARREFLOCAL: {
+      int target, from; getcode_varreflocal(i, target, from);
+      if (vars->local.get(from).capture)
+        code.set(pc, code_refbox(target, from));
+      break;
+    }
+    case OP_SETLOCAL: {
+      int target, from; getcode_setlocal(i, target, from);
+      if (vars->local.get(target).capture)
+        code.set(pc, code_setbox(target, from));
+      break;
+    }
+    default:
+      break;
+    }
+  }
+}
+
 void LambdaVarsObj::visit(VM* vm)
 {
-  VEC_FOR(i, &local) Check(local.get(i));
+  VEC_FOR(i, &local) local.getptr(i)->visit(vm);
   VEC_FOR(i, &syntax) Check(syntax.get(i));
   VEC_FOR(i, &ovar) ovar.getptr(i)->visit(vm);
 }
 
 void LambdaVarsObj::shrink(VM* vm)
 {
-  vec_shrink(SymPtr, vm, &local);
-  vec_shrink(bool, vm, &capture);
+  vec_shrink(LocalVar, vm, &local);
   vec_shrink(OuterVar, vm, &ovar);
   vec_shrink(SyntaxPtr, vm, &syntax);
 }
 
 void LambdaVarsObj::finz(VM* vm)
 {
-  vec_finz(SymPtr, vm, &local);
-  vec_finz(bool, vm, &capture);
+  vec_finz(LocalVar, vm, &local);
   vec_finz(OuterVar, vm, &ovar);
   vec_finz(SyntaxPtr, vm, &syntax);
 }
@@ -3408,15 +3464,14 @@ void LambdaVarsObj::addsyntax(VM* vm, SyntaxPtr syn)
 int LambdaVarsObj::looklocal(SymPtr sym)
 {
   VEC_FOR(i, &local)
-    if (local.get(i) == sym)
+    if (local.get(i).sym == sym)
       return i;
   return -1;
 }
 
 int LambdaVarsObj::addlocal(VM* vm, SymPtr sym)
 {
-  vec_add1(SymPtr, vm, local, sym);
-  vec_add1(bool, vm, capture, false);
+  vec_add2(LocalVar, vm, local, LocalVar(sym, false));
   return local.n - 1;
 }
 
@@ -3495,6 +3550,20 @@ void ClosureObj::initouters(VM* vm, StackSegment* seg, ValueT* base, OuterVal** 
       outers[i] = seg->findouterval(vm, base + 1 + ov->idx);
     else
       outers[i] = encouter[ov->idx];
+  }
+}
+
+void ClosureObj::initbox(VM* vm, StackSegment* seg, ValueT* base)
+{
+  LambdaVarsObj* vars = lambda->vars;
+  for (int i = 0; i < vars->local.n; i++)
+  {
+    if (vars->local.get(i).capture)
+    {
+      ValueT* slot = base + 1 + i;
+      BoxObj* box = Sr1(vm, BoxObj, *slot);
+      setbox(slot, box);
+    }
   }
 }
 

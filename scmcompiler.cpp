@@ -381,7 +381,7 @@ void SCompiler::compilerefsym(int* local, int* ovar, SymPtr sym)
         if (*local >= 0)
         {
           *ovar = vars->addovar(vm, sym, *local, true);
-          enclose->lambda->vars->capture.set(*local, true);
+          enclose->lambda->vars->local.getptr(*local)->capture = true;
           *local = -1;
         }
         else if (*ovar >= 0)

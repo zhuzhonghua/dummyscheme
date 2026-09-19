@@ -50,6 +50,8 @@ enum OPCode {
   OP_VARREFLOCAL,
   OP_VARREFGLOBAL,
   OP_VARREFOVAR,
+  OP_SETBOX,
+  OP_REFBOX,
   OP_ASSIGN,
   OP_JUMPLABEL,
   OP_RETURN,
@@ -103,6 +105,12 @@ enum OPCode {
 
 #define code_setlocal(A, B) CREATE_OPAB(OP_SETLOCAL, A, B)
 #define getcode_setlocal(i, A, B) GET_OPAB(i, A, B)
+
+#define code_setbox(A, B) CREATE_OPAB(OP_SETBOX, A, B)
+#define getcode_setbox(i, A, B) GET_OPAB(i, A, B)
+
+#define code_refbox(A, B) CREATE_OPAB(OP_REFBOX, A, B)
+#define getcode_refbox(i, A, B) GET_OPAB(i, A, B)
 
 #define code_setovar(A, B) CREATE_OPAB(OP_SETOVAR, A, B)
 #define getcode_setovar(i, A, B) GET_OPAB(i, A, B)
