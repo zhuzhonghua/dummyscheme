@@ -1674,6 +1674,7 @@ struct ContinuationObj : public RefObject {
   CallFrame* frm;
   ValueT* base;
   DynamicWindObj* dywind;
+  int dystage;
 };
 
 class Reader {

@@ -1763,6 +1763,7 @@ static void checkcallcc(VM* vm, CallFrame** frm, ValueT** procp, int len, CallAp
   *stkvt(0) = cc;
   ContinuationObj* newcont = Sr2(vm, ContinuationObj, oldfrm, base);
   newcont->dywind = Stk(vm)->dywind;
+  newcont->dystage = Stk(vm)->dywind ? (int)Stk(vm)->dywind->state : 0;
   setcontinuation(stkvt(1), newcont);
   if (argrest) *stkvt(2) = Snullref;
   callstate->callcc = true;
@@ -2302,6 +2303,12 @@ static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len, bool ist
     Assert(vm, len == 1, "return error in call continuation, len=%d", len);
     ContinuationPtr cont = continuationref(proc);
     unwinddywindchain(vm, cont->dywind);
+    if (cont->dystage == DW_BEFORE || cont->dystage == DW_AFTER)
+    {
+      DynamicWindObj* head = cont->dywind;
+      if (head != NULL && !indywindchain(Stk(vm)->dywind, head))
+        Error(vm, "dynamic-wind: illegal to re-enter a completed before/after thunk via continuation");
+    }
     enterdywindchain(vm, cont->dywind, Stk(vm)->dywind);
     CallFrame* top = cowfrm(vm, cont->frm);
     ValueT* rebased = top->base + (cont->base - cont->frm->base);
@@ -2799,7 +2806,7 @@ void VM::init()
   regComplex("call-with-output-file", NATIVE_COMPLEX_CALL_WITH_OUT_FILE);
   regComplex("call-with-output-string", NATIVE_COMPLEX_CALL_WITH_OUT_STR);
   regComplex("force", NATIVE_COMPLEX_FORCE);
-  //regComplex("dynamic-wind", NATIVE_COMPLEX_DYNAMIC_WIND);
+  regComplex("dynamic-wind", NATIVE_COMPLEX_DYNAMIC_WIND);
 }
 
 void VM::getuniquesym(SymPtr sym, ValueT* out)
@@ -3627,7 +3634,7 @@ void ContinuationObj::finz(VM* vm)
 }
 
 ContinuationObj::ContinuationObj(CallFrame* s, ValueT* b)
-  :frm(s), base(b), dywind(NULL)
+  :frm(s), base(b), dywind(NULL), dystage(0)
 {
   for (s = frm; s != NULL; s = s->prev)
     s->seg->frozen++;
