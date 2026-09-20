@@ -2210,10 +2210,17 @@ static CallNativeAct callnativeproc(VM* vm, CallFrame* frm, ValueT* proc, int le
 
 static void runthunk(VM* vm, ValueT* proc);
 
+static bool indywindchain(DynamicWindObj* head, DynamicWindObj* dy)
+{
+  for (DynamicWindObj* d = head; d != NULL; d = d->parent)
+    if (d == dy) return true;
+  return false;
+}
+
 static void unwinddywindchain(VM* vm, DynamicWindObj* stop)
 {
   Stack* stk = Stk(vm);
-  while (stk->dywind != NULL && stk->dywind != stop)
+  while (stk->dywind != NULL && !indywindchain(stop, stk->dywind))
   {
     DynamicWindObj* dy = stk->dywind;
     int dwstate = dy->state;
@@ -2229,6 +2236,23 @@ static void unwinddywindchain(VM* vm, DynamicWindObj* stop)
       Print("\ndynamic-wind: after thunk raised: %s\n", e);
     }
   }
+}
+
+static void enterdywindchain(VM* vm, DynamicWindObj* target, DynamicWindObj* current)
+{
+  if (target == NULL || target == current)
+    return;
+  enterdywindchain(vm, target->parent, current);
+  Sgcvar1(vm, before);
+  *before = target->before;
+  TRY {
+    runthunk(vm, before);
+  }
+  CATCH(e) {
+    Print("\ndynamic-wind: before thunk raised: %s\n", e);
+  }
+  target->state = DW_BODY;
+  Stk(vm)->dywind = target;
 }
 
 static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len, bool istail, DynamicWindObj* dywind)
@@ -2278,6 +2302,7 @@ static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len, bool ist
     Assert(vm, len == 1, "return error in call continuation, len=%d", len);
     ContinuationPtr cont = continuationref(proc);
     unwinddywindchain(vm, cont->dywind);
+    enterdywindchain(vm, cont->dywind, Stk(vm)->dywind);
     CallFrame* top = cowfrm(vm, cont->frm);
     ValueT* rebased = top->base + (cont->base - cont->frm->base);
     *frm = stk->curfrm = top;
