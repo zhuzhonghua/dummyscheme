@@ -83,6 +83,7 @@ public:
   void addlits(VM* vm, SymPtr lit, ValueT* expr);
   virtual void visit(VM* vm) {
     Check(literals);
+    Check(ellipsis);
     VEC_FOR(i, &rules)
       rules.get(i).visit(vm);
   }
@@ -98,7 +99,7 @@ public:
 
   GetSize(SyntaxRules)
 
-  ValueT* ellipsis;
+  SymPtr ellipsis;
   ValueT literals;
   VecT<PatnTmpl> rules;
 };

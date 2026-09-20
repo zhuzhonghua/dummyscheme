@@ -554,12 +554,33 @@ void SCompiler::compilesyntaxrules(ValueT* expr, ValueT* out)
   SyntaxRules* syntaxr = Sr1(vm, SyntaxRules, vm);
   setsyntaxrules(out, syntaxr);
   if (isboundvar(this, symref(&vm->ellipsisvt)))
-    syntaxr->ellipsis = Snullref;
+    syntaxr->ellipsis = NULL;
   ValueT* literals0 = annotatevt(&literals);
+  if (issym(literals0))
+  {
+    syntaxr->ellipsis = symref(literals0);
+    expr0 = splitannotatelist(vm, expr0, what, 1, &literals);
+    literals0 = annotatevt(&literals);
+  }
+  else
+    compileassert(vm, isnull(literals0) || ispair(literals0), &literals,
+                  "%s, not a symbol, null or list in syntax-rules", what);
   if (ispair(literals0))
     copystripannotateliterals(vm, &syntaxr->literals, &literals);
   else
     compileassert(vm, isnull(literals0), &literals, "%s, not null or list in literals", what);
+  if (syntaxr->ellipsis)
+  {
+    bool priority = false;
+    PAIR_FOR(p, &syntaxr->literals)
+      if (syntaxr->ellipsis == symref(Scar(p)))
+      {
+        priority = true;
+        break;
+      }
+    if (priority)
+      syntaxr->ellipsis = NULL;
+  }
   compileassert(vm, !isnull(expr0), &literals, "%s, not null or list in literals", what);
   ValueT* expr1 = annotatevt(expr0);
   if (ispair(expr1))
@@ -1473,12 +1494,12 @@ void PatnTmpl::addvar(VM* vm, SymPtr sym, int d)
 
 SyntaxRules::SyntaxRules(VM* vm)
 {
-  ellipsis = &vm->ellipsisvt;
+  ellipsis = symref(&vm->ellipsisvt);
 }
 
 bool SyntaxRules::isellipsis(VM* vm, ValueT* vt)
 {
-  return issym(vt) && issym(ellipsis) && symref(vt) == symref(ellipsis);
+  return ellipsis != NULL && issym(vt) && symref(vt) == ellipsis;
 }
 
 PatnTmpl* SyntaxRules::newsrule(VM* vm)
