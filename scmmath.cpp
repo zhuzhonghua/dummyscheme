@@ -1924,20 +1924,30 @@ static void scm_real2str(Lbuffer* numbuf, scm_float num)
       numbuf->put('-');
       num = -num;
     }
-    char buf[20] = {0};
-    int d = num;
+    char buf[128] = {0};
+    if (num >= SCM_INT_MAX)
+    {
+      scm_float dnum = std::trunc(num);
+      int i = snprintf(buf, sizeof(buf), "%.0f.", dnum);
+      numbuf->put(buf, i);
+      num -= dnum;
+    }
+    else
+    {
+      scm_int d = num;
     num -= d;
     int i = snprintf(buf, sizeof(buf), "%u", d);
     buf[i++] = '.';
     numbuf->put(buf, i);
+    }
 
     if (!SCMMath::isFloatEqual(num, 0.0))
     {
       do {
         num *= 10;
-        d = num;
+        int d = num;
         num -= d;
-        i = snprintf(buf, sizeof(buf), "%u", d);
+        int i = snprintf(buf, sizeof(buf), "%u", d);
         buf[i] = 0;
         numbuf->put(buf, i);
       } while (!SCMMath::isFloatEqual(num, 0.0));
