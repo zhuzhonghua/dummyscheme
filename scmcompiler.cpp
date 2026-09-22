@@ -2,6 +2,7 @@
 #include "scmcode.h"
 #include "scmcompiler.h"
 #include "scmmath.h"
+#include <cstdarg>
 
 using namespace Scheme;
 
@@ -126,11 +127,19 @@ static bool annotatelistp(ValueT* expr)
   }
 }
 
+class VaListEnd {
+public:
+  VaListEnd(va_list a): ap(a) {}
+  ~VaListEnd() { va_end(ap); }
+  va_list ap;
+};
+
 static ValueT* splitannotatelist(VM* vm, ValueT* expr, const char* what, int n, ...)
 {
   ValueT* pair = expr;
   va_list ap;
   va_start(ap, n);
+  VaListEnd vaend(ap);
   for (pair = expr; n-- > 0; pair = Scdr(pair))
   {
     compileassert(vm, !isnull(pair), expr, "%s", what);
@@ -139,7 +148,6 @@ static ValueT* splitannotatelist(VM* vm, ValueT* expr, const char* what, int n, 
     ValueT* vt = va_arg(ap, ValueT*);
     *vt = Scar(pair);
   }
-  va_end(ap);
   return pair;
 }
 
@@ -1086,8 +1094,9 @@ void PatnTmpl::init(VM* vm, SyntaxRules* syntaxr, ValueT* expr)
   Sgcvar1(vm, tmpl2);
   SCM::copystripanno(vm, patn2, &patn);
   SCM::copystripanno(vm, tmpl2, &tmpl);
-  patn = *patn2;
-  tmpl = *tmpl2;
+  patn = patn2;
+  tmpl = tmpl2;
+  collecttailinfos(vm, syntaxr, &patn);
 }
 
 void PatnTmpl::checktmplsym(VM* vm, SyntaxRules* syntaxr, ValueT* expr, ValueT* usedpvd, int depth)
@@ -1150,10 +1159,10 @@ void PatnTmpl::initpatn(VM* vm, SyntaxRules* syntaxr, ValueT* expr)
   ValueT* key0 = annotatevt(&key);
   compileassert(vm, issym(key0), &key, "%s, not a symbol", whatsyntaxr);
   compileassert(vm, !syntaxr->isliteral(symref(key0)), &key, "%s, cannot be in literals", whatsyntaxr);
-  initpatn(vm, syntaxr, expr, 0);
+  initpatn(vm, syntaxr, expr, 0, -1);
 }
 
-void PatnTmpl::initpatn(VM* vm, SyntaxRules* syntaxr, ValueT* expr, int depth)
+void PatnTmpl::initpatn(VM* vm, SyntaxRules* syntaxr, ValueT* expr, int depth, int ellipsis)
 {
   ValueT* expr0 = annotatevt(expr);
   if (issym(expr0))
@@ -1170,23 +1179,76 @@ void PatnTmpl::initpatn(VM* vm, SyntaxRules* syntaxr, ValueT* expr, int depth)
     ValueT* paira0 = annotatevt(paira);
     compileassert(vm, !syntaxr->isellipsis(vm, paira0), paira, "%s, ellipsis is the car", whatsyntaxr);
     if (isnull(paird))
-      initpatn(vm, syntaxr, paira, depth);
+      initpatn(vm, syntaxr, paira, depth, ellipsis);
     else
     {
       ValueT* paird0 = annotatevt(paird);
       compileassert(vm, !syntaxr->isellipsis(vm, paird0), paird, "%s, ellipsis is in a improper list", whatsyntaxr);
       if (ispair(paird0) && syntaxr->isellipsis(vm, annotatevt(Scar(paird0))))
       {
-        compileassert(vm, isnull(Scdr(paird0)), paird, "%s, don't support items after ellipsis", whatsyntaxr);
-        initpatn(vm, syntaxr, paira, depth + 1);
+        compileassert(vm, depth != ellipsis, expr, "too much repeated in one level");
+        initpatn(vm, syntaxr, paira, depth + 1, -1);
+        ValueT* tail = Scdr(paird0);
+        if (!isnull(tail))
+          initpatn(vm, syntaxr, tail, depth, depth);
       }
       else
       {
-        initpatn(vm, syntaxr, paira, depth);
-        initpatn(vm, syntaxr, paird, depth);
+        initpatn(vm, syntaxr, paira, depth, ellipsis);
+        initpatn(vm, syntaxr, paird, depth, ellipsis);
       }
     }
   }
+}
+
+static void comptailneed(ValueT* tail, AfterEllipsisLength* ael)
+{
+  int need = 0;
+  ValueT* tp = tail;
+  while (ispair(tp))
+  {
+    need++;
+    tp = Scdr(tp);
+  }
+  ael->len = need;
+}
+
+void PatnTmpl::collecttailinfos(VM* vm, SyntaxRules* syntaxr, ValueT* ptn)
+{
+  if (!ispair(ptn))
+    return;
+  ValueT* ptncar = Scar(ptn);
+  ValueT* ptncdr = Scdr(ptn);
+  if (ispair(ptncdr) && syntaxr->isellipsis(vm, Scar(ptncdr)))
+  {
+    ValueT* tail = Scdr(ptncdr);
+    if (!isnull(tail))
+    {
+      AfterEllipsisLength ael;
+      ael.tail = tail;
+      comptailneed(tail, &ael);
+      vec_add2(AfterEllipsisLength, vm, tailneeds, ael);
+      collecttailinfos(vm, syntaxr, tail);
+    }
+    collecttailinfos(vm, syntaxr, ptncar);
+  }
+  else
+  {
+    collecttailinfos(vm, syntaxr, ptncar);
+    collecttailinfos(vm, syntaxr, ptncdr);
+  }
+}
+
+int PatnTmpl::gettailneed(VM* vm, ValueT* key)
+{
+  for (int i = 0; i < tailneeds.n; i++)
+  {
+    AfterEllipsisLength* ael = tailneeds.getptr(i);
+    if (SCM::eqp(ael->tail, key))
+      return ael->len;
+  }
+  ErrorVT(vm, key, "internal error, no match afterellipsislength");
+  return -1;
 }
 
 bool PatnTmpl::trymatchrepeat2(ArrayObj* arr, int idx, ValueT* tomatch, int depth, MatchState* state)
@@ -1244,15 +1306,73 @@ bool PatnTmpl::trymatchrepeat1(ValueT* expr, ValueT* tomatch, int depth, MatchSt
   return true;
 }
 
+static int annotateexprlen(VM* vm, ValueT* expr)
+{
+  int n = 0;
+  AssertVT(vm, !isnull(expr), expr, "internal error, null");
+  ValueT* tp = annotatevt(expr);
+  while (ispair(tp))
+  {
+    n++;
+    tp = Scdr(tp);
+    if (isnull(tp))
+      break;
+    tp = annotatevt(tp);
+  }
+  return n;
+}
+
+
+static ValueT* splitannotatelisttwohalves(ValueT* expr, int n)
+{
+  ValueT* pair = expr;
+  for (int i = 0; i < n; i++)
+    pair = Scdr(annotatevt(pair));
+  return pair;
+}
+
+class CombineTwoHalves {
+public:
+  CombineTwoHalves(ValueT* j, ValueT* s): join(j), save(s) {}
+  ~CombineTwoHalves() { *join = *save; }
+  ValueT* join;
+  ValueT* save;
+};
+
+bool PatnTmpl::trymatchrepeatwithtail(ValueT* expr, ValueT* tomatch, ValueT* tail, int need, int depth, MatchState* state)
+{
+  VM* vm = state->lstate->vm;
+  int n = annotateexprlen(vm, expr);
+  if (n < need)
+    return false;
+  int m = n - need;
+  if (m == 0)
+    return trymatch(expr, tail, depth, state);
+  ValueT* suffix = splitannotatelisttwohalves(expr, m);
+  if (!trymatch(suffix, tail, depth, state))
+    return false;
+  Sgcvar1(vm, lastvt);
+  *lastvt = *suffix;
+  CombineTwoHalves reserveexpr(suffix, lastvt);
+  *suffix = Snullref;
+  return trymatchrepeat1(expr, tomatch, depth, state);
+}
+
 bool PatnTmpl::trymatchpair(ValueT* expr, ValueT* ptncar, ValueT* ptncdr, int depth, MatchState* state)
 {
   VM* vm = state->lstate->vm;
   if (ispair(ptncdr) && state->syntaxr->isellipsis(vm, Scar(ptncdr)))
   {
-    if (!isnull(Scdr(ptncdr)))
-      Serrorvt(vm, ptncdr, "internal error, ellipsis not the last");
+    ValueT* tail = Scdr(ptncdr);
+    if (isnull(tail))
+    {
     if (isnull(expr)) return true;
     return trymatchrepeat1(expr, ptncar, depth, state);
+  }
+    if (isnull(expr))
+      return false;
+    int need = gettailneed(vm, tail);
+    return trymatchrepeatwithtail(expr, ptncar, tail, need, depth, state);
   }
   else
   {

@@ -39,18 +39,29 @@ struct MatchState {
   SyntaxRules* syntaxr;
 };
 
+struct AfterEllipsisLength {
+  AfterEllipsisLength():tail(NULL), len(0) {}
+  ValueT* tail;
+  int len;
+};
+
 class PatnTmpl {
 public:
   void init(VM* vm, SyntaxRules*, ValueT* );
   void initpatn(VM* vm, SyntaxRules*, ValueT*);
-  void initpatn(VM* vm, SyntaxRules*, ValueT* , int);
+  void initpatn(VM* vm, SyntaxRules*, ValueT* , int, int);
   void inittmpl(VM* vm, SyntaxRules*, ValueT*, ValueT*, int);
   void checktmplsym(VM* vm, SyntaxRules*, ValueT* sym, ValueT*, int depth);
 
   bool trymatchrepeat2(ArrayObj* arr, int idx, ValueT* tomatch, int depth, MatchState* state);
   bool trymatchrepeat1(ValueT* expr, ValueT* tomatch, int depth, MatchState* state);
+  bool trymatchrepeatwithtail(ValueT* expr, ValueT* tomatch, ValueT* tail, int need, int depth, MatchState* state);
+
   bool trymatchpair(ValueT* expr, ValueT* ptn1, ValueT* ptn2, int depth, MatchState* state);
   bool trymatch(ValueT* expr, ValueT* ptn, int depth, MatchState* state);
+
+  void collecttailinfos(VM* vm, SyntaxRules* syntaxr, ValueT* ptn);
+  int gettailneed(VM*, ValueT* key);
 
   void expandarray(ValueT* out, ValueT* tpl, int i, int depth, MatchState* state);
   void expandpair(ValueT* out, ValueT* atpl, ValueT* dtpl, int depth, MatchState* state);
@@ -71,6 +82,7 @@ public:
     vec_shrink(PatnVarDepth, vm, &allvars);
   }
   VecT<PatnVarDepth> allvars;
+  VecT<AfterEllipsisLength> tailneeds;
   ValueT patn;
   ValueT tmpl;
 };
