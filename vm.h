@@ -331,9 +331,6 @@ struct CallFrame;
 #define PAIR_FOR(p, list) \
   for(ValueT* (p) = (list); !isnull(p); (p) = Scdr(p))
 
-#define ANNOTATE_PAIR_FOR(p, list) \
-  for(ValueT* (p) = annotatevt(list); !isnull(p); (p) = Scdr(p))
-
 #define ispair(VT) istype(VT, VT_REF_PAIR)
 #define pairref(VT) toref(VT, PairPtr)
 #define Spairref(VT) checkexp(ispair(VT), pairref(VT))
