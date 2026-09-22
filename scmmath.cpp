@@ -1924,7 +1924,7 @@ static void scm_real2str(Lbuffer* numbuf, scm_float num)
       numbuf->put('-');
       num = -num;
     }
-    char buf[128] = {0};
+    char buf[512] = {0};
     if (num >= SCM_INT_MAX)
     {
       scm_float dnum = std::trunc(num);
