@@ -1045,9 +1045,8 @@ void MatchObj::merge(MatchObj* sub, int idx)
     if (sympair)
     {
       ArrayObj* matchpair = arrayref(sympair->cdr());
-      for (int i = matchcount(); i < idx; i++)
+      for (int i = matchpair->array.n; i < idx; i++)
         matchpair->add(vm, Sundefined);
-
       matchpair->add(vm, pair->cdr());
     }
     else
