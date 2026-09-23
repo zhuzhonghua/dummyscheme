@@ -1613,7 +1613,15 @@ static bool scm_readureal(VM* vm, ReadNumState* state)
     case '.':
       if (!state->next()) return false;
       {
-        scm_int beforedot = state->negativep ? -state->n.num.inum
+        scm_float beforedot;
+        if (state->bigval)
+        {
+          beforedot = state->negativep ? -big2double(state->bigval)
+                                       : big2double(state->bigval);
+          state->bigval = NULL;
+        }
+        else
+          beforedot = state->negativep ? -state->n.num.inum
                                              : state->n.num.inum;
         if (!scm_readdecimalfromdot(vm, state, beforedot)) return false;
         if (state->negativep && state->n.type == NREAL)
