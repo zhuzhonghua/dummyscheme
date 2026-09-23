@@ -1936,7 +1936,7 @@ static void scm_real2str(Lbuffer* numbuf, scm_float num)
     {
       scm_int d = num;
     num -= d;
-    int i = snprintf(buf, sizeof(buf), "%u", d);
+    int i = snprintf(buf, sizeof(buf), scm_int_fmt, d);
     buf[i++] = '.';
     numbuf->put(buf, i);
     }
