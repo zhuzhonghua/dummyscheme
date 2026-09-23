@@ -54,7 +54,7 @@ struct ReadNumState {
   int zn;
   const char* zp;
   VCoNum n;
-  NumBigObj* bigval;
+  ValueT* bigval;
 
   Lbuffer* lb;
 
@@ -92,6 +92,7 @@ static double big2double(NumBigObj* b)
 
 bool SCMMath::str2num(VM* vm, const char* s, int len, ValueT* out)
 {
+  Sgcvar1(vm, bigval);
   Lbuffer lb(vm);
   ReadNumState state;
   state.exactp = true;
@@ -99,7 +100,7 @@ bool SCMMath::str2num(VM* vm, const char* s, int len, ValueT* out)
   state.radix = 10;
   state.zp = s;
   state.zn = len;
-  state.bigval = NULL;
+  state.bigval = bigval;
   state.lb = &lb;
   state.next();
   return scm_readnum(vm, &state, out);
@@ -1590,7 +1591,10 @@ static bool scm_readuinteger(VM* vm, ReadNumState* state)
     } while (state->c == '#');
   }
   if (overflow)
-    state->bigval = bigfromstr(vm, digits, ndigits, state->radix, state->negativep ? -1 : 1);
+  {
+    NumBigObj* bigval = bigfromstr(vm, digits, ndigits, state->radix, state->negativep ? -1 : 1);
+    setnumbig(state->bigval, bigval);
+  }
   else
   {
     scm_int val = (scm_int)uval;
@@ -1663,8 +1667,8 @@ static bool scm_readureal(VM* vm, ReadNumState* state)
     case '.':
       if (!state->next()) return false;
       {
-        if (state->bigval)
-          state->bigval = NULL;
+        if (isnumbig(state->bigval))
+          state->bigval->reset();
         if (!scm_readdecimalfromdot(vm, state, 0)) return false;
         return true;
       }
@@ -1683,8 +1687,8 @@ static bool scm_readureal(VM* vm, ReadNumState* state)
 
 static bool scm_makenumtovt(VM* vm, ReadNumState* state, ValueT* out)
 {
-  if (state->bigval) {
-    bigsetvt(vm, out, state->bigval);
+  if (isnumbig(state->bigval)) {
+    bigsetvt(vm, out, numbigref(state->bigval));
     return true;
   }
   switch(state->n.type) {
@@ -1922,7 +1926,7 @@ static ValueT scm_stub_string2number(VM* vm, ValueT* z, ValueT* r)
     AssertVT(vm, radix == 2 || radix == 8 || radix == 10 || radix == 16,
              ra, "%s: not an integer", METHOD);
   }
-  Sgcvar1(vm, out);
+  Sgcvar2(vm, out, bigval);
   const char* cstr = vtstr(z);
   Lbuffer lb(vm);
   ReadNumState state;
@@ -1931,7 +1935,7 @@ static ValueT scm_stub_string2number(VM* vm, ValueT* z, ValueT* r)
   state.radix = radix;
   state.zp = cstr;
   state.zn = len;
-  state.bigval = NULL;
+  state.bigval = bigval;
   state.lb = &lb;
   state.next();
   if (!scm_readnum(vm, &state, out)) return Sfalseref;
