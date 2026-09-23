@@ -335,6 +335,30 @@ static NumBigObj* numbigfromi(VM* vm, scm_int val)
   return num;
 }
 
+static NumBigObj* real2big(VM* vm, double d)
+{
+  if (d == 0) return numbigfromi(vm, 0);
+  char sign = d < 0 ? -1 : 1;
+  double ad = std::fabs(d);
+  int shift = 0;
+  while (ad >= (double)SCM_INT_MAX)
+  {
+    ad *= 0.5;
+    shift++;
+  }
+  Sgcvar1(vm, mvt);
+  NumBigObj* m = numbigfromi(vm, (scm_int)ad);
+  setnumbig(mvt, m);
+  for (int i = 0; i < shift; ++i)
+  {
+    m = m->addabs(vm, m);
+    setnumbig(mvt, m);
+  }
+  m->sign = sign;
+  m->normalize();
+  return m;
+}
+
 bool SCMMath::exactp(ValueT* p)
 {
   return isnumi(p) || isnumratio(p) || isnumbig(p);
@@ -610,7 +634,12 @@ static void numsynctype(VM* vm, ValueT* a1, ValueT* a2, ValueT* a1p, ValueT* a2p
     case VT_NUM_INTEGER: numuptoreal(vm, a2); break;
     case VT_REF_NUM_RATIO: numuptoreal(vm, a2); break;
     case VT_REF_NUM_COMPLEX: numtocomplex(vm, a1); break;
-    case VT_REF_NUM_BIG: setnumreal(a2, big2double(numbigref(a2))); break;
+    case VT_REF_NUM_BIG:
+      if (std::isfinite(numreal(a1)) && std::trunc(numreal(a1)) == numreal(a1))
+        setnumbig(a1, real2big(vm, numreal(a1)));
+      else
+        setnumreal(a2, big2double(numbigref(a2)));
+      break;
     }
     break;
   case VT_REF_NUM_COMPLEX:
@@ -624,7 +653,13 @@ static void numsynctype(VM* vm, ValueT* a1, ValueT* a2, ValueT* a1p, ValueT* a2p
   case VT_REF_NUM_BIG:
     switch(vttype(a2)) {
     case VT_NUM_INTEGER: setnumbig(a2, numbigfromi(vm, numi(a2))); break;
-    case VT_REF_NUM_RATIO: case VT_NUM_REAL: setnumreal(a1, big2double(numbigref(a1))); break;
+    case VT_REF_NUM_RATIO: setnumreal(a1, big2double(numbigref(a1))); break;
+    case VT_NUM_REAL:
+      if (std::isfinite(numreal(a2)) && std::trunc(numreal(a2)) == numreal(a2))
+        setnumbig(a2, real2big(vm, numreal(a2)));
+      else
+        setnumreal(a1, big2double(numbigref(a1)));
+      break;
     case VT_REF_NUM_COMPLEX: numtocomplex(vm, a1); break;
     }
     break;
@@ -2347,6 +2382,11 @@ static ValueT scm_stub_inexact2exact(VM* vm, ValueT* z)
     scm_float zr = numreal(z);
     AssertVT(vm, !isinf(zr) && !isnan(zr), z, "%s:  not a finite number", METHOD_NAME);
     scm_int nu = 0, de = 1;
+    if (std::trunc(zr) == zr && (zr >= (double)SCM_INT_MAX || zr <= (double)SCM_INT_MIN))
+    {
+      setnumbig(&out, real2big(vm, zr));
+      return out;
+    }
     scm_float _;
     SCMMath::float2ratio(zr, &_, &nu, &de, 10, 0);
 
