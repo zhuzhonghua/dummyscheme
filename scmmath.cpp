@@ -56,6 +56,20 @@ struct ReadNumState {
   VCoNum n;
   NumBigObj* bigval;
 
+  Lbuffer* lb;
+
+  void mantput(char ch) {
+    if (lb) lb->put(ch);
+  }
+  void mantreset() {
+    if (lb) lb->reset();
+  }
+  double manttod() {
+    if (!lb) return 0.0;
+    lb->buf[lb->count] = 0;
+    return std::strtod(lb->buf, 0);
+  }
+
   bool isend() { return zn <= 0; }
   bool next() { c = zn-- > 0 ? *zp++ : -1; return c >= 0; }
 };
@@ -78,6 +92,7 @@ static double big2double(NumBigObj* b)
 
 bool SCMMath::str2num(VM* vm, const char* s, int len, ValueT* out)
 {
+  Lbuffer lb(vm);
   ReadNumState state;
   state.exactp = true;
   state.negativep = false;
@@ -85,6 +100,7 @@ bool SCMMath::str2num(VM* vm, const char* s, int len, ValueT* out)
   state.zp = s;
   state.zn = len;
   state.bigval = NULL;
+  state.lb = &lb;
   state.next();
   return scm_readnum(vm, &state, out);
 }
@@ -1461,22 +1477,23 @@ static const char number_chars[] = "0123456789abcdef";
 
 static bool scm_readsuffix(VM* vm, ReadNumState* state, scm_float val)
 {
-  bool negativep = false;
+  (void)val;
+  state->mantput('e');
   switch(state->c) {
-  case '-': negativep = true;
+  case '-': state->mantput('-');
   case '+': state->next(); break;
   }
   switch(state->c) {
   case CASE_09DIGIT:case CASE_AFDIGIT:{
-    scm_int exp = 0;
     do {
       int digit = digit_value(state->c);
       if (digit < 0 || digit >= state->radix)
         return false;
-      exp = exp * state->radix + digit;
+      state->mantput(state->c);
       state->next();
     } while (std::isxdigit(state->c));
-    state->n.setreal(val * std::pow(10, negativep ? -exp : exp));
+    double d = state->manttod();
+    state->n.setreal(state->negativep ? -d : d);
     return true;
   }
   default: return false;
@@ -1494,6 +1511,7 @@ static bool scm_readuinteger(VM* vm, ReadNumState* state)
     int digit = digit_value(state->c);
     if (digit < 0 || digit >= state->radix)
       return false;
+    state->mantput(state->c);
     if (!overflow)
     {
       if (uval > maxpre)
@@ -1536,6 +1554,7 @@ static bool scm_readuinteger(VM* vm, ReadNumState* state)
   if (state->c == '#')
   {
     do {
+      state->mantput('0'); // '#'
       if (!overflow)
       {
         if (uval > maxpre)
@@ -1591,28 +1610,25 @@ static bool scm_readurealde(VM* vm, ReadNumState* state)
 
 static bool scm_readdecimalfromdot(VM* vm, ReadNumState* state, scm_float beforedot)
 {
+  (void)beforedot;
   if (state->radix != 10) return false;
-  scm_float de = state->radix;
-  scm_float val = beforedot;
-  if (std::isdigit(state->c))
+  state->mantput('.');
+  while (std::isdigit(state->c))
   {
-    do {
-      int digit = digit_value(state->c);
-      val = val + digit/de;
+    state->mantput(state->c);
       state->next();
-      de*=state->radix;
-    } while (std::isdigit(state->c));
   }
   if (state->c == '#')
-    do { state->next(); } while(state->c == '#');
+    do { state->mantput('0'); state->next(); } while(state->c == '#');
   switch(state->c) {
   case CASE_EXPMARK:
-    if (state->radix != 10) return false;
     state->next();
-    return scm_readsuffix(vm, state, val);
-  case '+':case '-':case '@':case 'i':case -1:
-    state->n.setreal(val);
+    return scm_readsuffix(vm, state, 0);
+  case '+':case '-':case '@':case 'i':case -1: {
+    double d = state->manttod();
+    state->n.setreal(state->negativep ? -d : d);
     return true;
+  }
   default:
     return false;
   }
@@ -1620,6 +1636,7 @@ static bool scm_readdecimalfromdot(VM* vm, ReadNumState* state, scm_float before
 
 static bool scm_readureal(VM* vm, ReadNumState* state)
 {
+  state->mantreset();
   switch(state->c) {
   case '.':{
     state->next();
@@ -1627,8 +1644,6 @@ static bool scm_readureal(VM* vm, ReadNumState* state)
     case CASE_09DIGIT:
     case CASE_AFDIGIT: {
       if (!scm_readdecimalfromdot(vm, state, 0)) return false;
-      if (state->negativep && state->n.type == NREAL)
-        state->n.num.real = -state->n.num.real;
       return true;
     }
     default: return false;
@@ -1648,19 +1663,9 @@ static bool scm_readureal(VM* vm, ReadNumState* state)
     case '.':
       if (!state->next()) return false;
       {
-        scm_float beforedot;
         if (state->bigval)
-        {
-          beforedot = state->negativep ? -big2double(state->bigval)
-                                       : big2double(state->bigval);
           state->bigval = NULL;
-        }
-        else
-          beforedot = state->negativep ? -state->n.num.inum
-                                             : state->n.num.inum;
-        if (!scm_readdecimalfromdot(vm, state, beforedot)) return false;
-        if (state->negativep && state->n.type == NREAL)
-          state->n.num.real = -state->n.num.real;
+        if (!scm_readdecimalfromdot(vm, state, 0)) return false;
         return true;
       }
     case CASE_EXPMARK: {
@@ -1919,6 +1924,7 @@ static ValueT scm_stub_string2number(VM* vm, ValueT* z, ValueT* r)
   }
   Sgcvar1(vm, out);
   const char* cstr = vtstr(z);
+  Lbuffer lb(vm);
   ReadNumState state;
   state.exactp = true;
   state.negativep = false;
@@ -1926,6 +1932,7 @@ static ValueT scm_stub_string2number(VM* vm, ValueT* z, ValueT* r)
   state.zp = cstr;
   state.zn = len;
   state.bigval = NULL;
+  state.lb = &lb;
   state.next();
   if (!scm_readnum(vm, &state, out)) return Sfalseref;
   return out;
