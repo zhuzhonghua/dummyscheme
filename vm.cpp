@@ -3200,6 +3200,17 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
     oport->writestr(buf);
     break;
   }
+  case VT_REF_NUM_RATIO: {
+    scm_int nu = numrationu(val);
+    scm_int de = numratiode(val);
+    char buf[64] = {0};
+    snprintf(buf, sizeof(buf), scm_int_fmt, nu);
+    oport->writestr(buf);
+    oport->writechar('/');
+    int i = snprintf(buf, sizeof(buf), scm_int_fmt, de);
+    oport->writestr(buf, i);
+    break;
+  }
   case VT_REF_NUM_COMPLEX: {
     char buf[64] = {0};
     snprintf(buf, sizeof(buf), "%f", numcomplexreal(val));
