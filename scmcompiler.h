@@ -6,8 +6,8 @@ namespace Scheme {
 
 class MatchObj {
 public:
-  MatchObj(VM* v, ValueT* m):vm(v), matchvt(m) {
-    setarray(matchvt, &matches);
+  MatchObj(VM* v):vm(v), matchvt(v) {
+    setarray(&matchvt.val, &matches);
   }
   void addmatch(ValueT* sym, ValueT* expr);
   PairPtr getsymmatch(SymPtr sym);
@@ -16,7 +16,7 @@ public:
   void reuse();
 
   VM* vm;
-  ValueT* matchvt;
+  StkVar matchvt;
   ArrayObj matches;
 };
 

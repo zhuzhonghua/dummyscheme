@@ -1257,8 +1257,7 @@ bool PatnTmpl::trymatchrepeat2(ArrayObj* arr, int idx, ValueT* tomatch, int dept
   int i = 0;
   state->idxarr->suffixset(depth, i);
   MatchObj* matches = state->matches;
-  Sgcvar1(vm, matchvt);
-  MatchObj submatch(vm, matchvt);
+  MatchObj submatch(vm);
   state->matches = &submatch;
   for (int j = idx; j < arr->array.n; j++)
   {
@@ -1283,8 +1282,7 @@ bool PatnTmpl::trymatchrepeat1(ValueT* expr, ValueT* tomatch, int depth, MatchSt
   int i = 0;
   state->idxarr->suffixset(depth, i);
   MatchObj* matches = state->matches;
-  Sgcvar1(vm, matchvt);
-  MatchObj submatch(vm, matchvt);
+  MatchObj submatch(vm);
   state->matches = &submatch;
   while(true)
   {
@@ -1658,8 +1656,7 @@ PatnTmpl* SyntaxRules::expand(SCompiler* lstate, ValueT* out, ValueT* expr)
 #endif
 
   ValueT* expr0 = annotatevt(expr);
-  Sgcvar1(vm, matchvt);
-  MatchObj match(vm, matchvt);
+  MatchObj match(vm);
   IntArray arr(vm);
   MatchState mstate;
   mstate.expr = expr;
