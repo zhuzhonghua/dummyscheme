@@ -335,6 +335,7 @@ void SCompiler::compilelambda0(int target, int line, ValueT* param, ValueT* body
   compiler.prevline = newlambda->defline;
   initlambdaparam(vm, newlambda, param);
   compiler.compileseqpre(body);
+  compileassert(vm, !isnull(body), body, "%s, no body", whatlambda);
   compiler.compileseq(newlambda->vars->local.n+1, body, Sreturn, 1);
   newlambda->patchinstruction(vm);
 
@@ -448,7 +449,7 @@ void SCompiler::compileset(int target, ValueT* expr, ValueT* link)
   compile(target, &symval, Snext, false);
 }
 
-void SCompiler::compileseqpre0(ValueT* vt)
+ValueT* SCompiler::compileseqpre0(ValueT* vt)
 {
   ValueT* vt0 = annotatevt(vt);
   if (ispair(vt0))
@@ -458,12 +459,13 @@ void SCompiler::compileseqpre0(ValueT* vt)
     if (iskwdefine(vm, type))
       compiledefpre(vt);
     else if (iskwdefsyntax(vm, type))
-      compiledefsyntax(vt);
-    else if (iskwbegin(vm, type))
     {
-      if (!isnull(Scdr(vt0)))
-        compileseqpre(Scdr(vt0));
+      compiledefsyntax(vt);
+      *vt = Snullref;
+      return vt;
     }
+    else if (iskwbegin(vm, type))
+      return Scdr(vt0);
     else
     {
       ValueT typeout;
@@ -475,24 +477,43 @@ void SCompiler::compileseqpre0(ValueT* vt)
         Sgcvar1(vm, out);
         proc->expand(this, out, vt);
         *vt = out;
-        compileseqpre(vt);
+        return compileseqpre0(vt);
       }
     }
   }
+  return NULL;
 }
 
 void SCompiler::compileseqpre(ValueT* expr)
 {
-  static const char* what = "begin: bad syntax, not a list";
+  static const char* what = "begin: bad syntax, not a proper list";
   ValueT* expr0 = annotatevt(expr);
   compileassert(vm, ispair(expr0), expr, "%s", what);
-  if (isnull(Scdr(expr0)))
-    compileseqpre0(Scar(expr0));
+  ValueT* body = compileseqpre0(Scar(expr0));
+  if (body)
+  {
+    ValueT* tail = Scdr(expr0);
+    if (isnull(body))
+      *expr = *tail;
   else
   {
-    compileseqpre0(Scar(expr0));
-    compileseqpre(Scdr(expr0));
+      ValueT* body0 = annotatevt(body);
+      compileassert(vm, ispair(body0), expr, "%s", what);
+      *expr = *body;
+      while (!isnull(Scdr(body0)))
+      {
+        body = Scdr(body0);
+        body0 = annotatevt(body);
+        compileassert(vm, ispair(body0), body, "%s", what);
+    }
+      *Scdr(body0) = *tail;
+    }
+    if (!isnull(expr))
+      compileseqpre(expr);
+    return;
   }
+  if (!isnull(Scdr(expr0)))
+    compileseqpre(Scdr(expr0));
 }
 
 void SCompiler::compileseq(int target, ValueT* expr, ValueT* link, bool defok)

@@ -139,7 +139,7 @@ public:
   void compilerefsym(int* local, int* refvar, SymPtr sym);
   void compilepair(int target, ValueT* pair, ValueT* link, bool defok);
   void compileseqpre(ValueT* expr);
-  void compileseqpre0(ValueT* vt);
+  ValueT* compileseqpre0(ValueT* vt);
   void compileseq(int target, ValueT* pair, ValueT* link, bool defok);
   void compilelambda(int target, ValueT* pair, ValueT* link);
   void compilelambda0(int target, int line, ValueT* param, ValueT* body);
