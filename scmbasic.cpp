@@ -43,6 +43,54 @@ CARCDR2(cadr, Scar, Scdr)
 CARCDR2(cdar, Scdr, Scar)
 CARCDR2(cddr, Scdr, Scdr)
 
+#define CARCDR3(NAME, A, B, C)                        \
+static ValueT scm_stub_ ## NAME (VM* vm, ValueT* p) { \
+  AssertArgPair(vm, p, #NAME);                        \
+  p = C (p);                                          \
+  AssertArgPair(vm, p, #NAME);                        \
+  p = B (p);                                          \
+  AssertArgPair(vm, p, #NAME);                        \
+  return A (p);                                       \
+}
+
+CARCDR3(caaar, Scar, Scar, Scar)
+CARCDR3(caadr, Scar, Scar, Scdr)
+CARCDR3(cadar, Scar, Scdr, Scar)
+CARCDR3(caddr, Scar, Scdr, Scdr)
+CARCDR3(cdaar, Scdr, Scar, Scar)
+CARCDR3(cdadr, Scdr, Scar, Scdr)
+CARCDR3(cddar, Scdr, Scdr, Scar)
+CARCDR3(cdddr, Scdr, Scdr, Scdr)
+
+#define CARCDR4(NAME, A, B, C, D)                     \
+static ValueT scm_stub_ ## NAME (VM* vm, ValueT* p) { \
+  AssertArgPair(vm, p, #NAME);                        \
+  p = D (p);                                          \
+  AssertArgPair(vm, p, #NAME);                        \
+  p = C (p);                                          \
+  AssertArgPair(vm, p, #NAME);                        \
+  p = B (p);                                          \
+  AssertArgPair(vm, p, #NAME);                        \
+  return A (p);                                       \
+}
+
+CARCDR4(caaaar, Scar, Scar, Scar, Scar)
+CARCDR4(caaadr, Scar, Scar, Scar, Scdr)
+CARCDR4(caadar, Scar, Scar, Scdr, Scar)
+CARCDR4(caaddr, Scar, Scar, Scdr, Scdr)
+CARCDR4(cadaar, Scar, Scdr, Scar, Scar)
+CARCDR4(cadadr, Scar, Scdr, Scar, Scdr)
+CARCDR4(caddar, Scar, Scdr, Scdr, Scar)
+CARCDR4(cadddr, Scar, Scdr, Scdr, Scdr)
+CARCDR4(cdaaar, Scdr, Scar, Scar, Scar)
+CARCDR4(cdaadr, Scdr, Scar, Scar, Scdr)
+CARCDR4(cdadar, Scdr, Scar, Scdr, Scar)
+CARCDR4(cdaddr, Scdr, Scar, Scdr, Scdr)
+CARCDR4(cddaar, Scdr, Scdr, Scar, Scar)
+CARCDR4(cddadr, Scdr, Scdr, Scar, Scdr)
+CARCDR4(cdddar, Scdr, Scdr, Scdr, Scar)
+CARCDR4(cddddr, Scdr, Scdr, Scdr, Scdr)
+
 static ValueT scm_stub_cons(VM* vm, ValueT* p1, ValueT* p2)
 {
   ValueT ret;
@@ -327,6 +375,32 @@ void SCMBasic::init(VM* vm)
     STUB_REG1(cadr),
     STUB_REG1(cddr),
     STUB_REG1(cdar),
+
+    STUB_REG1(caaar),
+    STUB_REG1(caadr),
+    STUB_REG1(cadar),
+    STUB_REG1(caddr),
+    STUB_REG1(cdaar),
+    STUB_REG1(cdadr),
+    STUB_REG1(cddar),
+    STUB_REG1(cdddr),
+
+    STUB_REG1(caaaar),
+    STUB_REG1(caaadr),
+    STUB_REG1(caadar),
+    STUB_REG1(caaddr),
+    STUB_REG1(cadaar),
+    STUB_REG1(cadadr),
+    STUB_REG1(caddar),
+    STUB_REG1(cadddr),
+    STUB_REG1(cdaaar),
+    STUB_REG1(cdaadr),
+    STUB_REG1(cdadar),
+    STUB_REG1(cdaddr),
+    STUB_REG1(cddaar),
+    STUB_REG1(cddadr),
+    STUB_REG1(cdddar),
+    STUB_REG1(cddddr),
 
     {"cons", scm_stub_cons},
     {"list", scm_stub_list, true},
