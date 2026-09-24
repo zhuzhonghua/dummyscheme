@@ -1963,6 +1963,15 @@ static void scm_uint2str(Lbuffer* numbuf, scm_int num, int radix)
     numbuf->put('0');
 }
 
+#ifdef HAS_TO_CHARS
+#include <charconv>
+static void scm_real2str(Lbuffer* numbuf, scm_float num)
+{
+  char buf[64] = {0};
+  std::to_chars(buf, buf+sizeof(buf), num);
+  numbuf->put(buf);
+}
+#else
 static void scm_real2str(Lbuffer* numbuf, scm_float num)
 {
   if (std::isinf(num))
@@ -1978,38 +1987,31 @@ static void scm_real2str(Lbuffer* numbuf, scm_float num)
       numbuf->put('-');
       num = -num;
     }
-    char buf[512] = {0};
-    if (num >= SCM_INT_MAX)
+    char buf[64] = {0};
+    int i = 0;
+    for (int p = 1; p <= 17; ++p)
     {
-      scm_float dnum = std::trunc(num);
-      int i = snprintf(buf, sizeof(buf), "%.0f.", dnum);
-      numbuf->put(buf, i);
-      num -= dnum;
+      i = snprintf(buf, sizeof(buf), "%.*g", p, num);
+      if (strtod(buf, 0) == num) break;
     }
-    else
+    bool whole = true;
+    for (int j = 0; j < i; ++j)
     {
-      scm_int d = num;
-    num -= d;
-    int i = snprintf(buf, sizeof(buf), scm_int_fmt, d);
-    buf[i++] = '.';
+      if (buf[j] == '.' || buf[j] == 'e' || buf[j] == 'E')
+      {
+        whole = false;
+        break;
+    }
+    }
+    if (whole)
+    {
+      buf[i++] = '.';
+      buf[i++] = '0';
+    }
     numbuf->put(buf, i);
-    }
-
-    if (!SCMMath::isFloatEqual(num, 0.0))
-    {
-      do {
-        num *= 10;
-        int d = num;
-        num -= d;
-        int i = snprintf(buf, sizeof(buf), "%u", d);
-        buf[i] = 0;
-        numbuf->put(buf, i);
-      } while (!SCMMath::isFloatEqual(num, 0.0));
-    }
-    else
-      numbuf->put('0');
   }
 }
+#endif
 
 static ValueT scm_stub_number2string(VM* vm, ValueT* z, ValueT* r)
 {
