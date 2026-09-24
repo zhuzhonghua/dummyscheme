@@ -1496,7 +1496,7 @@ struct NativeProcObj : public RefObject {
 };
 
 struct InputPortObj : public RefObject {
-  InputPortObj(): fname(NULL), file(NULL), size(0), n(0) {}
+  InputPortObj(): fname(NULL), file(NULL), size(0), n(0), eof(false) {}
 
   void close() {
     if (file) {
@@ -1504,6 +1504,7 @@ struct InputPortObj : public RefObject {
       file = NULL;
       size = 0;
     }
+    eof = true;
   }
   virtual void finz(VM* vm);
   Visit1(fname)
@@ -1516,16 +1517,20 @@ struct InputPortObj : public RefObject {
   void unreadchar(int c) { n--; }
   int fillbuff(int initn) {
     if (!file) return -1;
+    if (eof) return -1;
     size = fread(buff, 1, sizeof(buff), file);
     if (size > 0)
       return (n=initn, buff[0]);
-    else
+    else {
+      eof = true;
       return -1;
+  }
   }
 
   char buff[32];
   int n;
   int size;
+  bool eof;
 
   StrPtr fname;
   FILE* file;

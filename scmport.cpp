@@ -197,6 +197,18 @@ static ValueT scm_stub_read_char(VM* vm, ValueT* vt)
   return ret;
 }
 
+static ValueT scm_stub_char_readyp(VM* vm, ValueT* vt)
+{
+  const static char* METHOD = "char-ready?";
+  AssertVT(vm, isiport(vt), vt, "%s: not a port", METHOD);
+  InputPortObj* iport = iportref(vt);
+  if (iport->n < iport->size)
+    return Strueref;
+  if (iport->eof)
+    return Strueref;
+  return Sfalseref;
+}
+
 static ValueT scm_stub_write_char(VM* vm, ValueT* cvt, ValueT* args)
 {
   const static char* METHOD = "write-char";
@@ -243,6 +255,7 @@ void SCMPort::init(VM* vm)
     {"close-output-port", scm_stub_close_output_port},
     {"peek-char", scm_stub_peek_char},
     {"read-char", scm_stub_read_char},
+    {"char-ready?", scm_stub_char_readyp},
     {"write-char", scm_stub_write_char, true},
     {"eof-object?", scm_stub_eof_objp},
     {"read", scm_stub_read},
