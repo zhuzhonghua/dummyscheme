@@ -245,6 +245,7 @@ struct ContinuationObj;
 typedef ContinuationObj* ContinuationPtr;
 
 class ArrayObj;
+struct ValuesObj;
 class SCompiler;
 
 struct NativeProcObj;
@@ -346,6 +347,11 @@ struct CallFrame;
 #define isarray(VT) istype(VT, VT_REF_ARRAY)
 #define arrayref(VT) toref(VT, ArrayObj*)
 #define setarray(VT, e) settyperef(VT, VT_REF_ARRAY, e)
+
+/* Values */
+#define isvaluesobj(VT) istype(VT, VT_REF_VALUESOBJ)
+#define valuesobjref(VT) toref(VT, ValuesObj*)
+#define setvaluesobj(VT, e) settyperef(VT, VT_REF_VALUESOBJ, e)
 
 /* SyntaxObj */
 #define ismacro(VT) istype(VT, VT_REF_MACRO)
@@ -475,6 +481,7 @@ enum ValueTEnum {
   VT_REF_HYGIENE_SYM,
   VT_REF_PAIR,
   VT_REF_ARRAY,
+  VT_REF_VALUESOBJ,
   VT_REF_NATIVE,
   VT_REF_IPORT,
   VT_REF_OPORT,
@@ -687,6 +694,15 @@ public:
   GetSize(ArrayObj)
 
   VecT<ValueT> array;
+};
+
+struct ValuesObj : public RefObject {
+  ValuesObj():data(NULL) {}
+
+  virtual void visit(VM* vm);
+  GetSize(ValuesObj)
+
+  ArrayObj* data;
 };
 
 class SCM {
@@ -1220,6 +1236,7 @@ enum NATIVE_COMPLEX_PROC {
   NATIVE_COMPLEX_CALL_WITH_OUT_STR,
   NATIVE_COMPLEX_FORCE,
   NATIVE_COMPLEX_DYNAMIC_WIND,
+  NATIVE_COMPLEX_VALUES,
   NATIVE_COMPLEX_EVAL,
   NATIVE_COMPLEX_MAX,
 };

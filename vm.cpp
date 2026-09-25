@@ -140,6 +140,11 @@ void ArrayObj::finz(VM* vm)
   vec_finz(ValueT, vm, &array);
 }
 
+void ValuesObj::visit(VM* vm)
+{
+  Check(data);
+}
+
 StkVar::StkVar(VM* v):vm(v), prev(NULL), next(NULL)
 {
   Stack* stk = Stk(vm);
@@ -1671,6 +1676,18 @@ static void ensurearity(VM* vm, ValueT* base, int len, int argnum, bool argrest,
   }
 }
 
+static ValueT* singlevalue(VM* vm, ValueT* value, const char* who)
+{
+  if (isvaluesobj(value))
+  {
+    ValuesObj* obj = valuesobjref(value);
+    if (obj->data->arrayn() != 1)
+      Error(vm, "%s: expected one value, got %d", who, obj->data->arrayn());
+    return obj->data->get(0);
+  }
+  return value;
+}
+
 static void shrinkapplyarity(VM* vm, ValueT* base, int* olen)
 {
   int len = *olen;
@@ -2094,6 +2111,38 @@ static CallFrame* recallforce(VM* vm, CallFrame* frm, ValueT* base)
   return frm;
 }
 
+static void callvalues(VM* vm, ValueT* base, int len,
+                       CallAppState* state)
+{
+  ValueT* applyargs = NULL;
+  if (state->fromapply)
+  {
+    applyargs = base + 1;
+    AssertVT(vm, SCM::listp(applyargs), applyargs, "values: contract violation list?");
+    len = SCM::length(vm, applyargs);
+    state->fromapply = false;
+  }
+  Sgcvar1(vm, result);
+  ValuesObj* obj = Sr0(vm, ValuesObj);
+  setvaluesobj(result, obj);
+  obj->data = len > 0 ? Sr2(vm, ArrayObj, vm, len) : Sr0(vm, ArrayObj);
+  if (applyargs != NULL)
+  {
+    int i = 0;
+    PAIR_FOR(p, applyargs)
+      obj->data->set(i++, Scar(p));
+    base[1] = Svoidref;
+  }
+  else
+  {
+    for (int i = 0; i < len; i++)
+      obj->data->set(i, base + 1 + i);
+    for (int i = 0; i < len; i++)
+      base[1 + i] = Svoidref;
+  }
+  *base = *result;
+}
+
 static void boxcapturedlocals(VM* vm, CallFrame* frm, LambdaPtr lambda)
 {
   LambdaVarsObj* vars = lambda->vars;
@@ -2112,6 +2161,11 @@ static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* ba
 {
   Stack* stk = Stk(vm);
   ClosurePtr newcall = closureref(base);
+  if (!callstate->fromapply)
+  {
+    for (int i = 1; i <= len; i++)
+      base[i] = *singlevalue(vm, base + i, "procedure");
+  }
   ensurearity(vm, base, len, newcall->lambda->argnum, newcall->lambda->argrest, "", callstate->fromapply);
   if (!istail || callstate->callcc || callstate->unwind || callstate->force || callstate->dywind)
   {
@@ -2201,6 +2255,10 @@ static CallComplexAct callcomplexproc(VM* vm, CallFrame** frm, ValueT** procp, i
     calldynamicwind(vm, *frm, *procp, len, state);
     return CALL_COMPLEX_RECALL;
   }
+  case NATIVE_COMPLEX_VALUES: {
+    callvalues(vm, *procp, *len, state);
+    return CALL_COMPLEX_AFTER;
+  }
   default:
     Error(vm, "not supported complex native proc %d yet\n", nproc->complexid);
   }
@@ -2215,6 +2273,11 @@ enum CallNativeAct {
 static CallNativeAct callnativeproc(VM* vm, CallFrame* frm, ValueT* proc, int len, CallAppState* state)
 {
   NativeProcObj* nproc = nativeprocref(proc);
+  if (!state->fromapply)
+  {
+    for (int i = 1; i <= len; i++)
+      proc[i] = *singlevalue(vm, proc + i, Ssstr(nproc->var));
+  }
   ensurearity(vm, proc, len, nproc->argnum, nproc->argrest, Ssstr(nproc->var), state->fromapply);
   *proc = scmcallcproc(vm, nproc, proc+1);
   if (state->unwind)
@@ -2605,14 +2668,14 @@ void VM::execute0(CallFrame* frm)
   }
   case OP_DEFLOCAL: {
     int target, from;getcode_deflocal(i, target, from);
-    ValueT* val = stkvt(from);
+    ValueT* val = singlevalue(this, stkvt(from), "define");
     Assert(this, !isundefined(val), "undefined value to define local variable");
     *stkvt(target+1) = val;
     break;
   }
   case OP_SETLOCAL: {
     int A, B;getcode_setlocal(i, A, B);
-    ValueT* val = stkvt(B);
+    ValueT* val = singlevalue(this, stkvt(B), "set!");
     SymPtr var = lambda->vars->reflocal(A);
     Assert(this, !isundefined(val), "undefined val for var %s", Ssstr(var));
     *stkvt(A+1) = val;
@@ -2620,7 +2683,7 @@ void VM::execute0(CallFrame* frm)
   }
   case OP_SETBOX: {
     int A, B;getcode_setbox(i, A, B);
-    ValueT* val = stkvt(B);
+    ValueT* val = singlevalue(this, stkvt(B), "set!");
     ValueT* boxvt = stkvt(1 + A);
     BoxObj* box = boxref(boxvt);
     box->val = *val;
@@ -2629,7 +2692,7 @@ void VM::execute0(CallFrame* frm)
   case OP_SETBVAR: {
     int A, B;getcode_setbvar(i, A, B);
     BoxVar* bv = lambda->vars->refbvar(A);
-    ValueT* val = stkvt(B);
+    ValueT* val = singlevalue(this, stkvt(B), "set!");
     Assert(this, !isundefined(val), "undefined val for var %s", Ssstr(bv->name));
     call->outers[A]->val = *val;
     break;
@@ -2638,7 +2701,7 @@ void VM::execute0(CallFrame* frm)
     int target, from;getcode_setglobal(i, target, from);
     ValueT* k = lambda->getk(target);
     SymPtr name = symref(k);
-    ValueT* val = stkvt(from);
+    ValueT* val = singlevalue(this, stkvt(from), "set!");
     Assert(this, !isundefined(val), "undefined value to set! global variable %s", Ssstr(name));
     GEnv(this)->setslot(name, val);
     *val = Svoidref;
@@ -2646,7 +2709,7 @@ void VM::execute0(CallFrame* frm)
   }
   case OP_IFFALSEJUMP: {
     int A, B;getcode_iffalsejmp(i, A, B);
-    ValueT* val = stkvt(B);
+    ValueT* val = singlevalue(this, stkvt(B), "if");
     if (isfalse(val))
     {
       pc = A;
@@ -2837,6 +2900,7 @@ void VM::init()
   regComplex("call-with-output-string", NATIVE_COMPLEX_CALL_WITH_OUT_STR);
   regComplex("force", NATIVE_COMPLEX_FORCE);
   regComplex("dynamic-wind", NATIVE_COMPLEX_DYNAMIC_WIND);
+  regComplex("values", NATIVE_COMPLEX_VALUES);
 }
 
 void VM::getuniquesym(SymPtr sym, ValueT* out)
@@ -3412,6 +3476,17 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
   case VT_REF_BOX:
     oport->writestr("#<box>");
     break;
+  case VT_REF_VALUESOBJ: {
+    ValuesObj* obj = valuesobjref(val);
+    oport->writestr("#<values");
+    for (int i = 0; i < obj->data->arrayn(); i++)
+    {
+      oport->writechar(' ');
+      printvalue0(oport, obj->data->get(i), stripanno);
+    }
+    oport->writechar('>');
+    break;
+  }
   default:
     fprintf(stderr, "printvalue unknown type %d\n", vttype(val));
     *((int*)0) = 0;
