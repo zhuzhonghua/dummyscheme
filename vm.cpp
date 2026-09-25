@@ -1946,6 +1946,7 @@ static bool callforce(VM* vm, CallFrame* frm, ValueT* base, int* olen, CallAppSt
     AssertVT(vm, ispair(cw), cw, "%s: internal error in apply", METHOD);
     proc = Scar(cw);
     AssertVT(vm, isnull(Scdr(cw)), cw, "%s: two much arguments", METHOD);
+    *stkvt(1) = *proc;
     state->fromapply = false;
   }
   else
