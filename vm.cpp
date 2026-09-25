@@ -2067,16 +2067,29 @@ static DyWindStep dywindadvance(VM* vm, DynamicWindObj* dywind, ValueT* slot)
   return DYWIND_STEP_DONE;
 }
 
+static void boxcapturedlocals(VM* vm, CallFrame* frm, LambdaPtr lambda);
 static CallFrame* recallforce(VM* vm, CallFrame* frm, ValueT* base)
 {
   Stack* stk = Stk(vm);
   PromiseObj* prom = promiseref(base);
   frm->force->cell = prom->cell;
   ClosureObj* newcall = prom->cell->clo;
-  CallFrame* prevfrm = stk->rtnfrm(frm);
-  frm = stk->newfrm(prevfrm, base, newcall->lambda->argnum, newcall->lambda->top);
   frm->start = base;
   frm->force = prom;
+  frm->top = frm->base + 1 + newcall->lambda->top;
+  if (frm->seg->frozen > 0 || frm->top >= frm->seg->end())
+  {
+    StackSegment* seg = Sr0(vm, StackSegment);
+    frm->seg = seg;
+    frm->base = seg->first();
+    frm->top = frm->base + 1 + newcall->lambda->top;
+    Assert(vm, frm->top < seg->end(), "alloc stack seg error in ctorfrm, arity: %d too big", newcall->lambda->top);
+  }
+  int j = 0;
+  for (; j <= newcall->lambda->argnum; j++)
+    *(frm->base+j) = base+j;
+  stk->setvoid(frm->base+newcall->lambda->argnum+1, frm->top-1);
+  boxcapturedlocals(vm, frm, newcall->lambda);
   return frm;
 }
 
@@ -2101,6 +2114,8 @@ static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* ba
   ensurearity(vm, base, len, newcall->lambda->argnum, newcall->lambda->argrest, "", callstate->fromapply);
   if (!istail || callstate->callcc || callstate->unwind || callstate->force || callstate->dywind)
   {
+    if (callstate->force && istail)
+      goto tail;
     frm = stk->newfrm(frm, base, newcall->lambda->argnum, newcall->lambda->top);
     frm->start = base;
     if (callstate->force)
@@ -2114,6 +2129,13 @@ static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* ba
   }
   else
   {
+  tail:
+    if (callstate->force)
+    {
+      ValueT* prom = base + 1;
+      Assert(vm, ispromise(prom), "internal error, not a promise in force");
+      frm->force = promiseref(prom);
+    }
     frm->top = frm->base + 1 + newcall->lambda->top;
     if (frm->seg->frozen > 0 || frm->top >= frm->seg->end())
     {
