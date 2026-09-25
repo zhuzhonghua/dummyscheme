@@ -2370,7 +2370,14 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
     vm->ac0 = *(*frm)->start = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
   if ((*frm)->force)
   {
-    if (ispromise((*frm)->start))
+    if ((*frm)->force->cell->state == PROMISE_EAGER)
+    {
+      vm->ac0 = (*frm)->force->cell->val;
+      if (owner != NULL)
+        *(*frm)->start = vm->ac0;
+      (*frm)->force = NULL;
+    }
+    else if (ispromise((*frm)->start))
     {
       *frm = recallforce(vm, *frm, (*frm)->start);
       return RTN_ENTER;
