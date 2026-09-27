@@ -4188,6 +4188,7 @@ void Lexer::readVector(ValueT* v)
     while (aheadToken != TOKEN_RIGHT_PAREN)
     {
       lexassert(vm, aheadToken != TOKEN_DOT, line, "illegal form, not proper list in vector");
+      lexassert(vm, aheadToken != TOKEN_END, line, "unterminated vector, unexpected end of file");
       idx = arr->add(vm, Snullref);
       v2 = arr->get(idx);
       readValueT(v2);
@@ -4206,6 +4207,7 @@ void Lexer::readListT0(ValueT* v)
 {
   int line = startline;
   aheadToken = dLex();
+  lexassert(vm, aheadToken != TOKEN_END, line, "unterminated list, unexpected end of file");
   if (aheadToken == TOKEN_RIGHT_PAREN)
   {
     setnull(v);
