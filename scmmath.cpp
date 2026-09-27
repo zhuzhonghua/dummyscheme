@@ -1677,7 +1677,7 @@ static bool scm_readureal(VM* vm, ReadNumState* state)
       state->next();
       return scm_readsuffix(vm, state, state->n.num.inum);
     }
-    case '+':case '-':case CASE_I:case -1: return true;
+    case '+':case '-':case CASE_I:case '@':case -1: return true;
     default: return false;
     }
   }
