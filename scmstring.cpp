@@ -299,8 +299,11 @@ static ValueT scm_stub_int_tochar(VM* vm, ValueT* p)
 {
   AssertArg(vm, isnumi(p), "integer->char", p, "not an integer");
 
+  const int n = numi(p);
+  AssertArg(vm, n >= SCM_CHAR_MIN && n <= SCM_CHAR_MAX, "integer->char", p,
+            "not in char range [%d, %d]", SCM_CHAR_MIN, SCM_CHAR_MAX);
   ValueT out;
-  setchar(&out, numi(p));
+  setchar(&out, (uchar)n);
   return out;
 }
 

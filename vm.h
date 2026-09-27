@@ -38,6 +38,7 @@ typedef unsigned int Instruction;
 typedef unsigned int uint;
 typedef unsigned short ushort;
 typedef unsigned char byte;
+typedef unsigned char uchar;
 
 #define MAXSHORTLEN 40
 #define SYMBOLCASEI
@@ -408,6 +409,8 @@ struct NumBigObj;
 #define isboolean(VT) isfalse(VT) || istrue(VT)
 
 /* Char */
+#define SCM_CHAR_MIN 0
+#define SCM_CHAR_MAX 255
 #define ischar(VT) istype(VT, VT_CHAR)
 #define vtchar(VT) (VT)->v.c
 #define setchar(VT, e) ((VT)->v.c = (e),(VT)->t = VT_CHAR)
@@ -502,7 +505,7 @@ union BasicNum {
 union ValueU {
   RefPtr p;
   BasicNum num;
-  char c;
+  uchar c;
 };
 
 struct ValueT {
@@ -1541,7 +1544,7 @@ struct InputPortObj : public RefObject {
   }
   }
 
-  char buff[32];
+  uchar buff[32];
   int n;
   int size;
   bool eof;
@@ -1736,7 +1739,7 @@ public:
   }
 
   FILE* file;
-  char buff[32];
+  uchar buff[32];
   int n;
   int size;
 };
@@ -1833,7 +1836,7 @@ protected:
   VM* vm;
 
   bool readT;
-  char readC;
+  uchar readC;
 
   Lbuffer buff;
   Reader* reader;
