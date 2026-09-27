@@ -1687,10 +1687,10 @@ static bool scm_readureal(VM* vm, ReadNumState* state)
 
 static bool scm_makenumtovt(VM* vm, ReadNumState* state, ValueT* out)
 {
-  if (isnumbig(state->bigval)) {
+  if (isnumbig(state->bigval))
     bigsetvt(vm, out, numbigref(state->bigval));
-    return true;
-  }
+  else
+  {
   switch(state->n.type) {
   case NINT:
     setnumi(out, state->n.num.inum); break;
@@ -1700,6 +1700,14 @@ static bool scm_makenumtovt(VM* vm, ReadNumState* state, ValueT* out)
     setnumratio(out, Sr2(vm, NumRatioObj, state->n.num.ratio.nu, state->n.num.ratio.de));
     break;
   default: return false;
+  }
+  }
+  if (!state->exactp && SCMMath::exactp(out))
+  {
+    if (isnumbig(out))
+      setnumreal(out, big2double(numbigref(out)));
+    else
+      numuptoreal(vm, out);
   }
   return true;
 }
