@@ -1686,7 +1686,7 @@ struct DynamicWindObj : public RefObject {
 };
 
 struct ContinuationObj : public RefObject {
-  ContinuationObj(CallFrame* s, ValueT* base);
+  ContinuationObj(CallFrame* s, ValueT* base, bool istail);
   virtual void finz(VM* vm);
   Visit3(frm, base, dywind)
   GetSize(ContinuationObj)
@@ -1694,6 +1694,7 @@ struct ContinuationObj : public RefObject {
   ValueT* base;
   DynamicWindObj* dywind;
   int dystage;
+  bool tail; // the call/cc that captured it was in tail position
 };
 
 class Reader {

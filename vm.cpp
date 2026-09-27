@@ -1606,7 +1606,8 @@ enum CallAct {
   CALLACT_DONE,
   CALLACT_ENTER,
   CALLACT_RESUME_CC,
-  CALLACT_TAILRET
+  CALLACT_TAILRET,
+  CALLACT_CC_TAILRET
 };
 
 struct CallAppState {
@@ -1778,7 +1779,7 @@ static void checkcallcc(VM* vm, CallFrame** frm, ValueT** procp, int len, CallAp
   else
     Error(vm, "%s: needs closure object", METHOD);
   *stkvt(0) = cc;
-  ContinuationObj* newcont = Sr2(vm, ContinuationObj, oldfrm, base);
+  ContinuationObj* newcont = Sr3(vm, ContinuationObj, oldfrm, base, callstate->istail);
   newcont->dywind = Stk(vm)->dywind;
   newcont->dystage = Stk(vm)->dywind ? (int)Stk(vm)->dywind->state : 0;
   setcontinuation(stkvt(1), newcont);
@@ -2169,7 +2170,7 @@ static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* ba
   ensurearity(vm, base, len, newcall->lambda->argnum, newcall->lambda->argrest, "", callstate->fromapply);
   if (!istail || callstate->callcc || callstate->unwind || callstate->force || callstate->dywind)
   {
-    if (callstate->force && istail)
+    if ((callstate->force || callstate->callcc) && istail)
       goto tail;
     frm = stk->newfrm(frm, base, newcall->lambda->argnum, newcall->lambda->top);
     frm->start = base;
@@ -2400,7 +2401,7 @@ static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len, bool ist
     ValueT* rebased = top->base + (cont->base - cont->frm->base);
     *frm = stk->curfrm = top;
     vm->ac0 = *rebased = proc+1;
-    return CALLACT_RESUME_CC;
+    return cont->tail ? CALLACT_CC_TAILRET : CALLACT_RESUME_CC;
   }
   else
     ErrorVT(vm, proc, "not a procedure");
@@ -2465,6 +2466,7 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
       case CALLACT_ENTER:
         return RTN_ENTER;
       case CALLACT_TAILRET:
+      case CALLACT_CC_TAILRET:
         return RTN_RETURN;
       case CALLACT_RESUME_CC:
       case CALLACT_DONE:
@@ -2748,6 +2750,11 @@ void VM::execute0(CallFrame* frm)
       lambda = call->lambda;
       pc = frm->getpc();
       break;
+    case CALLACT_CC_TAILRET:
+      base = frm->base;
+      call = closureref(base);
+      lambda = call->lambda;
+      goto retlab;
     case CALLACT_ENTER:
       base = frm->base;
       call = closureref(base);
@@ -3749,8 +3756,8 @@ void ContinuationObj::finz(VM* vm)
   RefObject::finz(vm);
 }
 
-ContinuationObj::ContinuationObj(CallFrame* s, ValueT* b)
-  :frm(s), base(b), dywind(NULL), dystage(0)
+ContinuationObj::ContinuationObj(CallFrame* s, ValueT* b, bool istail)
+  :frm(s), base(b), dywind(NULL), dystage(0), tail(istail)
 {
   for (s = frm; s != NULL; s = s->prev)
     s->seg->frozen++;
