@@ -48,6 +48,7 @@ struct VCoNum {
 
 struct ReadNumState {
   bool exactp;
+  bool forceexact;
   bool negativep;
   int radix;
   int c;
@@ -96,6 +97,7 @@ bool SCMMath::str2num(VM* vm, const char* s, int len, ValueT* out)
   Lbuffer lb(vm);
   ReadNumState state;
   state.exactp = true;
+  state.forceexact = false;
   state.negativep = false;
   state.radix = 10;
   state.zp = s;
@@ -1685,12 +1687,93 @@ static bool scm_readureal(VM* vm, ReadNumState* state)
   }
 }
 
+static bool scm_exactfrommantissa(VM* vm, ReadNumState* state)
+{
+  const char* s = state->lb->buf;
+  int n = state->lb->count;
+  int i = 0, frac = 0, expo = 0;
+  bool dot = false, any = false;
+  scm_int nu = 0, de = 1;
+  for (; i < n; i++)
+  {
+    char c = s[i];
+    if (c == '.')
+    {
+      if (dot) return false;
+      dot = true;
+      continue;
+    }
+    if (!std::isdigit((uchar)c))
+      break;
+    any = true;
+    if (nu > (SCM_INT_MAX - (c - '0')) / 10)
+      Error(vm, "#e: exact number too large, not support yet, %.*s", n, s);
+    nu = nu * 10 + (c - '0');
+    if (dot)
+      frac++;
+  }
+  if (!any)
+    return false;
+  if (i < n && (s[i] == 'e' || s[i] == 'E'))
+  {
+    bool eneg = false;
+    for (i++; i < n && (s[i] == '+' || s[i] == '-'); i++)
+      eneg = s[i] == '-';
+    if (i >= n || !std::isdigit((uchar)s[i]))
+      return false;
+    for (; i < n && std::isdigit((uchar)s[i]); i++)
+    {
+      if (expo > 100000)
+        return false;
+      expo = expo * 10 + (s[i] - '0');
+    }
+    if (eneg)
+      expo = -expo;
+  }
+  if (i != n)
+    return false;
+  if (state->negativep)
+    nu = -nu;
+  int net = expo - frac;
+  if (net > 0)
+  {
+    for (int k = 0; k < net; k++)
+    {
+      if (nu > SCM_INT_MAX / 10)
+        Error(vm, "#e: exact number too large, not support yet, %.*s", n, s);
+      nu *= 10;
+    }
+  }
+  else if (net < 0)
+  {
+    for (int k = 0; k < -net; k++)
+    {
+      if (de > SCM_INT_MAX / 10)
+        Error(vm, "#e: exact number too small, not support yet, %.*s", n, s);
+      de *= 10;
+    }
+  }
+  if (de != 1)
+  {
+    scm_int g = SCMMath::gcd(nu, de);
+    nu /= g;
+    de /= g;
+  }
+  if (de == 1)
+    state->n.setint(nu);
+  else
+    state->n.setratio(nu, de);
+  return true;
+}
+
 static bool scm_makenumtovt(VM* vm, ReadNumState* state, ValueT* out)
 {
   if (isnumbig(state->bigval))
     bigsetvt(vm, out, numbigref(state->bigval));
   else
   {
+    if (state->forceexact && state->n.type == NREAL && !scm_exactfrommantissa(vm, state))
+      return false;
   switch(state->n.type) {
   case NINT:
     setnumi(out, state->n.num.inum); break;
@@ -1893,7 +1976,7 @@ static bool scm_readnum(VM* vm, ReadNumState* state, ValueT* out)
     case 'i':case 'I':
       state->exactp=false;e=true;state->next(); break;
     case 'e':case 'E':
-      state->exactp=true;e=true; state->next(); break;
+      state->exactp=true;state->forceexact=true;e=true; state->next(); break;
     default: return false;
     }
     if (state->c == '#')
@@ -1911,7 +1994,7 @@ static bool scm_readnum(VM* vm, ReadNumState* state, ValueT* out)
       case 'i':case 'I': if (e) return false;
         state->exactp=false; state->next(); break;
       case 'e':case 'E': if (e) return false;
-        state->exactp=true; state->next(); break;
+        state->exactp=true; state->forceexact=true; state->next(); break;
       default: return false;
       }
     }
@@ -1939,6 +2022,7 @@ static ValueT scm_stub_string2number(VM* vm, ValueT* z, ValueT* r)
   Lbuffer lb(vm);
   ReadNumState state;
   state.exactp = true;
+  state.forceexact = false;
   state.negativep = false;
   state.radix = radix;
   state.zp = cstr;
