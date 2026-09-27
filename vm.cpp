@@ -3076,17 +3076,23 @@ StrObj* VM::strintern(int len, char c)
 
 const char* VM::gettopsource()
 {
-  return gettoplambda()->source->str;
+  LambdaPtr lambda = gettoplambda();
+  if (lambda == NULL || lambda->source == NULL)
+    return "<unknown source>";
+  return lambda->source->str;
 }
 
 LambdaPtr VM::gettoplambda()
 {
   Stack* stk = Stk(this);
   CallFrame* frm  = stk->curfrm;
+  if (frm == NULL)  // compile/lex error, no frame is pushed yet
+    return NULL;
   ValueT* base = frm->base;
   ValueT* basevt = stkvt(0);
-  ClosurePtr call = closureref(basevt);
-  return call->lambda;
+  if (!isclosure(basevt))
+    return NULL;
+  return closureref(basevt)->lambda;
 }
 
 bool VM::dolex(Lexer* lex, StrPtr source)
