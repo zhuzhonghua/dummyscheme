@@ -233,3 +233,6 @@
      x)
     ((_ "step" x y)
      y)))
+
+(define (call-with-values producer consumer)
+  (apply consumer (%values->list (producer))))

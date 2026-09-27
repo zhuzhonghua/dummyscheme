@@ -697,12 +697,12 @@ public:
 };
 
 struct ValuesObj : public RefObject {
-  ValuesObj():data(NULL) {}
+  ValuesObj() {}
 
-  virtual void visit(VM* vm);
+  Visit1(data);
   GetSize(ValuesObj)
 
-  ArrayObj* data;
+  ValueT data;
 };
 
 class SCM {
@@ -1237,6 +1237,7 @@ enum NATIVE_COMPLEX_PROC {
   NATIVE_COMPLEX_FORCE,
   NATIVE_COMPLEX_DYNAMIC_WIND,
   NATIVE_COMPLEX_VALUES,
+  NATIVE_COMPLEX_VALUES2LIST,
   NATIVE_COMPLEX_EVAL,
   NATIVE_COMPLEX_MAX,
 };

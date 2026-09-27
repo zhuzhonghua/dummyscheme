@@ -1681,10 +1681,10 @@ static ValueT* singlevalue(VM* vm, ValueT* value, const char* who)
 {
   if (isvaluesobj(value))
   {
-    ValuesObj* obj = valuesobjref(value);
-    if (obj->data->arrayn() != 1)
-      Error(vm, "%s: expected one value, got %d", who, obj->data->arrayn());
-    return obj->data->get(0);
+    ValueT* vals = &valuesobjref(value)->data;
+    if (ispair(vals) && isnull(Scdr(vals)))
+      return Scar(vals);
+    Error(vm, "%s: expected one value, got %d", who, SCM::length(vm, vals));
   }
   return value;
 }
@@ -2112,8 +2112,7 @@ static CallFrame* recallforce(VM* vm, CallFrame* frm, ValueT* base)
   return frm;
 }
 
-static void callvalues(VM* vm, ValueT* base, int len,
-                       CallAppState* state)
+static void callvalues(VM* vm, ValueT* base, int len, CallAppState* state)
 {
   ValueT* applyargs = NULL;
   if (state->fromapply)
@@ -2123,25 +2122,22 @@ static void callvalues(VM* vm, ValueT* base, int len,
     len = SCM::length(vm, applyargs);
     state->fromapply = false;
   }
-  Sgcvar1(vm, result);
   ValuesObj* obj = Sr0(vm, ValuesObj);
-  setvaluesobj(result, obj);
-  obj->data = len > 0 ? Sr2(vm, ArrayObj, vm, len) : Sr0(vm, ArrayObj);
+  setvaluesobj(base, obj);
   if (applyargs != NULL)
   {
-    int i = 0;
-    PAIR_FOR(p, applyargs)
-      obj->data->set(i++, Scar(p));
-    base[1] = Svoidref;
+    obj->data = *applyargs;
+    *(base + 1) = Svoidref;
   }
   else
   {
+    Sgcvar1(vm, vals);
+    for (int i = len - 1; i >= 0; i--)
+      setpair(vals, SCM::cons(vm, base + 1 + i, vals));
+    obj->data = *vals;
     for (int i = 0; i < len; i++)
-      obj->data->set(i, base + 1 + i);
-    for (int i = 0; i < len; i++)
-      base[1 + i] = Svoidref;
+      *(base + 1 + i) = Svoidref;
   }
-  *base = *result;
 }
 
 static void boxcapturedlocals(VM* vm, CallFrame* frm, LambdaPtr lambda)
@@ -2258,6 +2254,24 @@ static CallComplexAct callcomplexproc(VM* vm, CallFrame** frm, ValueT** procp, i
   }
   case NATIVE_COMPLEX_VALUES: {
     callvalues(vm, *procp, *len, state);
+    return CALL_COMPLEX_AFTER;
+  }
+  case NATIVE_COMPLEX_VALUES2LIST: {
+    const static char* METHOD = "%values->list";
+    if (state->fromapply)
+    {
+      Error(vm, "%s: cannot be applied", METHOD);
+      return CALL_COMPLEX_NONE;
+    }
+    Assert(vm, *len == 1, "%s: needs 1 argument, not %d", METHOD, *len);
+    ValueT* arg = *procp + 1;
+    ValueT out;
+    if (isvaluesobj(arg))
+      out = valuesobjref(arg)->data;
+    else
+      setpair(&out, SCM::list(vm, arg));
+    *arg = Svoidref;
+    **procp = out;
     return CALL_COMPLEX_AFTER;
   }
   default:
@@ -2662,7 +2676,7 @@ void VM::execute0(CallFrame* frm)
     int target, from;getcode_defglobal(i, target, from);
     ValueT* k = lambda->getk(target);
     SymPtr name = symref(k);
-    ValueT* val = stkvt(from);
+    ValueT* val = singlevalue(this, stkvt(from), "define");
     Assert(this, !isundefined(val), "undefined value to define global variable %s", Ssstr(name));
     GEnv(this)->newkeyorupdate(name, val);
     *val = Svoidref;
@@ -2908,6 +2922,7 @@ void VM::init()
   regComplex("force", NATIVE_COMPLEX_FORCE);
   regComplex("dynamic-wind", NATIVE_COMPLEX_DYNAMIC_WIND);
   regComplex("values", NATIVE_COMPLEX_VALUES);
+  regComplex("%values->list", NATIVE_COMPLEX_VALUES2LIST);
 }
 
 void VM::getuniquesym(SymPtr sym, ValueT* out)
@@ -3486,10 +3501,10 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
   case VT_REF_VALUESOBJ: {
     ValuesObj* obj = valuesobjref(val);
     oport->writestr("#<values");
-    for (int i = 0; i < obj->data->arrayn(); i++)
+    PAIR_FOR(p, &obj->data)
     {
       oport->writechar(' ');
-      printvalue0(oport, obj->data->get(i), stripanno);
+      printvalue0(oport, Scar(p), stripanno);
     }
     oport->writechar('>');
     break;
