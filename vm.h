@@ -252,9 +252,6 @@ struct NativeProcObj;
 
 struct CallFrame;
 
-//#define checkexp(c, e) (Util::assert((c), STR(c), "\nEXE FAIL\n%s", STR(e)), (e))
-#define checkexp(c, e) (e)
-
 /* Type Ref */
 #define settyperef(VT, tp, e) ((VT)->v.p = (e), (VT)->t = tp)
 #define istype(VT, tp) ((VT)->t == tp)
@@ -334,7 +331,6 @@ struct CallFrame;
 
 #define ispair(VT) istype(VT, VT_REF_PAIR)
 #define pairref(VT) toref(VT, PairPtr)
-#define Spairref(VT) checkexp(ispair(VT), pairref(VT))
 #define setpair(VT, e) settyperef(VT, VT_REF_PAIR, e)
 
 #define Scdr(VT) (&(pairref(VT)->scdr))
