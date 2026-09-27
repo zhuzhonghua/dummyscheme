@@ -699,9 +699,9 @@ void SCompiler::compileapp(int target, ValueT* expr, ValueT* link)
 
 void SCompiler::compiledelay(int target, ValueT* expr, ValueT* link)
 {
-  compileassert(vm, !isnull(Scdr(expr)), expr, "illegal delay");
   int line = annotateline(expr);
   ValueT* expr0 = annotatevt(expr);
+  compileassert(vm, !isnull(Scdr(expr0)), expr, "illegal delay");
   compilelink(link, line);
   putcode(code_promise(target), line);
   compilelambda0(target, line, Snullref, Scdr(expr0));
