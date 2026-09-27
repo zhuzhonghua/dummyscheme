@@ -699,7 +699,7 @@ public:
 struct ValuesObj : public RefObject {
   ValuesObj() {}
 
-  Visit1(data);
+  virtual void visit(VM*);
   GetSize(ValuesObj)
 
   ValueT data;
