@@ -2145,7 +2145,7 @@ static void boxcapturedlocals(VM* vm, CallFrame* frm, LambdaPtr lambda)
   LambdaVarsObj* vars = lambda->vars;
   for (int i = 0; i < vars->local.n; i++)
   {
-    if (vars->local.get(i).capture)
+    if (vars->local.get(i).capture || vars->local.get(i).assigned)
     {
       ValueT* slot = frm->base + 1 + i;
       BoxObj* box = Sr1(vm, BoxObj, *slot);
@@ -3602,19 +3602,19 @@ void LambdaObj::patchinstruction(VM* vm)
     {
     case OP_REFLOCAL: {
       int target, from; getcode_reflocal(i, target, from);
-      if (vars->local.get(from).capture)
+      if (vars->local.get(from).capture || vars->local.get(from).assigned)
         code.set(pc, code_refbox(target, from));
       break;
     }
     case OP_DEFLOCAL: {
       int target, from; getcode_deflocal(i, target, from);
-      if (vars->local.get(target).capture)
+      if (vars->local.get(target).capture || vars->local.get(target).assigned)
         code.set(pc, code_setbox(target, from));
       break;
     }
     case OP_SETLOCAL: {
       int target, from; getcode_setlocal(i, target, from);
-      if (vars->local.get(target).capture)
+      if (vars->local.get(target).capture || vars->local.get(target).assigned)
         code.set(pc, code_setbox(target, from));
       break;
     }

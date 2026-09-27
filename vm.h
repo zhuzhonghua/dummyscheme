@@ -1382,12 +1382,10 @@ protected:
 struct LocalVar {
   SymPtr sym;
   bool capture;
-
-  void visit(VM* vm) {
-    Check(sym);
-  }
-  LocalVar():sym(NULL), capture(false) {}
-  LocalVar(SymPtr s, bool c):sym(s), capture(c) {}
+  bool assigned;
+  Visit1(sym);
+  LocalVar():sym(NULL), capture(false), assigned(false) {}
+  LocalVar(SymPtr s, bool c):sym(s), capture(c), assigned(false) {}
 };
 
 struct BoxVar {

@@ -419,6 +419,7 @@ void SCompiler::compileset(int target, ValueT* expr, ValueT* link)
     compilerefsym(&local, &bvar, symp);
     if (local >= 0)
     {
+      lambda->vars->local.getptr(local)->assigned = true;
       target += 1;
       line = annotateline(&symvt);
       putcode(code_setlocal(local, target), line);
