@@ -2104,9 +2104,9 @@ static CallFrame* recallforce(VM* vm, CallFrame* frm, ValueT* base)
     frm->top = frm->base + 1 + newcall->lambda->top;
     Assert(vm, frm->top < seg->end(), "alloc stack seg error in ctorfrm, arity: %d too big", newcall->lambda->top);
   }
-  int j = 0;
-  for (; j <= newcall->lambda->argnum; j++)
+  for (int j = 0; j <= newcall->lambda->argnum; j++)
     *(frm->base+j) = base+j;
+  setclosure(frm->base, newcall);
   stk->setvoid(frm->base+newcall->lambda->argnum+1, frm->top-1);
   boxcapturedlocals(vm, frm, newcall->lambda);
   return frm;
