@@ -216,6 +216,32 @@ static ValueT scm_stub_read_char(VM* vm, ValueT* args)
   return ret;
 }
 
+#if defined(SCM_PLATFORM_WINDOWS)
+static bool scm_input_ready(FILE* file)
+{
+  int fd = _fileno(file);
+  if (fd < 0)
+    return false;
+  if (_isatty(fd))
+    return _kbhit() != 0;   // console input: key already buffered?
+  return true;             // regular file / pipe: data or EOF is available
+}
+#elif defined(SCM_PLATFORM_APPLE) || defined(SCM_PLATFORM_LINUX)
+static bool scm_input_ready(FILE* file)
+{
+  int fd = fileno(file);
+  if (fd < 0)
+    return false;
+  struct pollfd pfd;
+  pfd.fd = fd;
+  pfd.events = POLLIN;
+  pfd.revents = 0;
+  if (poll(&pfd, 1, 0) <= 0)
+    return false;
+  return (pfd.revents & POLLIN) != 0;
+}
+#endif
+
 static ValueT scm_stub_char_readyp(VM* vm, ValueT* args)
 {
   const static char* METHOD = "char-ready?";
@@ -226,6 +252,10 @@ static ValueT scm_stub_char_readyp(VM* vm, ValueT* args)
     return Strueref;
   if (iport->eof)
     return Strueref;
+#if defined(SCM_PLATFORM_WINDOWS) || defined(SCM_PLATFORM_APPLE) || defined(SCM_PLATFORM_LINUX)
+  if (iport->file != NULL && scm_input_ready(iport->file))
+    return Strueref;
+#endif
   return Sfalseref;
 }
 

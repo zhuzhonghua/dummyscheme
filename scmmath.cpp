@@ -2056,7 +2056,6 @@ static void scm_uint2str(Lbuffer* numbuf, scm_int num, int radix)
 }
 
 #ifdef HAS_TO_CHARS
-#include <charconv>
 static void scm_real2str(Lbuffer* numbuf, scm_float num)
 {
   char buf[64] = {0};

@@ -12,6 +12,27 @@
 #include <climits>
 #include <algorithm>
 
+#if defined(__cplusplus) && __cplusplus >= 201703L
+#include <charconv>
+#define HAS_TO_CHARS 1
+#endif
+
+#if defined(_WIN32)
+#define SCM_PLATFORM_WINDOWS 1
+#elif defined(__APPLE__)
+#define SCM_PLATFORM_APPLE 1
+#elif defined(__linux__)
+#define SCM_PLATFORM_LINUX 1
+#endif
+
+#if defined(SCM_PLATFORM_WINDOWS)
+#include <io.h>
+#include <conio.h>
+#elif defined(SCM_PLATFORM_APPLE) || defined(SCM_PLATFORM_LINUX)
+#include <unistd.h>
+#include <poll.h>
+#endif
+
 namespace Scheme {
 
 //#define SCHEME_STD_R4RS

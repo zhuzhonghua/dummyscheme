@@ -3052,6 +3052,7 @@ static void constvalinit(VM* vm)
 void VM::init()
 {
   iport = Sr0(this, InputPortObj);
+  iport->file = stdin;  // default input = stdin; interactive REPL can rely on it
   OutputPortFileObj* ofile = NULL;
   oport = ofile = Sr0(this, OutputPortFileObj);
   ofile->file = stderr;
