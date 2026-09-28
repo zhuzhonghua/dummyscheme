@@ -1475,12 +1475,16 @@ public:
 
   ValueT* get(ValueT* key);
   void set(VM* vm, ValueT* key, ValueT* val);
+  /* given previous result kv (#f = start), return next (key . val) or #f */
+  ValueT next(VM* vm, ValueT* kv);
 
 protected:
   uint gethash(ValueT* v); /* instance: lazily backfills string hashes */
   static int arrayindex(ValueT* key); /* array candidate index (>=1), or -1 */
   TableNode* mainposition(ValueT* key);
   TableNode* getfreepos();
+  bool keyeq(ValueT* a, ValueT* b); /* eq? with string content comparison */
+  int nodeindex(ValueT* key); /* hash-part slot of key, or -1 */
   void initnodes(int size);
   void fixfirstfree();
   void insertkey(ValueT* key, ValueT* val);

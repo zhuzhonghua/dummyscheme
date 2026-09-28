@@ -236,3 +236,29 @@
 
 (define (call-with-values producer consumer)
   (apply consumer (%values->list (producer))))
+
+;; hash-table traversal on top of the C primitive hash-table-next
+(define (hash-table-for-each proc ht)
+  (let loop ((kv #f))
+    (let ((next (hash-table-next ht kv)))
+      (if next
+          (begin
+            (proc (car next) (cdr next))
+            (loop next))
+          (if #f #f)))))
+
+(define (hash-table-map proc ht)
+  (let loop ((kv #f) (acc '()))
+    (let ((next (hash-table-next ht kv)))
+      (if next
+          (loop next (cons (proc (car next) (cdr next)) acc))
+          (reverse acc)))))
+
+(define (hash-table->alist ht)
+  (hash-table-map cons ht))
+
+(define (hash-table-keys ht)
+  (hash-table-map (lambda (k v) k) ht))
+
+(define (hash-table-values ht)
+  (hash-table-map (lambda (k v) v) ht))

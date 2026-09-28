@@ -105,13 +105,85 @@ ValueT* HashTableObj::get(ValueT* key)
   {
     if (isundefined(&n->key))
       return NULL;
-    if ((isstr(key) && isstr(&n->key) && strref(key)->equalp(strref(&n->key))) ||
-        SCM::eqp(key, &n->key))
+    if (keyeq(key, &n->key))
       return &n->val;
     if (n->next == NULL)
       return NULL;
     n = n->next;
   }
+}
+
+bool HashTableObj::keyeq(ValueT* a, ValueT* b)
+{
+  if (isstr(a) && isstr(b) && strref(a)->equalp(strref(b)))
+    return true;
+  return SCM::eqp(a, b);
+}
+
+/* hash-part slot of key, or -1 if absent (Lua: invalid key for next) */
+int HashTableObj::nodeindex(ValueT* key)
+{
+  if (!node)
+    return -1;
+  TableNode* n = mainposition(key);
+  for (;;)
+  {
+    if (isundefined(&n->key))
+      return -1;
+    if (keyeq(key, &n->key))
+      return (int)(n - node);
+    if (n->next == NULL)
+      return -1;
+    n = n->next;
+  }
+}
+
+/* Lua luaH_next: kv = #f means start; otherwise kv is the previous (key . val).
+   Returns the next (key . val), or #f when traversal is done. */
+ValueT HashTableObj::next(VM* vm, ValueT* kv)
+{
+  static const char* METHOD = "hash-table-next";
+  int i;
+  if (isfalse(kv))
+    i = -1;
+  else
+  {
+    AssertVT(vm, ispair(kv), kv, "%s: not a pair or #f", METHOD);
+    ValueT key = *Scar(kv);
+    int k = arrayindex(&key);
+    if (k >= 1 && k <= sizearray)
+      i = k - 1; /* locate in the array part */
+    else
+    {
+      i = nodeindex(&key);
+      if (i < 0)
+        Error(vm, "%s: invalid key for traversal", METHOD);
+      i += sizearray; /* hash elements are numbered after array ones */
+    }
+  }
+  /* scan the array part */
+  for (i++; i < sizearray; i++)
+  {
+    if (!isundefined(&array[i]))
+    {
+      ValueT k, out;
+      setnumi(&k, i + 1);
+      setpair(&out, SCM::cons(vm, &k, &array[i]));
+      return out;
+    }
+  }
+  /* scan the hash part */
+  for (i -= sizearray; i < (node ? twoto(lsizenode) : 0); i++)
+  {
+    TableNode* n = &node[i];
+    if (!isundefined(&n->key))
+    {
+      ValueT out;
+      setpair(&out, SCM::cons(vm, &n->key, &n->val));
+      return out;
+    }
+  }
+  return *Sfalseref;
 }
 
 void HashTableObj::fixfirstfree()
@@ -179,7 +251,12 @@ void HashTableObj::set(VM* vm, ValueT* key, ValueT* val)
   }
 
   if (!node || (!isundefined(&mainposition(key)->key) && getfreepos() == NULL))
+  {
     rehash(vm);
+    set(vm, key, val);
+    GC(vm)->checkBarrier(this);
+    return;
+  }
 
   insertkey(key, val);
   GC(vm)->checkBarrier(this);
@@ -438,12 +515,21 @@ static ValueT scm_stub_hash_table_set(VM* vm, ValueT* ht, ValueT* key, ValueT* v
   return Svoidref;
 }
 
+static ValueT scm_stub_hash_table_next(VM* vm, ValueT* ht, ValueT* kv)
+{
+  static const char* METHOD = "hash-table-next";
+  AssertArg(vm, ishashtable(ht), METHOD, ht, " is not a hash-table");
+  HashTableObj* table = hashtableref(ht);
+  return table->next(vm, kv);
+}
+
 void SCMTable::init(VM* vm)
 {
   const RegCProc hashes[] = {
     {"make-hash-table", scm_stub_make_hash_table, true},
     {"hash-table-ref", scm_stub_hash_table_ref},
     {"hash-table-set!", scm_stub_hash_table_set},
+    {"hash-table-next", scm_stub_hash_table_next},
     {NULL, -1}
   };
   regcfunc(vm, hashes);
