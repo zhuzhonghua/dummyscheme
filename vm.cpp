@@ -3660,6 +3660,9 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
   case VT_REF_BOX:
     oport->writestr("#<box>");
     break;
+  case VT_REF_HASH:
+    oport->writestr("#<hash-table>");
+    break;
   case VT_REF_VALUESOBJ: {
     ValuesObj* obj = valuesobjref(val);
     oport->writestr("#<values");
