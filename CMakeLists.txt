@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 project(scheme C CXX)
 
-set(SOURCES main.cpp vm.cpp scmbasic.cpp scmmath.cpp scmstring.cpp scmcompiler.cpp scmport.cpp scmvector.cpp)
+set(SOURCES main.cpp vm.cpp scmbasic.cpp scmmath.cpp scmstring.cpp scmcompiler.cpp scmport.cpp scmvector.cpp scmtable.cpp)
 add_executable(vm ${SOURCES})
 add_executable(vmr4 ${SOURCES})
 target_compile_definitions(vmr4 PRIVATE SCHEME_STD_R4RS=1)
