@@ -5,6 +5,7 @@
 #include "scmport.h"
 #include "scmstring.h"
 #include "scmvector.h"
+#include "scmtable.h"
 #include "scmcode.h"
 #include <cctype>
 #include <cstddef>
@@ -3064,6 +3065,7 @@ void VM::init()
   SCMPort::init(this);
   SCMStr::init(this);
   SCMVector::init(this);
+  SCMTable::init(this);
   regComplex("apply", NATIVE_COMPLEX_APPLY);
   regComplex("call-with-current-continuation", NATIVE_COMPLEX_CALLCC);
   regComplex("call/cc", NATIVE_COMPLEX_CALLCC);

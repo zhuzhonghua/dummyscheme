@@ -314,6 +314,11 @@ struct CallFrame;
 #define setbox(VT, e) settyperef(VT, VT_REF_BOX, e)
 #define boxref(VT) toref(VT, BoxObj*)
 
+/* HashTableObj */
+#define ishashtable(VT) istype(VT, VT_REF_HASH)
+#define sethashtable(VT, e) settyperef(VT, VT_REF_HASH, e)
+#define hashtableref(VT) toref(VT, HashTableObj*)
+
 /* NativeProc */
 #define isnativeproc(VT) istype(VT, VT_REF_NATIVE)
 #define setnativeproc(VT, f) settyperef(VT, VT_REF_NATIVE, f)
@@ -516,6 +521,7 @@ enum ValueTEnum {
   VT_REF_STACKSEG,
   VT_REF_FRAMESEG,
   VT_REF_BOX,
+  VT_REF_HASH,
 };
 
 union BasicNum {
@@ -1440,6 +1446,58 @@ struct BoxObj : public RefObject {
   GetSize(BoxObj)
 
   ValueT val;
+};
+
+/* max size of the array part is 2^MAXBITS (Lua MAXBITS = BITS_INT-2, capped at 24) */
+#if INT_MAX > 16777215 /* int has more than 24 bits */
+#define SCMMAXBITS 24
+#else
+#define SCMMAXBITS 22
+#endif
+#define scmtoobig(x) ((((x) - 1) >> SCMMAXBITS) != 0)
+
+struct TableNode {
+  ValueT key;
+  ValueT val;
+  TableNode* next;
+};
+
+class HashTableObj : public RefObject {
+public:
+  HashTableObj(VM* v);
+
+  static const int MINLSIZE = 4;
+
+  virtual void visit(VM* vm);
+  virtual void finz(VM* vm);
+
+  GetSize(HashTableObj)
+
+  ValueT* get(ValueT* key);
+  void set(VM* vm, ValueT* key, ValueT* val);
+
+protected:
+  uint gethash(ValueT* v); /* instance: lazily backfills string hashes */
+  static int arrayindex(ValueT* key); /* array candidate index (>=1), or -1 */
+  TableNode* mainposition(ValueT* key);
+  TableNode* getfreepos();
+  void initnodes(int size);
+  void fixfirstfree();
+  void insertkey(ValueT* key, ValueT* val);
+  void rehash(VM* vm);
+  void numuse(int* narray, int* nhash);
+  void setarrayvector(VM* vm, int size);
+  void setnodevector(VM* vm, int lsize);
+  void resize(VM* vm, int nasize, int nhsize);
+  static int log2i(int x);
+
+protected:
+  VM* vm;
+  ValueT* array;    /* array part: keys 1..sizearray map to array[0..sizearray-1] */
+  int sizearray;    /* size of the array part */
+  byte lsizenode;
+  TableNode* node;  /* hash part: 2^lsizenode nodes */
+  TableNode* firstfree;
 };
 
 class LambdaVarsObj : public RefObject {
