@@ -2305,7 +2305,7 @@ static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* ba
   ensurearity(vm, base, len, newcall->lambda->argnum, newcall->lambda->argrest, "", callstate->fromapply);
   if (!istail || callstate->callcc || callstate->unwind || callstate->force || callstate->dywind)
   {
-    if ((callstate->force || callstate->callcc) && istail)
+    if ((callstate->force || callstate->callcc || callstate->unwind) && istail)
       goto tail;
     frm = stk->newfrm(frm, base, newcall->lambda->argnum, newcall->lambda->top);
     frm->start = base;
@@ -2327,6 +2327,7 @@ static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* ba
       Assert(vm, ispromise(prom), "internal error, not a promise in force");
       frm->force = promiseref(prom);
     }
+    if (callstate->unwind) frm->unwind = callstate->unwind;
     frm->top = frm->base + 1 + newcall->lambda->top;
     if (frm->seg->frozen > 0 || frm->top >= frm->seg->end())
     {
