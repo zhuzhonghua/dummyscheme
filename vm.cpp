@@ -1803,22 +1803,36 @@ static void checkcallcc(VM* vm, CallFrame** frm, ValueT** procp, int len, CallAp
 static void closeiport(VM* vm, CallFrame* frm)
 {
   ValueT* val = frm->base + 1;
+  if (!isiport(val))
+  {
+    AssertVT(vm, ispair(val), val, "internal error, not a iport in close");
+    val = Scar(val);
   AssertVT(vm, isiport(val), val, "internal error, not a iport in close");
-  InputPortObj* iport = iportref(val);
-  iport->close();
+  }
+  iportref(val)->close();
 }
 
 static void closeoport(VM* vm, CallFrame* frm)
 {
   ValueT* val = frm->base + 1;
+  if (!isoport(val))
+  {
+    AssertVT(vm, ispair(val), val, "internal error, not a oport in close");
+    val = Scar(val);
   AssertVT(vm, isoport(val), val, "internal error, not a oport in close");
-  OutputPortObj* oport = oportref(val);
-  oport->close();
+  }
+  oportref(val)->close();
 }
 
 static void closeoportstr(VM* vm, CallFrame* frm)
 {
   ValueT* val = frm->base + 1;
+  if (!isoport(val))
+  {
+    AssertVT(vm, ispair(val), val, "internal error, not a oportstr in close");
+    val = Scar(val);
+    AssertVT(vm, isoport(val), val, "internal error, not a oportstr in close");
+  }
   OutputPortStrObj* oport = oportstrref(val);
   StrObj* str = vm->strintern(oport->strbuf.buf, oport->strbuf.count);
   ValueT out;
@@ -3053,6 +3067,7 @@ void VM::init()
   regComplex("call/cc", NATIVE_COMPLEX_CALLCC);
   regComplex("call-with-input-file", NATIVE_COMPLEX_CALL_WITH_IN_FILE);
   regComplex("call-with-output-file", NATIVE_COMPLEX_CALL_WITH_OUT_FILE);
+  regComplex("call-with-output-to-string", NATIVE_COMPLEX_CALL_WITH_OUT_STR);
   regComplex("call-with-output-string", NATIVE_COMPLEX_CALL_WITH_OUT_STR);
   regComplex("with-input-from-file", NATIVE_COMPLEX_WITH_IN_FILE);
   regComplex("with-output-to-file", NATIVE_COMPLEX_WITH_OUT_FILE);
