@@ -167,12 +167,19 @@ void StackSegment::finz(VM* vm)
   RefObject::finz(vm);
 }
 
+void DynamicEnv::visit(VM* vm)
+{
+  Check(curiport);
+  Check(curoport);
+}
+
 void CallFrame::visit(VM* vm)
 {
   Check(prev);
   Check(seg);
   for (ValueT* b = base; b < top; b++)
     Check(b);
+  env.visit(vm);
 }
 
 CallFrame* CallFrame::copy(VM* vm)
@@ -187,6 +194,7 @@ CallFrame* CallFrame::copy(VM* vm)
   newfrm->unwind = unwind;
   newfrm->force = force;
   newfrm->dynwind = dynwind;
+  newfrm->env = env;
   return newfrm;
 }
 
@@ -236,6 +244,7 @@ CallFrame* Stack::newfrm(CallFrame* frm, ValueT* base, int argnum, int arity)
   newfrm->seg = seg;
   newfrm->base = newfrm->start = frm != NULL ? base : NULL;
   newfrm->top = newfrm->base + 1 + arity;
+  if (frm) newfrm->env = frm->env;
   if (frm == NULL || seg->frozen > 0 || newfrm->top >= seg->end())
   {
     seg = Sr0(vm, StackSegment);
@@ -1611,7 +1620,7 @@ enum CallAct {
 };
 
 struct CallAppState {
-  CallAppState():dywind(NULL), istail(false),
+  CallAppState():dywind(NULL), istail(false), curiport(NULL), curoport(NULL),
     force(false), callcc(false), unwind(NULL), fromapply(false) {}
   bool callcc;
   UnWindFrame unwind;
@@ -1619,6 +1628,8 @@ struct CallAppState {
   bool force;
   DynamicWindObj* dywind;
   bool istail;
+  InputPortObj* curiport;
+  OutputPortObj* curoport;
 };
 
 static void shrinkarity(VM* vm, ValueT* base, int len, int argnum)
@@ -1816,44 +1827,150 @@ static void closeoportstr(VM* vm, CallFrame* frm)
   oport->close();
 }
 
-static void callwithfile(VM* vm, ValueT* base, int len, CallAppState* callstate, ValueT** procp, ValueT** filep, const char* METHOD)
+struct CallFileInfo {
+  CallFileInfo(): state(NULL), proc(NULL), file(NULL),
+    argnum(0) {}
+  CallAppState* state;
+  ValueT* proc;
+  ValueT* file;
+  int argnum;
+};
+
+static void closecuriport(VM* vm, CallFrame* frm)
 {
+  if (isiport(frm->base + 1))
+  {
+    iportref(frm->base + 1)->close();
+    frm->env.curiport = isiport(frm->base + 2) ? iportref(frm->base + 2) : NULL;
+  }
+  else
+  {
+    Assert(vm, frm->env.curiport != NULL, "internal error, curiport lost");
+    frm->env.curiport->close();
+  }
+}
+
+static void closecuroport(VM* vm, CallFrame* frm)
+{
+  if (isoport(frm->base + 1))
+  {
+    oportref(frm->base + 1)->close();
+    frm->env.curoport = isoport(frm->base + 2) ? oportref(frm->base + 2) : NULL;
+  }
+  else
+  {
+    Assert(vm, frm->env.curoport != NULL, "internal error, curoport lost");
+    frm->env.curoport->close();
+  }
+}
+
+static void callwithfile(VM* vm, ValueT* base, int len, CallFileInfo* info, const char* METHOD)
+{
+  CallAppState* callstate = info->state;
   Stack* stk = Stk(vm);
   ValueT* cw = stkvt(1);
   ValueT* proc = NULL, *file = NULL;
   if (callstate->fromapply)
   {
     AssertVT(vm, ispair(cw), cw, "%s: internal error in apply", METHOD);
-    file = Scar(cw);
+    file = info->file = Scar(cw);
     cw = Scdr(cw);
     AssertVT(vm, ispair(cw), cw, "%s: needs 2 arguments", METHOD);
-    proc = Scar(cw);
+    proc = info->proc = Scar(cw);
     AssertVT(vm, isnull(Scdr(cw)), cw, "%s: two much arguments other than 2", METHOD);
     callstate->fromapply = false;
   }
   else
   {
     Assert(vm, len==2, "%s: needs 2 arguments, not %d", METHOD, len);
-    file = stkvt(1);
-    proc = stkvt(2);
+    file = info->file = stkvt(1);
+    proc = info->proc = stkvt(2);
   }
   AssertVT(vm, isstr(file), file, "%s: not a string", METHOD);
   if (isnativeproc(proc))
   {
     NativeProcObj* ccproc = nativeprocref(proc);
-    Assert(vm, ccproc->argnum == 1 || (ccproc->argnum == 2 && ccproc->argrest),
+    Assert(vm, ccproc->argnum == -1 ||
+           ccproc->argnum == info->argnum ||
+           (ccproc->argnum == info->argnum+1 && ccproc->argrest),
            "%s: closure object parameter wrong", METHOD);
   }
   else if (isclosure(proc))
   {
     ClosurePtr ccc = closureref(proc);
-    Assert(vm, ccc->lambda->argnum == 1 || (ccc->lambda->argnum == 2 && ccc->lambda->argrest),
+    Assert(vm, ccc->lambda->argnum == info->argnum || (ccc->lambda->argnum == info->argnum+1 && ccc->lambda->argrest),
            "%s: closure object parameter wrong", METHOD);
   }
   else
     AssertVT(vm, iscontinuation(proc), proc, "%s: not a closure", METHOD);
-  *procp = proc;
-  *filep = file;
+}
+
+static void withinputfromfile(VM* vm, CallFrame* frm, ValueT* base, int* olen, CallAppState* callstate)
+{
+  const static char* METHOD = "with-input-from-file";
+  Stack* stk = Stk(vm);
+  CallFileInfo info;
+  info.state = callstate;
+  info.argnum = 0;
+  callwithfile(vm, base, *olen, &info, METHOD);
+  ValueT* proc = info.proc;
+  ValueT* file = info.file;
+  StrPtr fn = strref(file);
+  const char* filename = Ssstr(fn);
+  FILE* fhandle = fopen(filename, "r");
+  if (fhandle == NULL)
+  {
+    Print("%s: error read file %s", METHOD, filename);
+    throw "ReadError: failed to read file";
+  }
+  *stkvt(0) = proc;
+  InputPortObj* iport = NULL;
+  setiport(stkvt(1), iport = Sr0(vm, InputPortObj));
+  iport->file = fhandle;
+  iport->fname = fn;
+  callstate->unwind = &closecuriport;
+  callstate->curiport = iport;
+  if (!isclosure(proc))
+  {
+    if (frm->env.curiport)
+      setiport(stkvt(2), frm->env.curiport);
+    frm->env.curiport = iport;
+  }
+  *olen = 0;
+}
+
+static void withoutputtofile(VM* vm, CallFrame* frm, ValueT* base, int* olen, CallAppState* callstate)
+{
+  const static char* METHOD = "with-output-to-file";
+  Stack* stk = Stk(vm);
+  CallFileInfo info;
+  info.state = callstate;
+  info.argnum = 0;
+  callwithfile(vm, base, *olen, &info, METHOD);
+  ValueT* proc = info.proc;
+  ValueT* file = info.file;
+  StrPtr fn = strref(file);
+  const char* filename = Ssstr(fn);
+  FILE* fhandle = fopen(filename, "w");
+  if (fhandle == NULL)
+  {
+    Print("%s: error create file %s", METHOD, filename);
+    throw "Error: failed to create file";
+  }
+  *stkvt(0) = proc;
+  OutputPortFileObj* oport = NULL;
+  setoport(stkvt(1), oport = Sr0(vm, OutputPortFileObj));
+  oport->file = fhandle;
+  oport->fname = fn;
+  callstate->unwind = &closecuroport;
+  callstate->curoport = oport;
+  if (!isclosure(proc))
+  {
+    if (frm->env.curoport)
+      setoport(stkvt(2), frm->env.curoport);
+    frm->env.curoport = oport;
+  }
+  *olen = 0;
 }
 
 static void callwithinputfile(VM* vm, CallFrame* frm, ValueT* base, int* olen, CallAppState* callstate)
@@ -1861,8 +1978,12 @@ static void callwithinputfile(VM* vm, CallFrame* frm, ValueT* base, int* olen, C
   const static char* METHOD = "call-with-input-file";
   Stack* stk = Stk(vm);
   ValueT* cw = stkvt(1);
-  ValueT* proc = NULL, *file = NULL;
-  callwithfile(vm, base, *olen, callstate, &proc, &file, METHOD);
+  CallFileInfo info;
+  info.state = callstate;
+  info.argnum = 1;
+  callwithfile(vm, base, *olen, &info, METHOD);
+  ValueT* proc = info.proc;
+  ValueT* file = info.file;
   StrPtr fn = strref(file);
   const char* filename = Ssstr(fn);
   FILE* fhandle = fopen(filename, "r");
@@ -1885,8 +2006,12 @@ static void callwithoutputfile(VM* vm, CallFrame* frm, ValueT* base, int* olen, 
   const static char* METHOD = "call-with-output-file";
   Stack* stk = Stk(vm);
   ValueT* cw = stkvt(1);
-  ValueT* proc = NULL, *file = NULL;
-  callwithfile(vm, base, *olen, callstate, &proc, &file, METHOD);
+  CallFileInfo info;
+  info.state = callstate;
+  info.argnum = 1;
+  callwithfile(vm, base, *olen, &info, METHOD);
+  ValueT* proc = info.proc;
+  ValueT* file = info.file;
   StrPtr fn = strref(file);
   const char* filename = Ssstr(fn);
   FILE* fhandle = fopen(filename, "w");
@@ -2201,6 +2326,8 @@ static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* ba
     for (; j <= newcall->lambda->argnum; j++)
       *(frm->base+j) = base+j;
   }
+  if (callstate->curiport) frm->env.curiport = callstate->curiport;
+  if (callstate->curoport) frm->env.curoport = callstate->curoport;
   stk->setvoid(frm->base+newcall->lambda->argnum+1, frm->top-1);
   boxcapturedlocals(vm, frm, newcall->lambda);
   return frm;
@@ -2240,6 +2367,14 @@ static CallComplexAct callcomplexproc(VM* vm, CallFrame** frm, ValueT** procp, i
   }
   case NATIVE_COMPLEX_CALL_WITH_OUT_STR: {
     callwithoutputstr(vm, *frm, *procp, len, state);
+    return CALL_COMPLEX_RECALL;
+  }
+  case NATIVE_COMPLEX_WITH_IN_FILE: {
+    withinputfromfile(vm, *frm, *procp, len, state);
+    return CALL_COMPLEX_RECALL;
+  }
+  case NATIVE_COMPLEX_WITH_OUT_FILE: {
+    withoutputtofile(vm, *frm, *procp, len, state);
     return CALL_COMPLEX_RECALL;
   }
   case NATIVE_COMPLEX_FORCE: {
@@ -2919,6 +3054,8 @@ void VM::init()
   regComplex("call-with-input-file", NATIVE_COMPLEX_CALL_WITH_IN_FILE);
   regComplex("call-with-output-file", NATIVE_COMPLEX_CALL_WITH_OUT_FILE);
   regComplex("call-with-output-string", NATIVE_COMPLEX_CALL_WITH_OUT_STR);
+  regComplex("with-input-from-file", NATIVE_COMPLEX_WITH_IN_FILE);
+  regComplex("with-output-to-file", NATIVE_COMPLEX_WITH_OUT_FILE);
   regComplex("force", NATIVE_COMPLEX_FORCE);
   regComplex("dynamic-wind", NATIVE_COMPLEX_DYNAMIC_WIND);
   regComplex("values", NATIVE_COMPLEX_VALUES);

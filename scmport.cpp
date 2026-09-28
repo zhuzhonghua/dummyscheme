@@ -13,6 +13,46 @@ static OutputPortObj* getoportrest(VM* vm, ValueT* args, const char* METHOD)
   return oportref(ovt);
 }
 
+static InputPortObj* getiportrest(VM* vm, ValueT* args, const char* METHOD)
+{
+  if (isnull(args))
+    return NULL;
+  ValueT* ivt = Scar(args);
+  AssertVT(vm, isiport(ivt), ivt, "%s: not a input-port", METHOD);
+  Assert(vm, isnull(Scdr(args)), "%s: too much arguments", METHOD);
+  return iportref(ivt);
+}
+
+static InputPortObj* getcuriport(VM* vm)
+{
+  CallFrame* fm = Stk(vm)->curfrm;
+  if (fm->env.curiport) return fm->env.curiport;
+  return vm->iport;
+}
+
+static OutputPortObj* getcuroport(VM* vm)
+{
+  CallFrame* fm = Stk(vm)->curfrm;
+  if (fm->env.curoport) return fm->env.curoport;
+  return vm->oport;
+}
+
+static ValueT scm_stub_current_iport(VM* vm)
+{
+  const static char* METHOD = "current-input-port";
+  ValueT ret;
+  setiport(&ret, getcuriport(vm));
+  return ret;
+}
+
+static ValueT scm_stub_current_oport(VM* vm)
+{
+  const static char* METHOD = "current-output-port";
+  ValueT ret;
+  setoport(&ret, getcuroport(vm));
+  return ret;
+}
+
 static ValueT scm_stub_write(VM* vm, ValueT* p, ValueT* args)
 {
   const static char* METHOD = "write";
@@ -20,7 +60,7 @@ static ValueT scm_stub_write(VM* vm, ValueT* p, ValueT* args)
   if (oport)
     oport->write(vm, p);
   else
-    vm->printvalue(p);
+    getcuroport(vm)->write(vm, p);
   return Svoidref;
 }
 
@@ -31,7 +71,7 @@ static ValueT scm_stub_newline(VM* vm, ValueT* args)
   if (oport)
     oport->writechar('\n');
   else
-    putc('\n', stderr);
+    getcuroport(vm)->writechar('\n');
   return Svoidref;
 }
 
@@ -39,29 +79,20 @@ static ValueT scm_stub_display(VM* vm, ValueT* p, ValueT* args)
 {
   const static char* METHOD = "display";
   OutputPortObj* oport = getoportrest(vm, args, METHOD);
+  if (!oport)
+    oport = getcuroport(vm);
   if (isstr(p))
   {
     StrPtr strp = strref(p);
-    if (!oport)
-      fwrite(Ssstr(strp), 1, Sslen(strp), stderr);
-    else
       oport->writestr(Ssstr(strp), Sslen(strp));
   }
   else if (ischar(p))
   {
     char c = vtchar(p);
-    if (!oport)
-      putc(c, stderr);
-    else
       oport->writechar(c);
   }
-  else
-  {
-    if (!oport)
-      vm->printvalue(p);
     else
       oport->write(vm, p);
-  }
   return Svoidref;
 }
 
@@ -86,20 +117,6 @@ static ValueT scm_stub_oportp(VM* vm, ValueT* p)
 static ValueT scm_stub_portp(VM* vm, ValueT* p)
 {
   return frombool(isoport(p) || isiport(p));
-}
-
-static ValueT scm_stub_current_iport(VM* vm)
-{
-  ValueT vt;
-  setiport(&vt, vm->iport);
-  return vt;
-}
-
-static ValueT scm_stub_current_oport(VM* vm)
-{
-  ValueT vt;
-  setoport(&vt, vm->oport);
-  return vt;
 }
 
 static ValueT scm_stub_open_input_file(VM* vm, ValueT* fname)
@@ -167,15 +184,16 @@ static ValueT scm_stub_flush_output_port(VM* vm, ValueT* args)
   if (oport)
     oport->flush();
   else
-    vm->oport->flush();
+    getcuroport(vm)->flush();
   return Svoidref;
 }
 
-static ValueT scm_stub_peek_char(VM* vm, ValueT* vt)
+static ValueT scm_stub_peek_char(VM* vm, ValueT* args)
 {
   const static char* METHOD = "peek-char";
-  AssertVT(vm, isiport(vt), vt, "%s: not a port", METHOD);
-  InputPortObj* iport = iportref(vt);
+  InputPortObj* iport = getiportrest(vm, args, METHOD);
+  if (iport == NULL)
+    iport = getcuriport(vm);
   int c = iport->peekchar();
   if (c < 0)
     return Seofref;
@@ -184,11 +202,12 @@ static ValueT scm_stub_peek_char(VM* vm, ValueT* vt)
   return ret;
 }
 
-static ValueT scm_stub_read_char(VM* vm, ValueT* vt)
+static ValueT scm_stub_read_char(VM* vm, ValueT* args)
 {
   const static char* METHOD = "read-char";
-  AssertVT(vm, isiport(vt), vt, "%s: not a port", METHOD);
-  InputPortObj* iport = iportref(vt);
+  InputPortObj* iport = getiportrest(vm, args, METHOD);
+  if (iport == NULL)
+    iport = getcuriport(vm);
   int c = iport->readchar();
   if (c < 0)
     return Seofref;
@@ -197,11 +216,12 @@ static ValueT scm_stub_read_char(VM* vm, ValueT* vt)
   return ret;
 }
 
-static ValueT scm_stub_char_readyp(VM* vm, ValueT* vt)
+static ValueT scm_stub_char_readyp(VM* vm, ValueT* args)
 {
   const static char* METHOD = "char-ready?";
-  AssertVT(vm, isiport(vt), vt, "%s: not a port", METHOD);
-  InputPortObj* iport = iportref(vt);
+  InputPortObj* iport = getiportrest(vm, args, METHOD);
+  if (iport == NULL)
+    iport = getcuriport(vm);
   if (iport->n < iport->size)
     return Strueref;
   if (iport->eof)
@@ -227,11 +247,12 @@ static ValueT scm_stub_eof_objp(VM* vm, ValueT* vt)
   return frombool(iseof(vt));
 }
 
-static ValueT scm_stub_read(VM* vm, ValueT* vt)
+static ValueT scm_stub_read(VM* vm, ValueT* args)
 {
   const static char* METHOD = "read";
-  AssertVT(vm, isiport(vt), vt, "%s: not a port", METHOD);
-  InputPortObj* iport = iportref(vt);
+  InputPortObj* iport = getiportrest(vm, args, METHOD);
+  if (iport == NULL)
+    iport = getcuriport(vm);
   Sgcvar1(vm, ret);
   iport->read(vm, ret);
   return ret;
@@ -247,18 +268,18 @@ void SCMPort::init(VM* vm)
     {"port?", scm_stub_portp},
     {"input-port?", scm_stub_iportp},
     {"output-port?", scm_stub_oportp},
-    {"current-output-port", scm_stub_current_oport},
     {"current-input-port", scm_stub_current_iport},
+    {"current-output-port", scm_stub_current_oport},
     {"open-input-file", scm_stub_open_input_file},
     {"open-output-file", scm_stub_open_output_file},
     {"close-input-port", scm_stub_close_input_port},
     {"close-output-port", scm_stub_close_output_port},
-    {"peek-char", scm_stub_peek_char},
-    {"read-char", scm_stub_read_char},
-    {"char-ready?", scm_stub_char_readyp},
+    {"peek-char", scm_stub_peek_char, true},
+    {"read-char", scm_stub_read_char, true},
+    {"char-ready?", scm_stub_char_readyp, true},
     {"write-char", scm_stub_write_char, true},
     {"eof-object?", scm_stub_eof_objp},
-    {"read", scm_stub_read},
+    {"read", scm_stub_read, true},
     {"flush-output-port", scm_stub_flush_output_port, true},
     {"flush-output", scm_stub_flush_output_port, true},
     {NULL, -1}

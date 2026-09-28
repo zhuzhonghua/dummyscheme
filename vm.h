@@ -908,6 +908,17 @@ public:
 typedef void (*UnWindFrame)(VM*, CallFrame*);
 struct DynamicWindObj;
 struct PromiseObj;
+struct InputPortObj;
+struct OutputPortObj;
+
+struct DynamicEnv {
+  DynamicEnv(): curiport(NULL), curoport(NULL) {}
+  InputPortObj* curiport;
+  OutputPortObj* curoport;
+
+  void visit(VM*);
+};
+
 struct CallFrame : public RefObject {
   CallFrame():unwind(NULL), force(NULL), dynwind(NULL),
     pc(-1),prev(NULL),seg(NULL),start(NULL),base(NULL),top(NULL) {}
@@ -928,6 +939,7 @@ struct CallFrame : public RefObject {
   UnWindFrame unwind;
   PromiseObj* force;
   DynamicWindObj* dynwind;
+  DynamicEnv env;
 };
 
 struct DynamicWindObj;
@@ -1233,6 +1245,8 @@ enum NATIVE_COMPLEX_PROC {
   NATIVE_COMPLEX_CALL_WITH_IN_FILE,
   NATIVE_COMPLEX_CALL_WITH_OUT_FILE,
   NATIVE_COMPLEX_CALL_WITH_OUT_STR,
+  NATIVE_COMPLEX_WITH_IN_FILE,
+  NATIVE_COMPLEX_WITH_OUT_FILE,
   NATIVE_COMPLEX_FORCE,
   NATIVE_COMPLEX_DYNAMIC_WIND,
   NATIVE_COMPLEX_VALUES,
