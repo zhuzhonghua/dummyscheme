@@ -1,4 +1,5 @@
 #include "vm.h"
+#include "scminit.h"
 #include "scmcompiler.h"
 #include "scmmath.h"
 #include "scmbasic.h"
@@ -3079,6 +3080,9 @@ void VM::init()
   regComplex("dynamic-wind", NATIVE_COMPLEX_DYNAMIC_WIND);
   regComplex("values", NATIVE_COMPLEX_VALUES);
   regComplex("%values->list", NATIVE_COMPLEX_VALUES2LIST);
+
+  /* Scheme bootstrap code (was init.scm) */
+  SCMInit::init(this);
 }
 
 void VM::getuniquesym(SymPtr sym, ValueT* out)
