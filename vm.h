@@ -67,8 +67,10 @@ typedef unsigned char uchar;
 // precompiled code ('<esc>scheme')
 #define SCM_SIGNATURE	"\x1bscheme"
 
+typedef uchar scm_char;
 typedef long scm_int;
 typedef unsigned long scm_uint;
+
 #define scm_int_fmt "%ld"
 #define INT_BITS (8*sizeof(scm_int))
 #define INT_BITS_HALF (4*sizeof(scm_int))
