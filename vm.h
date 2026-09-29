@@ -997,6 +997,9 @@ public:
 protected:
   VM* vm;
   CallFrame* curfrm;
+  DynamicWindObj* dywind;
+  StkVar oldfrm;   // keep the saved chain alive while detached
+  StkVar olddw;
 };
 
 class RefObjGroup {
@@ -1348,6 +1351,7 @@ public:
 public:
   void dorepl();
   void loadfile(const char* fname);
+  ValueT evalstr(const char* str);
   bool dolex(Lexer* lex, StrPtr source);
 
 public:

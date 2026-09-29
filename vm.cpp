@@ -260,14 +260,29 @@ CallFrame* Stack::newfrm(CallFrame* frm, ValueT* base, int argnum, int arity)
   return newfrm;
 }
 
-ReserveStack::ReserveStack(VM* v):vm(v)
+ReserveStack::ReserveStack(VM* v)
+  : vm(v), oldfrm(v), olddw(v)
 {
-  curfrm = Stk(vm)->curfrm;
+  Stack* stk = Stk(vm);
+  curfrm = stk->curfrm;
+  dywind = stk->dywind;
+  if (curfrm)
+  {
+    setref(&oldfrm.val, curfrm);
+    stk->curfrm = NULL;
+  }
+  if (dywind)
+  {
+    setref(&olddw.val, dywind);
+    stk->dywind = NULL;
+  }
 }
 
 ReserveStack::~ReserveStack()
 {
-  Stk(vm)->curfrm = curfrm;
+  Stack* stk = Stk(vm);
+  stk->curfrm = curfrm;
+  stk->dywind = dywind;
 }
 
 void CacheGroup::addref(PairPtr ref)
@@ -3326,6 +3341,20 @@ void VM::loadfile(const char* fname)
     flag = dolex(&lex, strref(source));
   } while(flag);
   GC(this)->fullgc();
+}
+
+ValueT VM::evalstr(const char* str)
+{
+  ReaderS reader(str);
+  Lexer lex(this, &reader);
+  Sgcvar1(this, source);
+  setstr(source, strintern(str));
+  bool flag = false;
+  do {
+    flag = dolex(&lex, strref(source));
+  } while(flag);
+  GC(this)->fullgc();
+  return this->ac0;
 }
 
 void VM::dorepl()
