@@ -3357,6 +3357,30 @@ ValueT VM::evalstr(const char* str)
   return this->ac0;
 }
 
+ValueT VM::call(const char* name, ValueT** argv, int argc)
+{
+  ReserveStack _reservestk_(this);
+  Stack* stk = Stk(this);
+  SymPtr sym = strintern(name);
+  Sgcvar1(this, proc);
+  GEnv(this)->getval(sym, proc);
+  Assert(this, !isundefined(proc), "undefined global var %s", name);
+  Assert(this, !iscontinuation(proc), "call: continuation %s not supported", name);
+  CallFrame* frm = stk->newfrm(NULL, NULL, 0, 2 + argc);
+  ValueT* base = frm->base;
+  ClosurePtr closure = newclosure(0);
+  setclosure(stkvt(0), closure);
+  *stkvt(1) = proc;
+  for (int i = 0; i < argc; i++)
+    *stkvt(2+i) = *argv[i];
+  *stkvt(2+argc) = Svoidref;
+  LambdaPtr lambda = closure->lambda = Sr0(this, LambdaObj);
+  int pc = lambda->pushcode(this, code_tailcallapp(1, argc));
+  lambda->saveline(this, pc, -1, -1);
+  execute(frm);
+  return this->ac0;
+}
+
 void VM::dorepl()
 {
   ReaderI reader(this);

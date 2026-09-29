@@ -1352,6 +1352,7 @@ public:
   void dorepl();
   void loadfile(const char* fname);
   ValueT evalstr(const char* str);
+  ValueT call(const char* name, ValueT** argv, int argc);
   bool dolex(Lexer* lex, StrPtr source);
 
 public:
