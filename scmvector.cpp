@@ -112,13 +112,13 @@ static ValueT scm_stub_vector_fill(VM* vm, ValueT* vec, ValueT* obj)
 void SCMVector::init(VM* vm)
 {
   const RegCProc vec[] = {
-    {"vector", scm_stub_vector, true},
-    {"make-vector", scm_stub_make_vector, true},
-    {"vector-set!", scm_stub_vector_set},
-    {"vector-fill!", scm_stub_vector_fill},
-    {"vector-ref", scm_stub_vector_ref},
-    {"vector-length", scm_stub_vector_length},
-    {NULL, -1},
+    RegCProc("vector", scm_stub_vector, true),
+    RegCProc("make-vector", scm_stub_make_vector, true),
+    RegCProc("vector-set!", scm_stub_vector_set),
+    RegCProc("vector-fill!", scm_stub_vector_fill),
+    RegCProc("vector-ref", scm_stub_vector_ref),
+    RegCProc("vector-length", scm_stub_vector_length),
+    RegCProc(NULL, -1),
   };
   regcfunc(vm, vec);
 }

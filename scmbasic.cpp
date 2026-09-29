@@ -365,11 +365,11 @@ static ValueT scm_stub_list2vector(VM* vm, ValueT* lst)
 void SCMBasic::init(VM* vm)
 {
   const RegCProc basics[] = {
-    {"car", scm_stub_car},
-    {"set-car!", scm_stub_set_car},
+    RegCProc("car", scm_stub_car),
+    RegCProc("set-car!", scm_stub_set_car),
 
-    {"cdr", scm_stub_cdr},
-    {"set-cdr!", scm_stub_set_cdr},
+    RegCProc("cdr", scm_stub_cdr),
+    RegCProc("set-cdr!", scm_stub_set_cdr),
 
     STUB_REG1(caar),
     STUB_REG1(cadr),
@@ -402,44 +402,44 @@ void SCMBasic::init(VM* vm)
     STUB_REG1(cdddar),
     STUB_REG1(cddddr),
 
-    {"cons", scm_stub_cons},
-    {"list", scm_stub_list, true},
-    {"append", scm_stub_append, true},
-    {"reverse", scm_stub_reverse},
-    {"length", scm_stub_length},
+    RegCProc("cons", scm_stub_cons),
+    RegCProc("list", scm_stub_list, true),
+    RegCProc("append", scm_stub_append, true),
+    RegCProc("reverse", scm_stub_reverse),
+    RegCProc("length", scm_stub_length),
 
-    {"list-tail", scm_stub_list_tail},
-    {"list-ref", scm_stub_list_ref},
+    RegCProc("list-tail", scm_stub_list_tail),
+    RegCProc("list-ref", scm_stub_list_ref),
 
-    {"memq", scm_stub_memq},
-    {"memv", scm_stub_memv},
-    {"member", scm_stub_memv},
+    RegCProc("memq", scm_stub_memq),
+    RegCProc("memv", scm_stub_memv),
+    RegCProc("member", scm_stub_memv),
 
-    {"equal?", scm_stub_equalp},
-    {"eq?", scm_stub_eqp},
-    {"eqv?", scm_stub_eqvp},
-    {"assv", scm_stub_assv},
-    {"assq", scm_stub_assq},
-    {"assoc", scm_stub_assoc},
+    RegCProc("equal?", scm_stub_equalp),
+    RegCProc("eq?", scm_stub_eqp),
+    RegCProc("eqv?", scm_stub_eqvp),
+    RegCProc("assv", scm_stub_assv),
+    RegCProc("assq", scm_stub_assq),
+    RegCProc("assoc", scm_stub_assoc),
 
-    {"not", scm_stub_notp},
+    RegCProc("not", scm_stub_notp),
 
-    {"procedure?", scm_stub_procedurep},
-    {"boolean?", scm_stub_booleanp},
-    {"null?", scm_stub_nullp},
-    {"pair?", scm_stub_pairp},
-    {"list?", scm_stub_listp},
-    {"string?", scm_stub_stringp},
-    {"vector?", scm_stub_vectorp},
-    {"char?", scm_stub_charp},
-    {"symbol?", scm_stub_symbolp},
+    RegCProc("procedure?", scm_stub_procedurep),
+    RegCProc("boolean?", scm_stub_booleanp),
+    RegCProc("null?", scm_stub_nullp),
+    RegCProc("pair?", scm_stub_pairp),
+    RegCProc("list?", scm_stub_listp),
+    RegCProc("string?", scm_stub_stringp),
+    RegCProc("vector?", scm_stub_vectorp),
+    RegCProc("char?", scm_stub_charp),
+    RegCProc("symbol?", scm_stub_symbolp),
 
-    {"symbol->string", scm_stub_symbol2string},
-    {"string->symbol", scm_stub_string2symbol},
-    {"vector->list", scm_stub_vector2list},
-    {"list->vector", scm_stub_list2vector},
+    RegCProc("symbol->string", scm_stub_symbol2string),
+    RegCProc("string->symbol", scm_stub_string2symbol),
+    RegCProc("vector->list", scm_stub_vector2list),
+    RegCProc("list->vector", scm_stub_list2vector),
 
-    {NULL, -1}
+    RegCProc(NULL, -1)
   };
   regcfunc(vm, basics);
 }

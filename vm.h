@@ -555,10 +555,10 @@ struct ValueT {
   byte t;
 
   ValueT() { reset(); }
-  ValueT(int type):ValueT() { t = type; }
+  ValueT(int type) { reset(); t = type; }
 
-  ValueT(const ValueT& rhs):ValueT() { t = rhs.t; v = rhs.v; }
-  ValueT(ValueT* rhs):ValueT() { copy(rhs); }
+  ValueT(const ValueT& rhs) { reset(); t = rhs.t; v = rhs.v; }
+  ValueT(ValueT* rhs) { reset(); copy(rhs); }
 
   const ValueT& operator = (const ValueT& rhs) {
     t = rhs.t; v = rhs.v;
@@ -1226,14 +1226,11 @@ protected:
 #define Sr3(vm, TYPE, a, b, c) (TYPE*)ObjGroup(vm)->recobj(Snew3(vm, TYPE, a, b, c))
 #define Sr4(vm, TYPE, a, b, c, d) (TYPE*)ObjGroup(vm)->recobj(Snew4(vm, TYPE, a, b, c, d))
 
-#define STUB_REG1(X) {#X, scm_stub_##X}
+#define STUB_REG1(X) RegCProc(#X, scm_stub_##X)
 
 #define regcfunc(vm, FUNCS) do{                             \
  for (const RegCProc *l = FUNCS; l->name != NULL; l++)      \
-   if (l->cf.cp0)                                           \
-     vm->regNative(l->name, l->cf, l->argnum, l->argrest);  \
-   else                                                     \
-     vm->regComplex(l->name, l->complexid);                 \
+   (vm)->regcproc(*l);                                      \
  }while(0)
 
 #define REGCPROC(CTYPE, n, cp)                                      \
@@ -1321,9 +1318,9 @@ public:
   InputPortObj* iport;
   OutputPortObj* oport;
 public:
-  VM(ScmAlloc a);
-  VM():VM(salloc) {}
+  VM(ScmAlloc a = salloc);
 
+  void regcproc(RegCProc regc);
   void regComplex(const char* name, int id);
   void regNative(const char* name, CProc f, int n, bool rest);
 public:
@@ -1740,7 +1737,7 @@ struct ClosureObj : public RefObject {
   BoxObj* outers[1];
 };
 
-typedef enum PromiseState { PROMISE_NONE, PROMISE_LAZY, PROMISE_EAGER };
+enum PromiseState { PROMISE_NONE, PROMISE_LAZY, PROMISE_EAGER };
 struct PromiseCellObj : public RefObject {
   PromiseCellObj(): clo(NULL) { setundefined(&val); state = PROMISE_NONE; }
 

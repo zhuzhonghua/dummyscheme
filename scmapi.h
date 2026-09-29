@@ -19,9 +19,9 @@
 //
 // ── 2. Registration (same as builtin libs, no new macros) ─
 //   static const RegCProc myext[] = {
-//     {"my-add", scm_stub_my_add},        // CProc2 → fixed 2 args
-//     {"my-sum", scm_stub_my_sum, true},  // true   → rest (pair list)
-//     {NULL, -1}
+//     RegCProc("my-add", scm_stub_my_add),        // CProc2 → fixed 2 args
+//     RegCProc("my-sum", scm_stub_my_sum, true),  // true   → rest (pair list)
+//     RegCProc(NULL, -1)
 //   };
 //   regcfunc(vm, myext);      // identical to hashes[] in scmtable.cpp
 //

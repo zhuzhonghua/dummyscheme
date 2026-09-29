@@ -526,11 +526,11 @@ static ValueT scm_stub_hash_table_next(VM* vm, ValueT* ht, ValueT* kv)
 void SCMTable::init(VM* vm)
 {
   const RegCProc hashes[] = {
-    {"make-hash-table", scm_stub_make_hash_table, true},
-    {"hash-table-ref", scm_stub_hash_table_ref},
-    {"hash-table-set!", scm_stub_hash_table_set},
-    {"hash-table-next", scm_stub_hash_table_next},
-    {NULL, -1}
+    RegCProc("make-hash-table", scm_stub_make_hash_table, true),
+    RegCProc("hash-table-ref", scm_stub_hash_table_ref),
+    RegCProc("hash-table-set!", scm_stub_hash_table_set),
+    RegCProc("hash-table-next", scm_stub_hash_table_next),
+    RegCProc(NULL, -1)
   };
   regcfunc(vm, hashes);
 }

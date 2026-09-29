@@ -3019,6 +3019,14 @@ void VM::regComplex(const char* name, int id)
   DebugReg(Print("register global complex native proc %s[hash %d]\n", name, Sshash(sym)));
 }
 
+void VM::regcproc(RegCProc reg)
+{
+  if (reg.cf.cp0)
+    regNative(reg.name, reg.cf, reg.argnum, reg.argrest);
+  else
+    regComplex(reg.name, reg.complexid);
+}
+
 static void constvalinit(VM* vm)
 {
   ArrayObj::empty.setimmutable();
