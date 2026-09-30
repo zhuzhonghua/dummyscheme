@@ -6,7 +6,7 @@ A portable, embeddable Scheme implementation based on a register-oriented byteco
 
 I have many years of work experiences in game programming, especially backend.
 Lua is so pupular in the game industry, and also in many other areas.
-I like SICP very much, and have read the article [The Roots Of Lisp](https://paulgraham.com/rootsoflisp.html) and the book <Hackers and Painters>.
+I like SICP very much, and have read the article [The Roots Of Lisp](https://paulgraham.com/rootsoflisp.html) and the book "Hackers and Painters".
 Lisp is highly praised.
 
 I want to have a scheme implementation that's like lua, a vm register and bytecode-based with line level debug info
