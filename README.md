@@ -2,6 +2,8 @@
 
 A portable, embeddable Scheme implementation based on a register-oriented bytecode vm
 
+[Try Online](https://zhuzhonghua.github.io/dummyscheme/repl.html)
+
 # Thoughts
 
 I have many years of work experiences in game programming, especially backend.
@@ -18,21 +20,20 @@ It could be easily embed to many host programs, only need to copy some .h/.cpp f
 - Bytecode compiler with register-based instruction set
 - tail-call optimization
 - First-class continuations (`call/cc`)
+
 multi-short, unlimited, use the method copy-on-write of the callframes.
+
 delimited continuation will be supported in the near future too
-- Flatten box value(inspired by Lua)
-no chain, box the stack value if captured by inner lambda
+- Flatten box value(inspired by Lua), no chain, box the stack value if captured by inner lambda
 - Stack segment technique for continuation capture and chain walking, inspired by Chez Scheme
 - Two-halves incremental generational GC (partially implemented, not used currently)
-- `syntax-rules` hygienic macros
-custom ellipsis is also supported
-- Number tower
-bignum is supported too
+- `syntax-rules` hygienic macros, custom ellipsis is also supported
+- Number tower, bignum is supported too
 - Line-level debug info with source location tracking
 - Lua-like embeddability and portability: platform-independent, easy to integrate into C/C++ host applications
-(windows, linux, mac, ios, android, any platform where there is a c99/c++98 compiliance compiler)
 - Full tests passed with r4rstest (pass SCHEME_STD_R4RS=1) and r5rs-tests
 - dynamic-wind support
+
 netsted with call/cc, jump to(out) dynamic-wind's thunk/body
 allow to jump out dynamic-wind's before and after, but jumping into is not forbidden
 - values+call-with-values
@@ -42,10 +43,12 @@ allow to jump out dynamic-wind's before and after, but jumping into is not forbi
 - no transcript-on / transcript-off
 - no eval but has vm->evalstr
 - hash-table (inspired by lua)
+```
 (make-hash-table)
 (hash-table-ref table key)
 (hash-table-set! table key val)
 (hash-table-for-each (lambda (key val) xxx) table)
+```
 
 ## How To Use
 
