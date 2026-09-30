@@ -1,5 +1,7 @@
 # dummyscheme
 
+[中文](README_cn.md)
+
 A portable, embeddable Scheme implementation based on a register-oriented bytecode vm
 
 [Try Online](https://zhuzhonghua.github.io/dummyscheme/repl.html)
@@ -21,11 +23,7 @@ It could be easily embed to many host programs, only need to copy some .h/.cpp f
 
 - Bytecode compiler with register-based instruction set
 - tail-call optimization
-- First-class continuations (`call/cc`)
-
-multi-short, unlimited, use the method copy-on-write of the callframes.
-
-delimited continuation will be supported in the near future too
+- First-class continuations (`call/cc`), multi-short, unlimited, use the method copy-on-write of the callframes, delimited continuation will be supported in the near future too
 - Flatten box value(inspired by Lua), no chain, box the stack value if captured by inner lambda
 - Stack segment technique for continuation capture and chain walking, inspired by Chez Scheme
 - Two-halves incremental generational GC (partially implemented, not used currently)
@@ -34,10 +32,7 @@ delimited continuation will be supported in the near future too
 - Line-level debug info with source location tracking
 - Lua-like embeddability and portability: platform-independent, easy to integrate into C/C++ host applications
 - Full tests passed with r4rstest (pass SCHEME_STD_R4RS=1) and r5rs-tests
-- dynamic-wind support
-
-netsted with call/cc, jump to(out) dynamic-wind's thunk/body
-allow to jump out dynamic-wind's before and after, but jumping into is not forbidden
+- dynamic-wind support, netsted with call/cc, jump to(out) dynamic-wind's thunk/body, allow to jump out dynamic-wind's before and after, but jumping into is not forbidden
 - values+call-with-values
 
 ## Extra
