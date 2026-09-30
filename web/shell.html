@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dummyscheme REPL</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: #fbfaf6;
+    color: #1f1d1a;
+    font: 15px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    overflow: hidden;
+  }
+
+  /* one continuous transcript: history, output and the live prompt all flow
+     together in a single scrolling column, like a terminal */
+  #term {
+    height: 100%; overflow-y: auto; padding: 18px 20px 40px;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  #term .line { min-height: 1.65em; }
+  #term .echo  { color: #2c7a5b; }   /* what you typed */
+  #term .res   { color: #1a56b0; }   /* value the VM returned */
+  #term .err   { color: #b03a2e; }   /* VM diagnostics */
+  #term .info  { color: #8a8271; }   /* banner */
+
+  /* the live prompt: a '>' plus an inline-growing editor, no visible box */
+  .live { display: flex; align-items: flex-start; }
+  .live .sigil { color: #1f1d1a; user-select: none; }
+  #in {
+    flex: 1; border: 0; outline: none; background: transparent; color: #2c7a5b;
+    font: inherit; padding: 0; resize: none; overflow: hidden;
+    height: 1.65em;
+  }
+
+  /* out of the way, like a real REPL with no chrome */
+  #bar {
+    position: fixed; top: 8px; right: 14px; display: flex; align-items: center; gap: 10px;
+    font-size: 12px; color: #b3ab98; opacity: .45; transition: opacity .15s;
+  }
+  #bar:hover { opacity: 1; }
+  #bar button {
+    font: inherit; color: #6d6553; background: transparent;
+    border: 1px solid #ded7c6; border-radius: 4px; padding: 1px 9px; cursor: pointer;
+  }
+  #bar button:hover { background: #f1eee4; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <span>dummyscheme &middot; wasm</span>
+  <button id="clear">clear</button>
+</div>
+<div id="term"><div class="line info">loading&hellip;</div></div>
+
+<script>
+// Must exist before the Emscripten glue below runs: it does
+// `var Module = typeof Module != 'undefined' ? Module : {}`.
+var Module = window.Module = window.Module || {};
+
+(function () {
+  var term = document.getElementById('term');
+  var history = [];
+  var histIdx = -1;
+  var pending = '';   // source of a form whose parens are still unbalanced
+  var input = null;
+  var live = null;    // the prompt node; always the last child of #term
+
+  // cwrap() is used instead of ccall(): ccall's argument marshalling is broken
+  // in some Emscripten builds, and its 'string' type is not always safe either.
+  // Strings cross the boundary as UTF-8 in a malloc'd buffer.
+  function bind() {
+    return {
+      init:    Module.cwrap('scm_wasm_init',    null,   []),
+      eval:    Module.cwrap('scm_wasm_eval',    'number', ['number']),
+      failed:  Module.cwrap('scm_wasm_failed',  'number', []),
+      free:    Module.cwrap('scm_wasm_free',    null,   ['number']),
+      version: Module.cwrap('scm_wasm_version', 'number', [])
+    };
+  }
+
+  function toNative(str) {
+    var size = Module.lengthBytesUTF8(str) + 1;
+    var buf = Module._malloc(size);
+    Module.stringToUTF8(str, buf, size);
+    return buf;
+  }
+
+  function fromNative(ptr) {
+    return Module.UTF8ToString(ptr);
+  }
+
+  // Wait for more input until parens/brackets balance, skipping comments,
+  // strings and escapes, so multi-line forms work with a plain Enter.
+  function balanced(src) {
+    var depth = 0, inStr = false, inCmt = false, i, c;
+    for (i = 0; i < src.length; i++) {
+      c = src.charAt(i);
+      if (inCmt) { if (c === '\n') inCmt = false; continue; }
+      if (inStr) {
+        if (c === '\\') { i++; continue; }
+        if (c === '"') inStr = false;
+        continue;
+      }
+      if (c === ';') { inCmt = true; continue; }
+      if (c === '"') { inStr = true; continue; }
+      if (c === '(' || c === '[') depth++;
+      else if (c === ')' || c === ']') depth--;
+    }
+    return depth <= 0 && !inStr;
+  }
+
+  function scroll() {
+    term.scrollTop = term.scrollHeight;
+  }
+
+  // History and output go *above* the live prompt, so the prompt always stays
+  // the last thing in the transcript — the way a shell behaves.
+  function addLine(cls, text) {
+    var div = document.createElement('div');
+    div.className = 'line' + (cls ? ' ' + cls : '');
+    div.textContent = text;
+    term.insertBefore(div, live);
+    scroll();
+  }
+
+  function say(api, src) {
+    var buf = toNative(src);
+    var ptr = api.eval(buf);
+    var failed = api.failed();
+    var text = fromNative(ptr);
+    api.free(ptr);
+    Module._free(buf);
+    if (!text.length) return;
+    // the VM's error macros start with a leading blank line; drop it
+    text = failed ? text.replace(/^\n+/, '') : text;
+    text.replace(/\n+$/, '').split('\n').forEach(function (line) {
+      addLine(failed ? 'err' : 'res', line);
+    });
+  }
+
+  // The live prompt is a real node that stays anchored as the last child of the
+  // transcript; new output is inserted before it, so the prompt rides the
+  // bottom edge down as history grows, just like a shell.
+  function newPrompt() {
+    if (live) term.removeChild(live);
+    var wrap = document.createElement('div');
+    wrap.className = 'live';
+    var sigil = document.createElement('span');
+    sigil.className = 'sigil';
+    sigil.textContent = '> ';
+    var ta = document.createElement('textarea');
+    ta.id = 'in';
+    ta.setAttribute('spellcheck', 'false');
+    ta.setAttribute('autocomplete', 'off');
+    ta.setAttribute('autocapitalize', 'off');
+    ta.rows = 1;
+    wrap.appendChild(sigil);
+    wrap.appendChild(ta);
+    term.appendChild(wrap);
+    live = wrap;
+    input = ta;
+    ta.addEventListener('input', grow);
+    ta.addEventListener('keydown', onKey);
+    ta.focus();
+    scroll();
+  }
+
+  // textarea with a transparent box: size it to its content so it reads as a
+  // plain inline prompt instead of a form control
+  function grow() {
+    input.style.height = 'auto';
+    input.style.height = (input.scrollHeight + 2) + 'px';
+    scroll();
+  }
+
+  function onKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      submit();
+    } else if (e.key === 'ArrowUp' && history.length && input.selectionStart === 0) {
+      e.preventDefault();
+      histIdx = histIdx < 0 ? history.length - 1 : Math.max(0, histIdx - 1);
+      input.value = history[histIdx];
+      grow();
+    } else if (e.key === 'ArrowDown' && histIdx >= 0) {
+      e.preventDefault();
+      histIdx++;
+      input.value = histIdx >= history.length ? '' : history[histIdx];
+      if (histIdx >= history.length) histIdx = -1;
+      grow();
+    }
+  }
+
+  function submit() {
+    var typed = input.value;               // just this line, not the whole form
+    var src = pending ? pending + '\n' + typed : typed;
+    if (!src.replace(/\s/g, '')) { input.value = ''; pending = ''; return; }
+
+    history.push(src);
+    histIdx = -1;
+
+    // freeze what was typed into the transcript, then start a fresh prompt
+    addLine('echo', '> ' + typed);
+    input.value = '';
+
+    if (balanced(src)) {
+      pending = '';
+      try {
+        say(window.scm, src);
+      } catch (e) {
+        addLine('err', 'host error: ' + e);
+      }
+    } else {
+      pending = src;      // form still open, keep reading
+    }
+    grow();
+  }
+
+  // Clicking the transcript should return you to the prompt unless you are
+  // selecting output to copy.
+  term.addEventListener('mouseup', function () {
+    if (input && !window.getSelection().toString()) input.focus();
+  });
+
+  document.getElementById('clear').addEventListener('click', function () {
+    term.textContent = '';
+    live = null;
+    input = null;
+    newPrompt();
+  });
+
+  Module.onRuntimeInitialized = function () {
+    var api = bind();
+    window.scm = api;
+    api.init();
+    term.textContent = '';
+    live = null;
+    input = null;
+    addLine('info', fromNative(api.version()) + ' ready');
+    addLine('info', 'Enter evaluates, shift+Enter inserts a newline. try (+ 1 2)');
+    newPrompt();
+  };
+})();
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

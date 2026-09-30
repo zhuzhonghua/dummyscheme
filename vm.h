@@ -19,6 +19,8 @@
 
 #if defined(_WIN32)
 #define SCM_PLATFORM_WINDOWS 1
+#elif defined(__EMSCRIPTEN__)
+#define SCM_PLATFORM_WASM 1
 #elif defined(__APPLE__)
 #define SCM_PLATFORM_APPLE 1
 #elif defined(__linux__)
@@ -68,18 +70,27 @@ typedef unsigned char uchar;
 #define SCM_SIGNATURE	"\x1bscheme"
 
 typedef uchar scm_char;
+
+#if defined(SCM_PLATFORM_WASM) || defined(__EMSCRIPTEN__)
+// wasm32 has 32-bit `long`; the bignum code assumes 64-bit fixnum limbs
+typedef long long scm_int;
+typedef unsigned long long scm_uint;
+#define scm_int_fmt "%lld"
+#define SCM_INT_MAX LLONG_MAX
+#define SCM_INT_MIN LLONG_MIN
+#else
 typedef long scm_int;
 typedef unsigned long scm_uint;
-
 #define scm_int_fmt "%ld"
+#define SCM_INT_MAX LONG_MAX
+#define SCM_INT_MIN LONG_MIN
+#endif
 #define INT_BITS (8*sizeof(scm_int))
 #define INT_BITS_HALF (4*sizeof(scm_int))
 #define UINT_MASK_LOW 0xFFFFFFFFULL
 #define UINT_MASK_HIGH 0xFFFFFFFF00000000ULL
 #define UINT_BASE 1000000000ULL // 10^9 (must be < 2^32 for div128by64)
 #define UINT_BASE_LEN 9
-#define SCM_INT_MAX LONG_MAX
-#define SCM_INT_MIN LONG_MIN
 
 typedef double scm_float;
 
@@ -1662,7 +1673,7 @@ struct OutputPortObj : public RefObject {
     close();
     RefObject::finz(vm);
   }
-  virtual int flush() {}
+  virtual int flush() { return 0; }
 };
 
 struct OutputPortStrObj : public OutputPortObj {
@@ -1675,8 +1686,8 @@ struct OutputPortStrObj : public OutputPortObj {
     }
   }
   virtual int write(VM* vm, ValueT* vt);
-  virtual int writestr(const char* str, int len) { strbuf.put(str, len); }
-  virtual int writechar(char c) { strbuf.put(c); }
+  virtual int writestr(const char* str, int len) { strbuf.put(str, len); return len; }
+  virtual int writechar(char c) { strbuf.put(c); return c; }
 
   GetSize(OutputPortStrObj)
 
@@ -1706,7 +1717,7 @@ struct OutputPortFileObj : public OutputPortObj {
     fflush(file);
     return c;
   }
-  virtual int flush() { if(file) fflush(file); }
+  virtual int flush() { if(file) fflush(file); return 0; }
   Visit1(fname)
   GetSize(OutputPortFileObj)
 
