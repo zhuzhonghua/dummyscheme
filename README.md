@@ -4,6 +4,8 @@ A portable, embeddable Scheme implementation based on a register-oriented byteco
 
 [Try Online](https://zhuzhonghua.github.io/dummyscheme/repl.html)
 
+To test scheme code, please refer to r4rstest.scm, r5rs-tests.scm, aftertest.scm in the project
+
 # Thoughts
 
 I have many years of work experiences in game programming, especially backend.
@@ -51,8 +53,6 @@ allow to jump out dynamic-wind's before and after, but jumping into is not forbi
 ```
 
 ## How To Use
-
--1. to test scheme code, please refer to r4rstest.scm, r5rs-tests.scm, aftertest.scm in the project
 
 0. copy *.cpp/h to your project except main.cpp
 1. include header file
