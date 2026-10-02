@@ -6,8 +6,8 @@ int main(int argc, char **argv)
 {
   VM vm;
   TRY {
-  for (int i = 1; i < argc; i++)
-    vm.loadfile(argv[i]);
+    for (int i = 1; i < argc; i++)
+      vm.loadfile(argv[i]);
   }
   CATCH(err) {
     Print("\ncaught: %s\n", err);

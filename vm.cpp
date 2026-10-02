@@ -1638,7 +1638,7 @@ enum CallAct {
 
 struct CallAppState {
   CallAppState():dywind(NULL), istail(false), curiport(NULL), curoport(NULL),
-    force(false), callcc(false), unwind(NULL), fromapply(false) {}
+                 force(false), callcc(false), unwind(NULL), fromapply(false) {}
   bool callcc;
   UnWindFrame unwind;
   bool fromapply;
@@ -1824,7 +1824,7 @@ static void closeiport(VM* vm, CallFrame* frm)
   {
     AssertVT(vm, ispair(val), val, "internal error, not a iport in close");
     val = Scar(val);
-  AssertVT(vm, isiport(val), val, "internal error, not a iport in close");
+    AssertVT(vm, isiport(val), val, "internal error, not a iport in close");
   }
   iportref(val)->close();
 }
@@ -1836,7 +1836,7 @@ static void closeoport(VM* vm, CallFrame* frm)
   {
     AssertVT(vm, ispair(val), val, "internal error, not a oport in close");
     val = Scar(val);
-  AssertVT(vm, isoport(val), val, "internal error, not a oport in close");
+    AssertVT(vm, isoport(val), val, "internal error, not a oport in close");
   }
   oportref(val)->close();
 }

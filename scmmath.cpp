@@ -1774,16 +1774,16 @@ static bool scm_makenumtovt(VM* vm, ReadNumState* state, ValueT* out)
   {
     if (state->forceexact && state->n.type == NREAL && !scm_exactfrommantissa(vm, state))
       return false;
-  switch(state->n.type) {
-  case NINT:
-    setnumi(out, state->n.num.inum); break;
-  case NREAL:
-    setnumreal(out, state->n.num.real); break;
-  case NRATIO:
-    setnumratio(out, Sr2(vm, NumRatioObj, state->n.num.ratio.nu, state->n.num.ratio.de));
-    break;
-  default: return false;
-  }
+    switch(state->n.type) {
+    case NINT:
+      setnumi(out, state->n.num.inum); break;
+    case NREAL:
+      setnumreal(out, state->n.num.real); break;
+    case NRATIO:
+      setnumratio(out, Sr2(vm, NumRatioObj, state->n.num.ratio.nu, state->n.num.ratio.de));
+      break;
+    default: return false;
+    }
   }
   if (!state->exactp && SCMMath::exactp(out))
   {

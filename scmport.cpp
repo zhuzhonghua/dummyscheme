@@ -84,15 +84,15 @@ static ValueT scm_stub_display(VM* vm, ValueT* p, ValueT* args)
   if (isstr(p))
   {
     StrPtr strp = strref(p);
-      oport->writestr(Ssstr(strp), Sslen(strp));
+    oport->writestr(Ssstr(strp), Sslen(strp));
   }
   else if (ischar(p))
   {
     char c = vtchar(p);
-      oport->writechar(c);
+    oport->writechar(c);
   }
-    else
-      oport->write(vm, p);
+  else
+    oport->write(vm, p);
   return Svoidref;
 }
 
