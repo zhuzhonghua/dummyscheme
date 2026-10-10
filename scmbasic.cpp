@@ -362,6 +362,62 @@ static ValueT scm_stub_list2vector(VM* vm, ValueT* lst)
   return out;
 }
 
+static void cocreate(VM* vm, Stack* costk, ValueT* body)
+{
+  Sgcvar2(vm, c0vt, segvt);
+  CallFrame* C0 = Sr0(vm, CallFrame);
+  setref(c0vt, C0);
+  StackSegment* seg = Sr0(vm, StackSegment);
+  setref(segvt, seg);
+  C0->seg = seg;
+  C0->base = seg->first();
+  ClosurePtr closure = closureref(body);
+  LambdaPtr lambda = closure->lambda;
+  *C0->base = *body;
+  C0->top = C0->base + 1 + lambda->top;
+  Assert(vm, C0->top < C0->seg->end(),
+         "coroutine-create: alloc stack seg error, arity: %d too big", lambda->top);
+  C0->env = Stk(vm)->curfrm->env;
+  C0->setpc(-1);
+  costk->setvoid(C0->base + lambda->argnum + 1, C0->top - 1);
+  costk->curfrm = C0;
+  costk->c0 = C0;
+}
+
+static ValueT scm_stub_coroutine_create(VM* vm, ValueT* body)
+{
+  AssertArg(vm, isclosure(body), "coroutine-create", body, "not a closure");
+  Sgcvar2(vm, out, costkvt);
+  Stack* costk = Sr0(vm, Stack);
+  setref(costkvt, costk);
+  costk->vm = vm;
+  costk->dywind = NULL;
+  costk->sv = NULL;
+  costk->state = CO_SUSPENDED;
+  cocreate(vm, costk, body);
+  setstack(out, costk);
+  return out;
+}
+
+static ValueT scm_stub_coroutine_status(VM* vm, ValueT* co)
+{
+  AssertArg(vm, isstack(co), "coroutine-status", co, "not a coroutine");
+  const char* name = SCM::costatename(vm, stackref(co));
+  ValueT out;
+  setsym(&out, vm->getintern()->internsym(name));
+  return out;
+}
+
+static ValueT scm_stub_coroutine_running(VM* vm)
+{
+  Stack* cur = Stk(vm);
+  if (cur == vm->mainstk())
+    return Sfalseref;
+  ValueT out;
+  setstack(&out, cur);
+  return out;
+}
+
 void SCMBasic::init(VM* vm)
 {
   const RegCProc basics[] = {
@@ -438,6 +494,10 @@ void SCMBasic::init(VM* vm)
     RegCProc("string->symbol", scm_stub_string2symbol),
     RegCProc("vector->list", scm_stub_vector2list),
     RegCProc("list->vector", scm_stub_list2vector),
+
+    RegCProc("coroutine-create", scm_stub_coroutine_create),
+    RegCProc("coroutine-status", scm_stub_coroutine_status),
+    RegCProc("coroutine-running", scm_stub_coroutine_running),
 
     RegCProc(NULL, -1)
   };

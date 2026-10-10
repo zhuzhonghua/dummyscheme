@@ -205,6 +205,11 @@ void Stack::stepmark()
   fullmark();
 }
 
+void Stack::visit(VM* vm)
+{
+  fullmark();
+}
+
 void Stack::fullmark()
 {
   StkVar *ptr = sv;
@@ -220,6 +225,10 @@ void Stack::fullmark()
 Stack::Stack(VM* v):vm(v),sv(NULL),dywind(NULL)
 {
   curfrm = NULL;
+  state = CO_OK;
+  callerstk = NULL;
+  retreg = NULL;
+  tail = false;
 }
 
 void Stack::setvoid(ValueT* s, ValueT* e)
@@ -263,7 +272,8 @@ CallFrame* Stack::newfrm(CallFrame* frm, ValueT* base, int argnum, int arity)
 ReserveStack::ReserveStack(VM* v)
   : vm(v), oldfrm(v), olddw(v)
 {
-  Stack* stk = Stk(vm);
+  curstk = v->getstk();
+  Stack* stk = curstk;
   curfrm = stk->curfrm;
   dywind = stk->dywind;
   if (curfrm)
@@ -280,9 +290,10 @@ ReserveStack::ReserveStack(VM* v)
 
 ReserveStack::~ReserveStack()
 {
-  Stack* stk = Stk(vm);
+  Stack* stk = curstk;
   stk->curfrm = curfrm;
   stk->dywind = dywind;
+  vm->setcurstk(curstk);
 }
 
 void CacheGroup::addref(PairPtr ref)
@@ -373,6 +384,7 @@ void SGC::singlestep()
   switch(state) {
   case GCSMarkStk:
     Stk(vm)->stepmark();
+    vm->mainstk()->stepmark();
     state = state + 1;
     break;
   case GCSMarkReg:
@@ -794,6 +806,19 @@ void SCM::assert(bool flag, const char* info, const char* fmt, ...)
     va_end(args);
     throw info;
   }
+}
+
+const char* SCM::costatename(VM* vm, Stack* stk)
+{
+  if (stk->state == CO_SUSPENDED)
+    return "suspended";
+  if (stk->state == CO_DEAD)
+    return "dead";
+  if (stk == vm->getstk())
+    return "running";
+  if (stk->curfrm != NULL)
+    return "normal";
+  return "suspended";
 }
 
 bool SCM::strcaseeql(const char* str1, int len1, const char* str2)
@@ -2369,7 +2394,121 @@ enum CallComplexAct {
   CALL_COMPLEX_NONE,
   CALL_COMPLEX_RECALL,
   CALL_COMPLEX_AFTER,
+  CALL_COMPLEX_ENTER,
+  CALL_COMPLEX_RESUME_CC,
+  CALL_COMPLEX_TAIL_RETURN,
 };
+
+static void runthunk(VM* vm, ValueT* proc);
+
+
+static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, Stack* costk, ValueT* arg, bool hasarg)
+{
+  Stack* callerstk = Stk(vm);
+  costk->state = CO_OK;
+  costk->callerstk = callerstk;
+  costk->resslot = base;
+  if (costk->curfrm->getpc() < 0)
+  {
+    CallFrame* C0 = costk->curfrm;
+    ClosurePtr body = closureref(C0->base);
+    LambdaPtr lambda = body->lambda;
+    if (hasarg)
+      *(C0->base + 1) = *arg;
+    ensurearity(vm, C0->base, hasarg ? 1 : 0, lambda->argnum, lambda->argrest,
+                "coroutine", false);
+    boxcapturedlocals(vm, C0, lambda);
+    vm->setcurstk(costk);
+    *frm = C0;
+    return CALL_COMPLEX_ENTER;
+  }
+  else
+  {
+    CallFrame* Y = costk->curfrm;
+    vm->ac0 = hasarg ? *arg : Svoidref;
+    *costk->retreg = vm->ac0;
+    vm->setcurstk(costk);
+    *frm = Y;
+    if (costk->tail)
+    {
+      ClosurePtr yclo = closureref(Y->base);
+      LambdaPtr ylambda = yclo->lambda;
+      ValueT* slot = Y->base + (1 + (ylambda->vars ? ylambda->vars->local.n : 0));
+      *slot = vm->ac0;
+      return CALL_COMPLEX_TAIL_RETURN;
+    }
+    return CALL_COMPLEX_RESUME_CC;
+  }
+}
+
+static CallComplexAct coyield(VM* vm, CallFrame** frm, ValueT* base, bool istail)
+{
+  Stack* costk = Stk(vm);
+  Assert(vm, costk->state == CO_OK, "coroutine-yield: internal error, coroutine not running");
+  ValueT value = *singlevalue(vm, base + 1, "coroutine-yield");
+  Stack* callerstk = costk->callerstk;
+  vm->ac0 = *costk->resslot = value;
+  costk->retreg = base;
+  costk->tail = istail;
+  costk->state = CO_SUSPENDED;
+  vm->setcurstk(callerstk);
+  *frm = callerstk->curfrm;
+  return CALL_COMPLEX_RESUME_CC;
+}
+
+static CallComplexAct cocallresume(VM* vm, CallFrame** frm, ValueT** procp, int* len, CallAppState* state)
+{
+  const static char* METHOD = "coroutine-resume";
+  ValueT* base = *procp;
+  ValueT* coarg = base + 1;
+  Stack* costk = NULL;
+  ValueT arg;
+  bool hasarg = false;
+  if (state->fromapply)
+  {
+    AssertVT(vm, ispair(coarg), coarg, "%s: internal error in apply", METHOD);
+    ValueT* rest = Scdr(coarg);
+    *coarg = Scar(coarg);
+    AssertVT(vm, isstack(coarg), coarg, "%s: not a coroutine", METHOD);
+    costk = stackref(coarg);
+    if (ispair(rest))
+    {
+      arg = Scar(rest);
+      hasarg = true;
+    }
+    state->fromapply = false;
+  }
+  else
+  {
+    Assert(vm, *len == 1 || *len == 2, "%s: needs 1 or 2 arguments, not %d", METHOD, *len);
+    AssertVT(vm, isstack(coarg), coarg, "%s: not a coroutine", METHOD);
+    costk = stackref(coarg);
+    if (*len == 2)
+    {
+      arg = *singlevalue(vm, base + 2, METHOD);
+      hasarg = true;
+    }
+  }
+  Assert(vm, costk->state == CO_SUSPENDED,
+         "%s: cannot resume a %s coroutine", METHOD, SCM::costatename(vm, costk));
+  return coresume(vm, frm, base, costk, &arg, hasarg);
+}
+
+static CallComplexAct cocallyield(VM* vm, CallFrame** frm, ValueT** procp, int* len, CallAppState* state)
+{
+  const static char* METHOD = "coroutine-yield";
+  Assert(vm, Stk(vm) != vm->mainstk(), "%s: yield outside a coroutine", METHOD);
+  if (state->fromapply)
+  {
+    ValueT* lst = *procp + 1;
+    AssertVT(vm, ispair(lst), lst, "%s: internal error in apply", METHOD);
+    *(*procp + 1) = Scar(lst);
+    state->fromapply = false;
+  }
+  else
+    Assert(vm, *len == 1, "%s: needs 1 argument, not %d", METHOD, *len);
+  return coyield(vm, frm, *procp, state->istail);
+}
 
 static CallComplexAct callcomplexproc(VM* vm, CallFrame** frm, ValueT** procp, int* len, CallAppState* state)
 {
@@ -2441,6 +2580,10 @@ static CallComplexAct callcomplexproc(VM* vm, CallFrame** frm, ValueT** procp, i
     **procp = out;
     return CALL_COMPLEX_AFTER;
   }
+  case NATIVE_COMPLEX_COROUTINE_RESUME:
+    return cocallresume(vm, frm, procp, len, state);
+  case NATIVE_COMPLEX_COROUTINE_YIELD:
+    return cocallyield(vm, frm, procp, len, state);
   default:
     Error(vm, "not supported complex native proc %d yet\n", nproc->complexid);
   }
@@ -2476,8 +2619,6 @@ static CallNativeAct callnativeproc(VM* vm, CallFrame* frm, ValueT* proc, int le
     }
   return CALL_NATIVE_DONE;
 }
-
-static void runthunk(VM* vm, ValueT* proc);
 
 static bool indywindchain(DynamicWindObj* head, DynamicWindObj* dy)
 {
@@ -2542,6 +2683,12 @@ static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len, bool ist
         goto recallapp;
       case CALL_COMPLEX_AFTER:
         goto afternative;
+      case CALL_COMPLEX_ENTER:
+        return CALLACT_ENTER;
+      case CALL_COMPLEX_RESUME_CC:
+        return CALLACT_RESUME_CC;
+      case CALL_COMPLEX_TAIL_RETURN:
+        return CALLACT_CC_TAILRET;
       default:
         Error(vm, "internal error, after callcomplex %d", act);
       }
@@ -2636,6 +2783,7 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
   }
   DynamicWindObj* dywind = (*frm)->dynwind;
   ValueT* slot = (*frm)->start;
+  CallFrame* dead = *frm;
   (*frm)->dynwind = NULL;
   *frm = stk->rtnfrm(*frm);
   if (dywind != NULL)
@@ -2661,7 +2809,14 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
   }
   if (*frm != NULL)
     return RTN_RESUME;
-  else
+  if (stk->callerstk != NULL && dead == stk->c0)
+  {
+    stk->state = CO_DEAD;
+    *stk->resslot = vm->ac0;
+    vm->setcurstk(stk->callerstk);
+    *frm = stk->callerstk->curfrm;
+    return RTN_RESUME;
+  }
     return RTN_DONE;
 }
 
@@ -2703,22 +2858,23 @@ static void unwinddynamichain(VM* vm)
       Print("\ndynamic-wind: after thunk raised: %s\n", e);
     }
   }
-  Stk(vm)->curfrm = NULL;
 }
 
 static void teardowndeadframes(VM* vm)
 {
   Stack* stk = Stk(vm);
-  CallFrame* f = stk->curfrm;
-  while (f != NULL)
+  CallFrame** f = &stk->curfrm;
+  CallFrame* fr = *f;
+  while (fr != NULL)
   {
-    if (f->unwind)
+    *f = fr->prev;
+    if (fr->unwind)
     {
-      UnWindFrame u = f->unwind;
-      f->unwind = NULL;
-      u(vm, f);
+      UnWindFrame u = fr->unwind;
+      fr->unwind = NULL;
+      u(vm, fr);
     }
-    f = f->prev;
+    fr = *f;
   }
 }
 
@@ -2729,6 +2885,19 @@ void VM::execute(CallFrame* frm)
   }
   CATCH(err) {
     (void)err;
+    Stack* stk = Stk(this);
+    while (stk != NULL && stk != mainstk())
+    {
+      if (stk->state != CO_DEAD)
+      {
+        stk->state = CO_DEAD;
+        teardowndeadframes(this);
+        unwinddynamichain(this);
+      }
+      stk = Stk(this)->callerstk;
+      if (stk != NULL)
+        setcurstk(stk);
+    }
     teardowndeadframes(this);
     unwinddynamichain(this);
     throw;
@@ -3103,6 +3272,8 @@ void VM::init()
   regComplex("dynamic-wind", NATIVE_COMPLEX_DYNAMIC_WIND);
   regComplex("values", NATIVE_COMPLEX_VALUES);
   regComplex("%values->list", NATIVE_COMPLEX_VALUES2LIST);
+  regComplex("coroutine-resume", NATIVE_COMPLEX_COROUTINE_RESUME);
+  regComplex("coroutine-yield", NATIVE_COMPLEX_COROUTINE_YIELD);
 
   /* Scheme bootstrap code (was init.scm) */
   SCMInit::init(this);
@@ -3120,7 +3291,7 @@ void VM::getuniquesym(SymPtr sym, ValueT* out)
 }
 
 VM::VM(ScmAlloc a):
-  frealloc(a), gc(this), stk(this), objGroup(this),
+  frealloc(a), gc(this), stk(this), curstk(&stk), objGroup(this),
   intern(this), cacheGroup(this),
   genv(this),uniquen(0)
 {
@@ -3602,6 +3773,9 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
     oport->writestr("#<procedure:cont>");
     break;
   }
+  case VT_REF_STACK:
+    oport->writestr("#<coroutine>");
+    break;
   case VT_REF_CLOSURE:{
     //ClosurePtr cptr = closureref(val);
     oport->writestr("#<procedure>");

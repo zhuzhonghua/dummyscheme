@@ -184,6 +184,7 @@ typedef double scm_float;
  } while(0)
 
 class VM;
+class Stack;
 
 struct Lbuffer {
   static const int INIT_LEN;
@@ -535,6 +536,7 @@ enum ValueTEnum {
   VT_REF_FRAMESEG,
   VT_REF_BOX,
   VT_REF_HASH,
+  VT_REF_STACK,
 };
 
 union BasicNum {
@@ -777,6 +779,8 @@ public:
   static NumBigObj* numbigdiv(VM*, NumBigObj*, NumBigObj*);
   static NumBigObj* numbigmod(VM*, NumBigObj*, NumBigObj*);
   static void numbig2str(VM* vm, NumBigObj* num, Lbuffer* buf);
+
+  static const char* costatename(VM* vm, Stack* stk);
   static void copystripanno(VM* vm, ValueT* out, ValueT* a);
   static ValueT* copylist(VM* vm, ValueT* out, ValueT* a);
   static void vector2cons(VM* vm, ValueT* out, ArrayObj* arr);
@@ -983,13 +987,25 @@ struct CallFrame : public RefObject {
 };
 
 struct DynamicWindObj;
-class Stack {
+class Stack;
+
+enum CoState {
+  CO_OK = 0,
+  CO_SUSPENDED,
+  CO_DEAD,
+};
+
+class Stack : public RefObject {
 public:
+  Stack(): vm(NULL), sv(NULL), dywind(NULL), curfrm(NULL),
+    state(CO_OK), callerstk(NULL), resslot(NULL), retreg(NULL), tail(false),
+    c0(NULL) {}
   Stack(VM* v);
 
   void fullmark();
   void stepmark();
-
+  virtual void visit(VM* vm);
+  GetSize(Stack)
   void setvoid(ValueT* s, ValueT* e);
 
   CallFrame* rtnfrm(CallFrame*);
@@ -999,7 +1015,17 @@ public:
   StkVar* sv;
   DynamicWindObj* dywind;
   CallFrame* curfrm;
+  int state;
+  Stack* callerstk;
+  ValueT* resslot;
+  ValueT* retreg;
+  bool tail;
+  CallFrame* c0;
 };
+
+#define isstack(VT) istype(VT, VT_REF_STACK)
+#define setstack(VT, e) settyperef(VT, VT_REF_STACK, e)
+#define stackref(VT) toref(VT, Stack*)
 
 class ReserveStack {
 public:
@@ -1007,6 +1033,7 @@ public:
   ~ReserveStack();
 protected:
   VM* vm;
+  Stack* curstk;
   CallFrame* curfrm;
   DynamicWindObj* dywind;
   StkVar oldfrm;   // keep the saved chain alive while detached
@@ -1292,6 +1319,8 @@ enum NATIVE_COMPLEX_PROC {
   NATIVE_COMPLEX_VALUES,
   NATIVE_COMPLEX_VALUES2LIST,
   NATIVE_COMPLEX_EVAL,
+  NATIVE_COMPLEX_COROUTINE_RESUME,
+  NATIVE_COMPLEX_COROUTINE_YIELD,
   NATIVE_COMPLEX_MAX,
 };
 
@@ -1419,15 +1448,18 @@ protected:
   void initprimitive();
 
 public:
-  Stack* getstk() { return &stk; }
+  Stack* getstk() { return curstk; }
+  void setcurstk(Stack* s) { curstk = s; }
   CacheGroup* getcachegroup() { return &cacheGroup; }
   SGC* getgc() { return &gc; }
   RefObjGroup* getobjgroup() { return &objGroup; }
   Interns* getintern() { return &intern; }
   GSymTable* getgenv() { return &genv; }
+  Stack* mainstk() { return &stk; }
 
 protected:
   Stack stk;
+  Stack* curstk;
   RefObjGroup objGroup;
   CacheGroup cacheGroup;
   SGC gc;
