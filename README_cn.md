@@ -48,6 +48,14 @@
 (hash-table-for-each (lambda (key val) xxx) table)
 ```
 
+-- coroutine
+```
+`coroutine-create` / `coroutine-resume` / `coroutine-yield` / `coroutine-status` / `coroutine-running`
+```
+每个协程一个私有 Stack（独立帧链 + dynamic-wind 风链 + StkVar），
+resume/yield/结束 = 切换 VM 当前执行上下文（一协程一 Stack，对应 Lua 的 lua_State）。
+`yield`/`resume` 暂只支持一个参数。
+
 ## 怎么用
 
 0. 把 *.cpp/h 拷到你的工程里，除了 main.cpp

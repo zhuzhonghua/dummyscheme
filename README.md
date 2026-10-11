@@ -46,6 +46,13 @@ It could be easily embed to many host programs, only need to copy some .h/.cpp f
 (hash-table-set! table key val)
 (hash-table-for-each (lambda (key val) xxx) table)
 ```
+-- coroutine
+```
+`coroutine-create` / `coroutine-resume` / `coroutine-yield` / `coroutine-status` / `coroutine-running`
+```
+Each coroutine owns a private Stack (independent frame chain + dynamic-wind chain + StkVar);
+resume/yield/finish switch the VM's current execution context (one coroutine per Stack,
+mirroring Lua's lua_State). `yield`/`resume` currently accept a single argument.
 
 ## How To Use
 

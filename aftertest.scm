@@ -6,8 +6,6 @@
 ;; tmp_dw_cont, tmp_dw_throw, tmp_dw_in_before/after, tmp_dw_err_*,
 ;; tmp_dw_reenter_before_multi, test_dw's t20 ...).
 ;;
-;; run: ./mkbuild/vm init.scm aftertest.scm
-;;
 ;; The VM writes display/write output to stderr by default.
 
 (define *npass* 0)
@@ -732,13 +730,380 @@
        '(#t #f #f #f))
 
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 13. coroutine: basics (co_a..co_b12, co_min, cogc)
+;;    Lua-style asymmetric coroutines: create builds an independent Stack;
+;;    resume is like a call, yield like a return; when the body ends,
+;;    resume returns the final value and status becomes dead.
+
+(section "13. coroutine: basics")
+
+;; co_a: single yield; the second resume's value becomes the yield
+;;       expression result (body ends, returning that value)
+(define co13a (coroutine-create (lambda (n) (coroutine-yield (list 'y n)))))
+(check 'co13a (list (coroutine-resume co13a 7) (coroutine-resume co13a 0))
+       '((y 7) 0))
+
+;; co_b: summing loop with yield; resumed once (suspended, not finished)
+(define co13b (coroutine-create
+  (lambda (n)
+    (let loop ((i 0) (sum 0))
+      (if (>= i n)
+          (coroutine-yield 'done)
+          (begin
+            (set! sum (+ sum i))
+            (coroutine-yield (list 'yield i sum))
+            (loop (+ i 1) sum)))))))
+(check 'co13b (coroutine-resume co13b 3) '(yield 0 0))
+
+;; co_b2: yields i each round (resume values ignored, loop increments)
+(define co13c (coroutine-create
+  (lambda (n)
+    (let loop ((i 0) (sum 0))
+      (if (>= i n)
+          (coroutine-yield 'done)
+          (begin
+            (set! sum (+ sum i))
+            (coroutine-yield i)
+            (loop (+ i 1) sum)))))))
+(check 'co13c (list (coroutine-resume co13c 3) (coroutine-resume co13c 0))
+       '(0 1))
+
+;; co_b3: two yields
+(define co13d (coroutine-create
+  (lambda (n)
+    (let loop ((i 0))
+      (if (>= i n)
+          (coroutine-yield 'done)
+          (begin
+            (coroutine-yield (list 'yield i))
+            (loop (+ i 1))))))))
+(check 'co13d (list (coroutine-resume co13d 3) (coroutine-resume co13d 0))
+       '((yield 0) (yield 1)))
+
+;; co_b4: main keeps running after resume returns (side-effect order)
+(set! *log* '())
+(define co13e (coroutine-create
+  (lambda (n)
+    (let loop ((i 0))
+      (if (>= i n)
+          (coroutine-yield 'done)
+          (begin
+            (coroutine-yield (list 'yield i))
+            (loop (+ i 1))))))))
+(add! (coroutine-resume co13e 3))
+(add! 'resume-returned)
+(add! (coroutine-resume co13e 0))
+(check 'co13e (reverse *log*) '((yield 0) resume-returned (yield 1)))
+
+;; co_b6: no yield, returns directly
+(define co13f (coroutine-create (lambda () (list 'a 'b))))
+(check 'co13f (coroutine-resume co13f) '(a b))
+
+;; co_b7: after yield the body ends; second resume's value becomes the result
+(define co13g (coroutine-create (lambda () (coroutine-yield 'y))))
+(check 'co13g (list (coroutine-resume co13g) (coroutine-resume co13g 0))
+       '(y 0))
+
+;; co_b9: pure loop without yield (one resume runs to the end)
+(define co13h (coroutine-create
+  (lambda (n)
+    (let loop ((i 0))
+      (if (< i n)
+          (begin (list 'a i) (loop (+ i 1)))
+          'done)))))
+(check 'co13h (coroutine-resume co13h 3) 'done)
+
+;; co_b10: yield mixed with tail recursion
+(define co13i (coroutine-create
+  (lambda (n)
+    (let loop ((i 0))
+      (if (< i n)
+          (begin
+            (coroutine-yield i)
+            (list 'a i)
+            (loop (+ i 1)))
+          'done)))))
+(check 'co13i (list (coroutine-resume co13i 3) (coroutine-resume co13i 0))
+       '(0 1))
+
+;; co_b11/co_b12: named external functions as coroutine bodies
+(define (co13j-f n) (let loop ((i 0)) (if (< i n) (begin (list 'a i) (loop (+ i 1))) 'done)))
+(define co13j (coroutine-create co13j-f))
+(check 'co13j (coroutine-resume co13j 3) 'done)
+(define (co13k-f) (let loop ((i 0)) (if (< i 3) (begin (list 'a i) (loop (+ i 1))) 'done)))
+(define co13k (coroutine-create co13k-f))
+(check 'co13k (coroutine-resume co13k) 'done)
+
+;; co_min: multi-round yields + finish + status
+(define co13m (coroutine-create
+  (lambda (n)
+    (let loop ((i 0) (sum 0))
+      (if (>= i n)
+          (begin (coroutine-yield 'done) sum)
+          (begin
+            (set! sum (+ sum i))
+            (coroutine-yield (list 'yield i sum))
+            (loop (+ i 1) sum)))))))
+(check 'co13m (list (coroutine-resume co13m 3) (coroutine-resume co13m 0)
+                    (coroutine-resume co13m 0) (coroutine-resume co13m 0))
+       '((yield 0 0) (yield 1 1) (yield 2 3) done))
+(check 'co13m-st (coroutine-status co13m) 'suspended)   ; stops at (yield 'done), not finished
+
+;; cogc: suspended coroutine survives GC pressure (30000 loops);
+;;       the coroutine stack is kept alive as a GC root
+(define (gcstress)
+  (let loop ((i 0))
+    (if (< i 30000)
+        (loop (+ i 1)))))
+(define co13n (coroutine-create
+  (lambda (n)
+    (let loop ((i 0) (sum 0))
+      (if (>= i n)
+          (begin
+            (coroutine-yield 'done)
+            sum)
+          (begin
+            (set! sum (+ sum i))
+            (if (= (modulo i 7) 0) (coroutine-yield (list 'yield i sum)))
+            (loop (+ i 1) sum)))))))
+(check 'co13n-r1 (coroutine-resume co13n 100) '(yield 0 0))
+(gcstress)
+(check 'co13n-r2 (coroutine-resume co13n 0) '(yield 7 28))
+(gcstress)
+(check 'co13n-r3 (coroutine-resume co13n 0) '(yield 14 105))
+(gcstress)
+(check 'co13n-r4 (coroutine-resume co13n 0) '(yield 21 231))
+(check 'co13n-st (coroutine-status co13n) 'suspended)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 14. coroutine: status / running / nesting
+;;    status inference: SUSPENDED/DEAD are explicit; CO_OK is derived from
+;;    the execution context (current stack = running, has frames = normal,
+;;    otherwise initial = suspended)
+
+(section "14. coroutine: status / running / nesting")
+
+;; co3nest: initially suspended; while A is suspended, B is still suspended
+(define c-status (lambda (c) (coroutine-status c)))
+(define co14a-B (coroutine-create (lambda () (coroutine-yield 'b-yield) 'b-done)))
+(define co14a-A (coroutine-create (lambda ()
+  (coroutine-yield 'a-yield1)
+  (add! (c-status co14a-B))
+  (coroutine-yield 'a-yield2)
+  'a-done)))
+(check 'co14a-initA (c-status co14a-A) 'suspended)
+(check 'co14a-initB (c-status co14a-B) 'suspended)
+(check 'co14a-r1 (coroutine-resume co14a-A) 'a-yield1)
+(check 'co14a-stA (c-status co14a-A) 'suspended)
+(set! *log* '())
+(check 'co14a-r2 (coroutine-resume co14a-A) 'a-yield2)
+(check 'co14a-log (reverse *log*) '(suspended))
+
+;; co3nest2: nested resume of B to dead; A records B's status each step
+(define co14b-B (coroutine-create (lambda () (coroutine-yield 'b-yield) 'b-done)))
+(set! *log* '())
+(define co14b-A (coroutine-create (lambda ()
+  (add! (c-status co14b-B))                 ; suspended
+  (add! (coroutine-resume co14b-B))         ; b-yield
+  (add! (c-status co14b-B))                 ; suspended
+  (add! (coroutine-resume co14b-B))         ; b-done
+  (add! (c-status co14b-B))                 ; dead
+  (coroutine-yield 'a-back)
+  'a-done)))
+(check 'co14b-r1 (coroutine-resume co14b-A) 'a-back)
+(check 'co14b-log (reverse *log*) '(suspended b-yield suspended b-done dead))
+(check 'co14b-stA (c-status co14b-A) 'suspended)
+(check 'co14b-r2 (coroutine-resume co14b-A) 'a-done)
+(check 'co14b-stA2 (c-status co14b-A) 'dead)
+
+;; costate: running/normal inference (checking self = running;
+;;          nested-and-suspended = normal)
+(define co14c (coroutine-create (lambda ()
+  (add! (coroutine-status (coroutine-running)))    ; running (self executing)
+  (define inner (coroutine-create (lambda ()
+    (add! (coroutine-status co14c))                ; normal (co14c suspended)
+    (coroutine-yield 'iy))))
+  (add! (coroutine-resume inner))                  ; iy
+  (add! (coroutine-status co14c))                  ; running (after inner returns)
+  (coroutine-yield 'y1))))
+(check 'co14c-init (c-status co14c) 'suspended)
+(set! *log* '())
+(check 'co14c-r1 (coroutine-resume co14c) 'y1)
+(check 'co14c-log (reverse *log*) '(running normal iy running))
+
+;; coidentity: running identity / eq? / ends returning void / print format
+(define co14d (coroutine-create (lambda ()
+  (add! (eq? co14d (coroutine-running)))
+  (coroutine-yield 'y1))))
+(check 'co14d-main-running (coroutine-running) #f)
+(set! *log* '())
+(check 'co14d-r1 (coroutine-resume co14d) 'y1)
+(check 'co14d-log (reverse *log*) '(#t))
+(check 'co14d-st (c-status co14d) 'suspended)
+(coroutine-resume co14d)                            ; body ends (no value, unchecked)
+(check 'co14d-st2 (c-status co14d) 'dead)
+(check 'co14d-print
+       (call-with-output-string (lambda (o) (write co14d o)))
+       "#<coroutine>")
+
+;; coapply: resume/yield via apply
+(define co14e (coroutine-create (lambda ()
+  (let ((v (apply coroutine-yield '(first))))
+    (list 'got v)))))
+(check 'co14e-r1 (apply coroutine-resume (list co14e)) 'first)
+(check 'co14e-r2 (apply coroutine-resume (list co14e 'hello)) '(got hello))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 15. coroutine x dynamic-wind
+;;    before/after follow the execution context: yield while suspended does
+;;    not run after; when the coroutine body ends (root frame popped),
+;;    after runs once.
+
+(section "15. coroutine with dynamic-wind")
+
+;; codw1: single-layer DW; yield does not trigger after, end does
+(set! *log* '())
+(define co15a (coroutine-create
+  (lambda ()
+    (dynamic-wind (lambda () (add! 'b))
+                  (lambda () (coroutine-yield 'mid) 'end)
+                  (lambda () (add! 'a))))))
+(check 'co15a-r1 (coroutine-resume co15a) 'mid)
+(check 'co15a-log1 (reverse *log*) '(b))       ; before ran, after did not
+(check 'co15a-r2 (coroutine-resume co15a) 'end)
+(check 'co15a-log2 (reverse *log*) '(b a))     ; popping the root frame advances after
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 16. coroutine: error boundary (Lua-style)
+;;    An error inside a coroutine is caught at the resume boundary: the
+;;    coroutine dies (status dead), resume delivers undefined, and the
+;;    caller keeps running.  DW afters of the dying stack are run during
+;;    teardown.  Errors never cross a resume boundary.
+
+(section "16. coroutine: error boundary")
+
+;; undefined predicate: the error-delivered value prints as <void>
+(define (undef? v)
+  (equal? (call-with-output-string (lambda (o) (display v o))) "<void>"))
+
+;; 16a body error: resume delivers undefined, coroutine dead, caller continues
+(define co16a (coroutine-create (lambda () (coroutine-yield 'y) (car 99))))
+(check 'co16a-r1 (coroutine-resume co16a) 'y)
+(check 'co16a-r2 (undef? (coroutine-resume co16a)) #t)
+(check 'co16a-st (coroutine-status co16a) 'dead)
+(check 'co16a-r3 (undef? (coroutine-resume co16a)) #t)   ; resume after dead
+(display "after-error") (newline)
+
+;; 16b nested: B dies at its own boundary, A keeps going and sees dead
+(define co16b-a (coroutine-create (lambda ()
+  (define b (coroutine-create (lambda ()
+    (coroutine-yield 'b-y)
+    (car 99))))
+  (coroutine-yield (list 'b-st0 (coroutine-status b) (coroutine-resume b)))
+  (coroutine-yield (list 'b-r2 (undef? (coroutine-resume b)) (coroutine-status b)))
+  'a-done)))
+(check 'co16b-r1 (coroutine-resume co16b-a) '(b-st0 suspended b-y))
+(check 'co16b-r2 (coroutine-resume co16b-a) '(b-r2 #t dead))
+(check 'co16b-r3 (coroutine-resume co16b-a) 'a-done)
+
+;; 16c nested resume then own yield: A suspended between B errors
+(define co16c-a (coroutine-create (lambda ()
+  (define b (coroutine-create (lambda ()
+    (coroutine-yield 'b-y)
+    (car 99))))
+  (coroutine-resume b)
+  (coroutine-yield (list 'a-y1 (coroutine-status b)))
+  (coroutine-resume b)
+  'a-done)))
+(check 'co16c-r1 (coroutine-resume co16c-a) '(a-y1 suspended))
+(check 'co16c-r2 (coroutine-resume co16c-a) 'a-done)
+
+;; 16d nested DW: C dies at its boundary, B sees undefined and finishes;
+;;     B-a runs once on B's normal end
+(set! *log* '())
+(define co16d-c (coroutine-create (lambda () (coroutine-yield 'c-y) (car 99))))
+(define co16d-b (coroutine-create (lambda ()
+  (dynamic-wind (lambda () (add! 'B-b))
+                (lambda () (coroutine-yield 'b-y)
+                          (coroutine-yield (coroutine-resume co16d-c))
+                          (coroutine-yield (undef? (coroutine-resume co16d-c)))
+                          'done)
+                (lambda () (add! 'B-a))))))
+(check 'co16d-r1 (coroutine-resume co16d-b) 'b-y)
+(check 'co16d-r2 (coroutine-resume co16d-b) 'c-y)
+(check 'co16d-r3 (coroutine-resume co16d-b) #t)
+(check 'co16d-r4 (coroutine-resume co16d-b) 'done)
+(check 'co16d-log (reverse *log*) '(B-b B-a))
+
+;; 16e main-stack DW: coroutine error caught at the boundary, DW body resumes
+(set! *log* '())
+(define co16e (coroutine-create (lambda ()
+  (dynamic-wind (lambda () (add! 'C-b))
+                (lambda () (car 1))
+                (lambda () (add! 'C-a))))))
+(dynamic-wind (lambda () (add! 'M-b))
+              (lambda () (coroutine-resume co16e) (add! 'M-t))
+              (lambda () (add! 'M-a)))
+(check 'co16e-log (reverse *log*) '(M-b C-b C-a M-t M-a))
+(check 'co16e-st (coroutine-status co16e) 'dead)
+
+;; 16f three-level nesting: C's error is contained; C-a, B-a, A-a run in order
+(set! *log* '())
+(define co16f-c (coroutine-create (lambda ()
+  (dynamic-wind (lambda () (add! 'C-b))
+                (lambda () (coroutine-yield 'c-y1) (coroutine-yield 'c-y2) (car 99))
+                (lambda () (add! 'C-a))))))
+(define co16f-b (coroutine-create (lambda ()
+  (dynamic-wind (lambda () (add! 'B-b))
+                (lambda () (coroutine-yield 'b-y1)
+                          (coroutine-yield (coroutine-resume co16f-c))
+                          (coroutine-yield (coroutine-resume co16f-c))
+                          (coroutine-resume co16f-c)
+                          'b-done)
+                (lambda () (add! 'B-a))))))
+(define co16f-a (coroutine-create (lambda ()
+  (dynamic-wind (lambda () (add! 'A-b))
+                (lambda () (coroutine-yield 'a-y1)
+                          (coroutine-yield (coroutine-resume co16f-b))
+                          (coroutine-yield (coroutine-resume co16f-b))
+                          (coroutine-yield (coroutine-resume co16f-b))
+                          (coroutine-resume co16f-b)
+                          'a-done)
+                (lambda () (add! 'A-a))))))
+(check 'co16f-r1 (coroutine-resume co16f-a) 'a-y1)
+(check 'co16f-r2 (coroutine-resume co16f-a) 'b-y1)
+(check 'co16f-r3 (coroutine-resume co16f-a) 'c-y1)
+(check 'co16f-r4 (coroutine-resume co16f-a) 'c-y2)
+(check 'co16f-r5 (coroutine-resume co16f-a) 'a-done)
+(check 'co16f-log (reverse *log*) '(A-b B-b C-b C-a B-a A-a))
+(check 'co16f-stA (coroutine-status co16f-a) 'dead)
+
+;; 16g DW after raises during teardown: caught and printed, A still finishes
+(define co16g-c (coroutine-create
+  (lambda ()
+    (dynamic-wind
+      (lambda () #f)
+      (lambda () (coroutine-yield 'c-y1) (car 99))
+      (lambda () (car 99))))))
+(define co16g-a (coroutine-create
+  (lambda ()
+    (dynamic-wind
+      (lambda () #f)
+      (lambda () (coroutine-yield 'a-y1)
+                (coroutine-resume co16g-c)
+                (coroutine-resume co16g-c)
+                'a-done)
+      (lambda () (display "A-a"))))))
+(check 'co16g-r1 (coroutine-resume co16g-a) 'a-y1)
+(check 'co16g-r2 (coroutine-resume co16g-a) 'a-done)
+(check 'co16g-stA (coroutine-status co16g-a) 'dead)
+(display "end") (newline)
+
 (display "aftertest passed ") (display *npass*)
 (display " failed ") (display *nfail*)
 (newline)
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; 12. hash-table print / equal
-
-
 (if (= *nfail* 0)
     (begin (display "ALL PASS") (newline))
     (begin (display "SOME FAIL") (newline)))
