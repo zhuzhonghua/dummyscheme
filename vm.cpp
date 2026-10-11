@@ -15,6 +15,8 @@
 
 using namespace Scheme;
 
+#define PC_RET -2   /* special code in execute0 */
+
 #define lexassert(vm, cond, line, fmt, ...) do {       \
  if (!(cond)) lexerror(vm, line, fmt, ##__VA_ARGS__);  \
  } while(0)
@@ -1657,6 +1659,7 @@ enum CallAct {
   CALLACT_DONE,
   CALLACT_ENTER,
   CALLACT_RESUME_CC,
+  CALLACT_YIELD_CC,
   CALLACT_TAILRET,
   CALLACT_CC_TAILRET
 };
@@ -2396,11 +2399,32 @@ enum CallComplexAct {
   CALL_COMPLEX_AFTER,
   CALL_COMPLEX_ENTER,
   CALL_COMPLEX_RESUME_CC,
+  CALL_COMPLEX_YIELD_CC,
   CALL_COMPLEX_TAIL_RETURN,
 };
 
 static void runthunk(VM* vm, ValueT* proc);
+static void teardowndeadframes(VM* vm);
+static void unwinddynamichain(VM* vm);
+static void teardownstack(VM* vm);
 
+
+static void coresume_run(VM* vm, Stack* costk, CallFrame* target)
+{
+  TRY {
+    vm->setcurstk(costk);
+    vm->execute0(target);
+  }
+  CATCH(err) {
+    (void)err;
+    Stack* stk = Stk(vm);
+    stk->state = CO_DEAD;
+    vm->setcurstk(stk);
+    teardownstack(vm);
+    vm->ac0 = *stk->resslot = Svoidref;
+    vm->setcurstk(stk->callerstk);
+  }
+}
 
 static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, Stack* costk, ValueT* arg, bool hasarg)
 {
@@ -2418,27 +2442,26 @@ static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, Stack* cos
     ensurearity(vm, C0->base, hasarg ? 1 : 0, lambda->argnum, lambda->argrest,
                 "coroutine", false);
     boxcapturedlocals(vm, C0, lambda);
-    vm->setcurstk(costk);
-    *frm = C0;
-    return CALL_COMPLEX_ENTER;
+    C0->setpc(lambda->getcodestart());
+    coresume_run(vm, costk, C0);
+    return CALL_COMPLEX_RESUME_CC;
   }
-  else
-  {
     CallFrame* Y = costk->curfrm;
     vm->ac0 = hasarg ? *arg : Svoidref;
-    *costk->retreg = vm->ac0;
-    vm->setcurstk(costk);
-    *frm = Y;
     if (costk->tail)
     {
       ClosurePtr yclo = closureref(Y->base);
       LambdaPtr ylambda = yclo->lambda;
       ValueT* slot = Y->base + (1 + (ylambda->vars ? ylambda->vars->local.n : 0));
       *slot = vm->ac0;
-      return CALL_COMPLEX_TAIL_RETURN;
-    }
+    Y->setpc(PC_RET);
+    coresume_run(vm, costk, Y);
     return CALL_COMPLEX_RESUME_CC;
   }
+  *costk->retreg = vm->ac0;
+  Y->setpc(Y->getpc() - 1);
+  coresume_run(vm, costk, Y);
+  return CALL_COMPLEX_RESUME_CC;
 }
 
 static CallComplexAct coyield(VM* vm, CallFrame** frm, ValueT* base, bool istail)
@@ -2453,7 +2476,7 @@ static CallComplexAct coyield(VM* vm, CallFrame** frm, ValueT* base, bool istail
   costk->state = CO_SUSPENDED;
   vm->setcurstk(callerstk);
   *frm = callerstk->curfrm;
-  return CALL_COMPLEX_RESUME_CC;
+  return CALL_COMPLEX_YIELD_CC;
 }
 
 static CallComplexAct cocallresume(VM* vm, CallFrame** frm, ValueT** procp, int* len, CallAppState* state)
@@ -2489,8 +2512,11 @@ static CallComplexAct cocallresume(VM* vm, CallFrame** frm, ValueT** procp, int*
       hasarg = true;
     }
   }
-  Assert(vm, costk->state == CO_SUSPENDED,
-         "%s: cannot resume a %s coroutine", METHOD, SCM::costatename(vm, costk));
+  if (costk->state != CO_SUSPENDED)
+  {
+    vm->ac0 = *base = Svoidref;
+    return CALL_COMPLEX_RESUME_CC;
+  }
   return coresume(vm, frm, base, costk, &arg, hasarg);
 }
 
@@ -2687,6 +2713,8 @@ static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len, bool ist
         return CALLACT_ENTER;
       case CALL_COMPLEX_RESUME_CC:
         return CALLACT_RESUME_CC;
+      case CALL_COMPLEX_YIELD_CC:
+        return CALLACT_YIELD_CC;
       case CALL_COMPLEX_TAIL_RETURN:
         return CALLACT_CC_TAILRET;
       default:
@@ -2742,6 +2770,7 @@ enum RtnFrmAct {
   RTN_RESUME,
   RTN_RETURN,
   RTN_DONE,
+  RTN_COEND,
 };
 
 static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lambda)
@@ -2815,7 +2844,7 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
     *stk->resslot = vm->ac0;
     vm->setcurstk(stk->callerstk);
     *frm = stk->callerstk->curfrm;
-    return RTN_RESUME;
+    return RTN_COEND;
   }
     return RTN_DONE;
 }
@@ -2837,7 +2866,8 @@ static void runthunk(VM* vm, ValueT* proc)
   *nf->base = *proc;
   stk->setvoid(nf->base + argnum + 1, nf->top - 1);
   stk->curfrm = nf;
-  vm->execute(nf);
+  nf->setpc(c->lambda->getcodestart());
+  vm->execute0(nf);
 }
 
 static void unwinddynamichain(VM* vm)
@@ -2878,6 +2908,12 @@ static void teardowndeadframes(VM* vm)
   }
 }
 
+static void teardownstack(VM* vm)
+{
+  teardowndeadframes(vm);
+  unwinddynamichain(vm);
+}
+
 void VM::execute(CallFrame* frm)
 {
   TRY {
@@ -2885,21 +2921,7 @@ void VM::execute(CallFrame* frm)
   }
   CATCH(err) {
     (void)err;
-    Stack* stk = Stk(this);
-    while (stk != NULL && stk != mainstk())
-    {
-      if (stk->state != CO_DEAD)
-      {
-        stk->state = CO_DEAD;
-        teardowndeadframes(this);
-        unwinddynamichain(this);
-      }
-      stk = Stk(this)->callerstk;
-      if (stk != NULL)
-        setcurstk(stk);
-    }
-    teardowndeadframes(this);
-    unwinddynamichain(this);
+    teardownstack(this);
     throw;
   }
 }
@@ -2910,16 +2932,18 @@ void VM::execute0(CallFrame* frm)
   ValueT* base = frm->base;
   ClosurePtr call = closureref(base);
   LambdaPtr lambda = call->lambda;
-  int pc = lambda->getcodestart();
+  int pc = frm->getpc();
   Instruction i;
-  int op = 0;
+  int op = 0, icode;
+  if (pc == PC_RET)               /* tail resume：TAILCALLAPP */
+    goto retlab;
  loop:
   if (pc < 0)
     return;
   frm->setpc(pc);
   i = lambda->fetchi(pc);
   //checkgc();
-  int icode = GET_OP(i);
+  icode = GET_OP(i);
   switch(icode) {
   case OP_CONSEXT: {
     int A, B, C; getcode_cons2(i, A, B, C);
@@ -3100,6 +3124,8 @@ void VM::execute0(CallFrame* frm)
       lambda = call->lambda;
       pc = frm->getpc();
       break;
+    case CALLACT_YIELD_CC:
+      return;
     case CALLACT_CC_TAILRET:
       base = frm->base;
       call = closureref(base);
@@ -3126,8 +3152,15 @@ void VM::execute0(CallFrame* frm)
     }
     break;
   }
-  retlab:
-  case OP_RETURN: {
+  case OP_RETURN:
+    goto retlab;
+  default:
+    Error(this, "unknown execution op %d", icode);
+  }
+  pcnext();
+  goto loop;
+
+retlab: {
     RtnFrmAct act = callrtnfrm(this, &frm, base, lambda);
     switch(act) {
     case RTN_DONE:
@@ -3139,6 +3172,8 @@ void VM::execute0(CallFrame* frm)
       lambda = call->lambda;
       pc = frm->getpc();
       break;
+  case RTN_COEND:
+    return;
     case RTN_ENTER:
       base = frm->base;
       call = closureref(base);
@@ -3153,13 +3188,9 @@ void VM::execute0(CallFrame* frm)
     default:
       Error(this, "intern error, return state %d", act);
     }
-    break;
-  }
-  default:
-    Error(this, "unknown execution op %d", icode);
-  }
   pcnext();
   goto loop;
+}
 }
 
 #define addbuff(b,p,e)                            \
@@ -3486,6 +3517,7 @@ bool VM::dolex(Lexer* lex, StrPtr source)
     setclosure(frm->base, closure);
     closure->lambda = lambda;
     stk->setvoid(frm->base+1, frm->top-1);
+    frm->setpc(lambda->getcodestart());
     execute(frm);
 
 #ifdef DebugVT
@@ -3548,6 +3580,7 @@ ValueT VM::call(const char* name, ValueT** argv, int argc)
   LambdaPtr lambda = closure->lambda = Sr0(this, LambdaObj);
   int pc = lambda->pushcode(this, code_tailcallapp(1, argc));
   lambda->saveline(this, pc, -1, -1);
+  frm->setpc(lambda->getcodestart());
   execute(frm);
   return this->ac0;
 }
