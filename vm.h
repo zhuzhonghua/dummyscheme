@@ -114,24 +114,15 @@ typedef double scm_float;
 
 #define STR(s) #s
 
-/* Portability: avoid the GNU-style ##__VA_ARGS__ macro extension. The former
- * Assert/Error macros are now ordinary variadic functions (same names, same
- * call signature) defined in vm.cpp. On failure the formatted message is
- * truncated to a fixed buffer with vsnprintf, wrapped into a non-interned
- * Scheme string, stored in GlobalVM::ac0, and thrown. */
-
 struct ValueT;
 class VM;
 class GlobalVM;
 
-/* console output (replaces the old Print0/Print vararg macros) */
 void Print0(FILE* file, const char* fmt, ...);
 void Print(const char* fmt, ...);
 
-/* fixed size for the formatted error message; longer messages are truncated. */
 #define SCM_ERRBUF_SIZE 1024
 
-/* condition-checking wrappers: return normally when cond is true. */
 void Assert(VM* vm, bool cond, const char* fmt, ...);
 void Assert(GlobalVM* g, bool cond, const char* fmt, ...);
 void AssertVT(VM* vm, bool cond, ValueT* vt, const char* fmt, ...);
@@ -143,7 +134,6 @@ void AssertArgPair(VM* vm, ValueT* p, const char* op);
 void Error(VM* vm, const char* fmt, ...);
 void ErrorVT(VM* vm, ValueT* vt, const char* fmt, ...);
 
-/* non-throwing diagnostics (print only, like the old Serror* macros). */
 void Serror(const char* fmt, ...);
 void Serrorvt(VM* vm, ValueT* vt, const char* fmt, ...);
 
