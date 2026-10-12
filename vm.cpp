@@ -2848,21 +2848,8 @@ static CallComplexAct cocallyield(VM* vm, CallFrame** frm, ValueT** procp, int* 
   {
     ValueT* lst = *procp + 1;
     AssertVT(vm, SCM::listp(lst), lst, "%s: internal error in apply", METHOD);
-    nargs = 0;
-    if (!isnull(lst))
-    {
-      /* expand the apply arg list onto the yield call-site slots (base+1..) */
-      ValueT* base = *procp;
-      ValueT* rest = Scdr(lst);
-      *(base + 1) = Scar(lst);
+    *(*procp + 1) = packlist(vm, lst);
       nargs = 1;
-      for (ValueT* p = rest; ispair(p); p = Scdr(p))
-      {
-        Assert(vm, base + 1 + nargs < vm->curfrm->top, "%s: too many arguments in apply", METHOD);
-        *(base + 1 + nargs) = Scar(p);
-        nargs++;
-      }
-    }
     state->fromapply = false;
   }
   return coyield(vm, frm, *procp, nargs, state->istail);

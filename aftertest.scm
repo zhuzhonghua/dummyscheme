@@ -1274,6 +1274,11 @@
                     (lambda (x y) (coroutine-yield (list x y)))))))
 (check 'co-yield-apply (call-with-values (lambda () (coroutine-resume co-y)) list) '(a b))
 (check 'co-yield-apply2 (call-with-values (lambda () (coroutine-resume co-y 'x 'y)) list) '((x y)))
+(define co-yl (coroutine-create (lambda ()
+  (apply coroutine-yield (co-mk 100 '()))
+  'done)))
+(check 'co-yield-long (call-with-values (lambda () (coroutine-resume co-yl))
+                                      (lambda vs (length vs))) 100)
 
 (display "aftertest passed ") (display *npass*)
 (display " failed ") (display *nfail*)
