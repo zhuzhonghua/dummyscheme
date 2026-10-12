@@ -583,7 +583,7 @@ void SCompiler::compilesyntaxrules(ValueT* expr, ValueT* out)
   ValueT* expr0 = splitannotatelist(vm, expr, what, 2, &_dummy_, &literals);
   SyntaxRules* syntaxr = Sr1(vm, SyntaxRules, vm);
   setsyntaxrules(out, syntaxr);
-  if (isboundvar(this, symref(&vm->ellipsisvt)))
+  if (isboundvar(this, symref(&G(vm)->ellipsisvt)))
     syntaxr->ellipsis = NULL;
   ValueT* literals0 = annotatevt(&literals);
   if (issym(literals0))
@@ -715,7 +715,7 @@ void SCompiler::compileqquote(int target, ValueT* expr, int depth)
   if (ispair(expr0))
   {
     ValueT dummy, vt;
-    if (isformannoshadow(this, expr, &vm->uquotevt))
+    if (isformannoshadow(this, expr, &G(vm)->uquotevt))
     {
       splitannotatelist(vm, expr, whatqq1, 2, &dummy, &vt);
       if (depth == 0)
@@ -726,7 +726,7 @@ void SCompiler::compileqquote(int target, ValueT* expr, int depth)
         compileqquote(target, &vt, depth-1);
       }
     }
-    else if (isformannotate(expr, &vm->qquotevt))
+    else if (isformannotate(expr, &G(vm)->qquotevt))
     {
       splitannotatelist(vm, expr, whatqq1, 2, &dummy, &vt);
       putcode(code_listk(target, K_QQUOTE), line);
@@ -736,7 +736,7 @@ void SCompiler::compileqquote(int target, ValueT* expr, int depth)
     {
       ValueT* head = Scar(expr0);
       ValueT* tail = Scdr(expr0);
-      if (isformannoshadow(this, head, &vm->uquotesvt))
+      if (isformannoshadow(this, head, &G(vm)->uquotesvt))
       {
         splitannotatelist(vm, head, whatqq1, 2, &dummy, &vt);
         if (depth == 0)
@@ -786,7 +786,7 @@ void SCompiler::compileqquotearray(int target, ValueT* expr, int depth)
     for(int i = 0; i < array->n-1; i++)
     {
       item = array->getptr(i);
-      if (isformannoshadow(this, item, &vm->uquotesvt))
+      if (isformannoshadow(this, item, &G(vm)->uquotesvt))
       {
         splitannotatelist(vm, item, whatqq1, 2, &dummy, &vt);
         if (depth == 0)
@@ -811,7 +811,7 @@ void SCompiler::compileqquotearray(int target, ValueT* expr, int depth)
       }
     }
     item = array->getptr(array->n-1);
-    if (isformannoshadow(this, item, &vm->uquotesvt))
+    if (isformannoshadow(this, item, &G(vm)->uquotesvt))
     {
       splitannotatelist(vm, item, whatqq1, 2, &dummy, &vt);
       if (depth == 0)
@@ -892,7 +892,7 @@ void SCompiler::compilepair(int target, ValueT* expr, ValueT* link, bool defok)
     static const char* whatqq = "quasiquote: bad sytnax";
     expr0 = splitannotatelist(vm, expr0, whatqq, 1, &dummy);
     compileassert(vm, isnull(expr0), expr0, "%s", whatqq);
-    compileassert(vm, !isformannotate(&dummy, &vm->uquotesvt), &dummy, "%s, unquote-splicing not in a list", whatqq);
+    compileassert(vm, !isformannotate(&dummy, &G(vm)->uquotesvt), &dummy, "%s, unquote-splicing not in a list", whatqq);
     int line = annotateline(&dummy);
     compilelink(link, line);
     compileqquote(target, &dummy, 0);
@@ -1634,7 +1634,7 @@ void PatnTmpl::addvar(VM* vm, SymPtr sym, int d)
 
 SyntaxRules::SyntaxRules(VM* vm)
 {
-  ellipsis = symref(&vm->ellipsisvt);
+  ellipsis = symref(&G(vm)->ellipsisvt);
 }
 
 bool SyntaxRules::isellipsis(VM* vm, ValueT* vt)

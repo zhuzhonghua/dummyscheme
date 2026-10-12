@@ -77,19 +77,19 @@ RefPtr RefObjGroup::recobj(RefPtr ref)
 {
   addref(ref, curIdx);
   ref->gcmark(bitmask[curIdx]);
-  GC(vm)->condgc();
+  g->getgc()->condgc();
   return ref;
 }
 
 void RefObjGroup::fullsweep()
 {
-  SweepListNext(gclst[curIdx], ObjGroup(vm), GC(vm), );
+  SweepListNext(gclst[curIdx], g->getobjgroup(), g->getgc(), );
   RefPtr* lst = &gclst[othIdx];
   while (*lst != NULL)
   {
     RefPtr item = *lst;
     lst = &(*lst)->gcnxt;
-    GC(vm)->toDelOrMark(item);
+    g->getgc()->toDelOrMark(item);
   }
 }
 
@@ -99,7 +99,7 @@ bool RefObjGroup::stepsweep()
   {
     RefPtr item = gclst[othIdx];
     gclst[othIdx] = gclst[othIdx]->gcnxt;
-    GC(vm)->toDelOrMark(item);
+    g->getgc()->toDelOrMark(item);
   }
   return gclst[othIdx] != NULL;
 }
@@ -149,26 +149,31 @@ void ValuesObj::visit(VM* vm)
   Check(data);
 }
 
-StkVar::StkVar(VM* v):vm(v), prev(NULL), next(NULL)
+StkVar::StkVar(GlobalVM* v):vm(v->mainstk())
 {
-  Stack* stk = Stk(vm);
-  this->prev = stk->sv;
-  if (stk->sv) stk->sv->next = this;
-  stk->sv = this;
+  init(vm);
+}
+
+void StkVar::init(VM* v)
+{
+  prev = NULL;
+  next = NULL;
+  this->prev = v->sv;
+  if (v->sv) v->sv->next = this;
+  v->sv = this;
+}
+
+StkVar::StkVar(VM* v):vm(v)
+{
+  init(v);
 }
 
 StkVar::~StkVar()
 {
-  Stack* stk = Stk(vm);
   StkVar* next = this->next, *prev = this->prev;
   if (next) next->prev = prev;
   if (prev) prev->next = next;
-  if (stk->sv == this) stk->sv = prev;
-}
-
-void StackSegment::finz(VM* vm)
-{
-  RefObject::finz(vm);
+  if (vm->sv == this) vm->sv = prev;
 }
 
 void DynamicEnv::visit(VM* vm)
@@ -202,18 +207,19 @@ CallFrame* CallFrame::copy(VM* vm)
   return newfrm;
 }
 
-void Stack::stepmark()
+void VM::stepmark()
 {
   fullmark();
 }
 
-void Stack::visit(VM* vm)
+void VM::visit(VM* vm)
 {
   fullmark();
 }
 
-void Stack::fullmark()
+void VM::fullmark()
 {
+  VM* vm = this;
   StkVar *ptr = sv;
   while (ptr)
   {
@@ -224,7 +230,7 @@ void Stack::fullmark()
   Check(dywind);
 }
 
-Stack::Stack(VM* v):vm(v),sv(NULL),dywind(NULL)
+VM::VM(GlobalVM* v):g(v),sv(NULL),dywind(NULL)
 {
   curfrm = NULL;
   state = CO_OK;
@@ -233,24 +239,95 @@ Stack::Stack(VM* v):vm(v),sv(NULL),dywind(NULL)
   tail = false;
 }
 
-void Stack::setvoid(ValueT* s, ValueT* e)
+void VM::setvoid(ValueT* s, ValueT* e)
 {
   for (ValueT* n = s; n <= e; n++)
     *n = Svoidref;
 }
 
-CallFrame* Stack::rtnfrm(CallFrame* frm)
+StrObj* VM::strintern(int len)
+{
+  return g->strintern(len);
+}
+
+StrObj* VM::strintern(int len, char c)
+{
+  return g->strintern(len, c);
+}
+
+void VM::loadfile(const char* fname)
+{
+  g->loadfile(fname);
+}
+
+NumBigObj* VM::newnumbig(int n, char c)
+{
+  return g->newnumbig(n, c);
+}
+
+bool VM::dolex(Lexer* lex, StrPtr source)
+{
+  return g->dolex(lex, source);
+}
+
+void* VM::shrinkvec(void* ptr, int *psize, int fn, int esize)
+{
+  return g->shrinkvec(ptr, psize, fn, esize);
+}
+
+void* VM::growvec(void* ptr, int *psize, int ne, int esize, int limit, const char* what)
+{
+  return g->growvec(ptr, psize, ne, esize, limit, what);
+}
+
+void VM::free(void* ptr, size_t size)
+{
+  g->free(ptr, size);
+}
+
+void VM::getuniquesym(SymPtr sym, ValueT* out)
+{
+  g->getuniquesym(sym, out);
+}
+
+const char* VM::gettopsource()
+{
+  return g->gettopsource();
+}
+
+Interns* VM::getintern()
+{
+  return g->getintern();
+}
+
+StrObj* VM::strintern(const char* str, int len)
+{
+  return g->strintern(str, len);
+}
+
+void* VM::alloc(size_t size)
+{
+  return g->alloc(size);
+}
+
+void* VM::realloc(void* ptr, size_t osize, size_t nsize)
+{
+  return g->realloc(ptr, osize, nsize);
+}
+
+CallFrame* VM::rtnfrm(CallFrame* frm)
 {
   if (frm->unwind)
   {
-    frm->unwind(vm, frm);
+    frm->unwind(this, frm);
     frm->unwind = NULL;
   }
   return curfrm = frm->prev;
 }
 
-CallFrame* Stack::newfrm(CallFrame* frm, ValueT* base, int argnum, int arity)
+CallFrame* VM::newfrm(CallFrame* frm, ValueT* base, int argnum, int arity)
 {
+  VM* vm = this;
   StackSegment* seg = frm != NULL ? frm->seg : NULL;
   CallFrame* newfrm = curfrm = Sr0(vm, CallFrame);
   newfrm->prev = frm;
@@ -274,28 +351,24 @@ CallFrame* Stack::newfrm(CallFrame* frm, ValueT* base, int argnum, int arity)
 ReserveStack::ReserveStack(VM* v)
   : vm(v), oldfrm(v), olddw(v)
 {
-  curstk = v->getstk();
-  Stack* stk = curstk;
-  curfrm = stk->curfrm;
-  dywind = stk->dywind;
+  curfrm = vm->curfrm;
+  dywind = vm->dywind;
   if (curfrm)
   {
     setref(&oldfrm.val, curfrm);
-    stk->curfrm = NULL;
+    vm->curfrm = NULL;
   }
   if (dywind)
   {
     setref(&olddw.val, dywind);
-    stk->dywind = NULL;
+    vm->dywind = NULL;
   }
 }
 
 ReserveStack::~ReserveStack()
 {
-  Stack* stk = curstk;
-  stk->curfrm = curfrm;
-  stk->dywind = dywind;
-  vm->setcurstk(curstk);
+  vm->curfrm = curfrm;
+  vm->dywind = dywind;
 }
 
 void CacheGroup::addref(PairPtr ref)
@@ -316,6 +389,7 @@ PairPtr CacheGroup::getonepair()
 
 void CacheGroup::fullsweep()
 {
+  VM* vm = g->mainstk();
   while (pairs != NULL)
   {
     PairPtr p = pairs;
@@ -326,22 +400,25 @@ void CacheGroup::fullsweep()
 
 void SGC::toDel(RefPtr ref)
 {
+  VM* vm = g->mainstk();
   ref->finz(vm);
 }
 
 void SGC::startstep()
 {
+  VM* vm = g->mainstk();
   Assert(vm, state == GCSNone, "internal error %d", state);
   Assert(vm, graylstLast == NULL, "internal error graylstlast not null");
   Assert(vm, graylst == NULL, "internal error graylst not null");
   state = GCSNone + 1;
-  //Stk(vm)->startstep();
-  Intern(vm)->startstep();
+  //Stk(g)->startstep();
+  g->getintern()->startstep();
   ftouchptr = &SGC::addgraylst;
 }
 
 bool SGC::markgray()
 {
+  VM* vm = g->mainstk();
   for (int i = 0; i < 10; i++)
   {
     if (graylst == NULL) return false;
@@ -363,7 +440,7 @@ void SGC::addgraylst(RefPtr ref)
   setref(&vt, ref);
   if (graylst == NULL)
   {
-    PairPtr pair = vm->getonepairnor();
+    PairPtr pair = g->getonepairnor();
     graylst = graylstLast = pair;
     graylstLast->car(&vt);
   }
@@ -373,7 +450,7 @@ void SGC::addgraylst(RefPtr ref)
       graylstLast->cdr(&vt);
     else
     {
-      PairPtr pair = vm->getonepairnor();
+      PairPtr pair = g->getonepairnor();
       graylstLast->gcnxt = pair;
       graylstLast = pair;
       pair->car(&vt);
@@ -383,17 +460,18 @@ void SGC::addgraylst(RefPtr ref)
 
 void SGC::singlestep()
 {
+  VM* vm = g->mainstk();
   switch(state) {
   case GCSMarkStk:
-    Stk(vm)->stepmark();
-    vm->mainstk()->stepmark();
+    vm->stepmark();
+    vm->stepmark();
     state = state + 1;
     break;
   case GCSMarkReg:
     state = state + 1;
     break;
   case GCSMarkFrame:
-    vm->stepmarkframes();
+    g->stepmarkframes();
     state = state + 1;
     break;
   case GCSMarkGray:
@@ -401,15 +479,15 @@ void SGC::singlestep()
       state = state + 1;
     break;
   case GCSSweepObjGroup:
-    if (!ObjGroup(vm)->stepsweep())
+    if (!g->getobjgroup()->stepsweep())
       state = state + 1;
     break;
   case GCSSweepInterns:
-    if (!Intern(vm)->stepsweep())
+    if (!g->getintern()->stepsweep())
       state = state + 1;
     break;
   case GCSSweepEnd:
-    Intern(vm)->checkResize();
+    g->getintern()->checkResize();
     state = state + 1;
     break;
   case GCSEnd:
@@ -435,20 +513,26 @@ void SGC::sweepgray()
   graylst = graylstLast = NULL;
 }
 
+void SGC::touchchild(RefPtr ptr)
+{
+  ptr->visit(g->mainstk());
+}
+
 void SGC::fullgc()
 {
-  Check(vm->iport);
-  Check(vm->oport);
+  VM* vm = g->mainstk();
+  Check(g->iport);
+  Check(g->oport);
   ftouchptr = &SGC::touchchild;
-  ObjGroup(vm)->setfullgcmask();
-  Stk(vm)->fullmark();
-  vm->regfullmark();
-  Cache(vm)->fullsweep();
-  ObjGroup(vm)->fullsweep();
+  g->getobjgroup()->setfullgcmask();
+  g->fullmark();
+  g->regfullmark();
+  g->getcachegroup()->fullsweep();
+  g->getobjgroup()->fullsweep();
   sweepgray();
-  Intern(vm)->fullsweep();
+  g->getintern()->fullsweep();
   clearDel();
-  ObjGroup(vm)->unsetfullgcmask();
+  g->getobjgroup()->unsetfullgcmask();
   ftouchptr = &SGC::addgraylst;
   state = GCSNone;
   setthreshold();
@@ -456,6 +540,7 @@ void SGC::fullgc()
 
 void SGC::clearDel()
 {
+  VM* vm = g->mainstk();
   while (toDelLst != NULL)
   {
     RefPtr item = toDelLst;
@@ -473,24 +558,24 @@ void SGC::stepfullgc()
 
 void SGC::trace(RefPtr ptr)
 {
-  if (ptr && !ptr->isgcmark(ObjGroup(vm)->curbit()))
+  if (ptr && !ptr->isgcmark(g->getobjgroup()->curbit()))
   {
-    ptr->gcmark(ObjGroup(vm)->curbit());
+    ptr->gcmark(g->getobjgroup()->curbit());
     (this->*ftouchptr)(ptr);
   }
 }
 
 void SGC::toDelOrMark(RefPtr ref)
 {
-  if (ref->isgcmark(ObjGroup(vm)->curbit()))
-    ObjGroup(vm)->addrefcur(ref);
+  if (ref->isgcmark(g->getobjgroup()->curbit()))
+    g->getobjgroup()->addrefcur(ref);
   else
     this->toDel(ref);
 }
 
 void SGC::checkBarrier(RefPtr ptr)
 {
-  if (state != GCSNone && ptr->isgcmark(ObjGroup(vm)->curbit()))
+  if (state != GCSNone && ptr->isgcmark(g->getobjgroup()->curbit()))
     trace(ptr);
 }
 
@@ -505,7 +590,7 @@ bool Interns::stepsweep()
     if (bucketlist[i] != NULL)
     {
       RefPtr bklst = bucketlist[i];
-      SweepListNext(bklst, ObjGroup(vm), GC(vm), bcount--);
+      SweepListNext(bklst, g->getobjgroup(), g->getgc(), bcount--);
     }
 
     return true;
@@ -519,7 +604,7 @@ void Interns::fullsweep()
   for (int i = 0; i < blistlen; i++)
   {
     RefPtr bklst = bucketlist[i];
-    SweepListNext(bklst, ObjGroup(vm), GC(vm), bcount--);
+    SweepListNext(bklst, g->getobjgroup(), g->getgc(), bcount--);
   }
 }
 
@@ -547,7 +632,7 @@ void Interns::checkResize()
   {
     int newl = blistlen * 2;
     while (bcount >= blistlen) newl *= 2;
-    bucketlist = (SymPtr*)vm->realloc(bucketlist, blistlen, sizeof(SymPtr) * newl);
+    bucketlist = (SymPtr*)g->realloc(bucketlist, blistlen, sizeof(SymPtr) * newl);
     rehash(blistlen, newl);
     blistlen = newl;
   }
@@ -557,7 +642,7 @@ void Interns::checkResize()
     while (bcount < newl / 4) newl /= 2;
     newl = std::max(newl, INIT_LEN);
     rehash(blistlen, newl);
-    bucketlist = (SymPtr*)vm->realloc(bucketlist, blistlen, sizeof(SymPtr) * newl);
+    bucketlist = (SymPtr*)g->realloc(bucketlist, blistlen, sizeof(SymPtr) * newl);
     blistlen = newl;
   }
 }
@@ -581,37 +666,42 @@ SymPtr Interns::internsym(const char* str, int n)
 
 SymPtr Interns::intern(const char* str, int n)
 {
-  uint h = SCM::hash(str, n, vm->seed);
+  uint h = SCM::hash(str, n, g->seed);
   int idx = h % blistlen;
   SymPtr b = bucketlist[idx];
   while (b != NULL)
   {
     if (b->len == n && memcmp(Ssstr(b), str, n * sizeof(char)) == 0)
     {
-      b->gcmark(ObjGroup(vm)->curbit());
+      b->gcmark(g->getobjgroup()->curbit());
       return b;
     }
     b = (SymPtr)b->gcnxt;
   }
-  SymPtr sym = vm->newstr(str, n, h);
+  SymPtr sym = g->newstr(str, n, h);
   sym->gcnxt = bucketlist[idx];
   b = bucketlist[idx] = sym;
-  b->gcmark(ObjGroup(vm)->curbit());
+  b->gcmark(g->getobjgroup()->curbit());
   bcount++;
   return sym;
 }
 
 void Interns::init()
 {
-  bucketlist = (SymPtr*)vm->alloc(sizeof(SymPtr) * INIT_LEN);
+  bucketlist = (SymPtr*)g->alloc(sizeof(SymPtr) * INIT_LEN);
   blistlen = INIT_LEN;
   bcount = 0;
+}
+
+Interns::Interns(GlobalVM* v)
+  : g(v), buf(v->mainstk()), bidx(0), bucketlist(0), blistlen(0), bcount(0)
+{
 }
 
 Interns::~Interns()
 {
   if (bucketlist)
-    vm->free(bucketlist, sizeof(SymPtr) * blistlen);
+    g->free(bucketlist, sizeof(SymPtr) * blistlen);
   bucketlist = NULL;
   blistlen = 0;
 }
@@ -625,19 +715,24 @@ Interns::~Interns()
 #define initreserve2(VT, SYM) {                 \
  SymPtr sym = Intern(vm)->internsym(SYM);       \
  sym->markconst();                              \
- setsym(&vm-> VT, sym);                         \
+ setsym(&G(vm)-> VT, sym);                     \
+}
+
+GSymTable::GSymTable(GlobalVM* v):g(v)
+{
 }
 
 void GSymTable::init()
 {
   lsizenode = MINLTSIZE;
   int size = twoto(lsizenode);
-  slots = new (vm->alloc(size * sizeof(TSlot))) TSlot[size];
+  slots = new (g->alloc(size * sizeof(TSlot))) TSlot[size];
   lastfree = &slots[size - 1];
 }
 
 void GSymTable::newkey(SymPtr sym, ValueT* v)
 {
+  VM* vm = g->mainstk();
   ValueT symp;
   setsym(&symp, sym);
   Sgcvar1(vm, dummy);
@@ -653,7 +748,7 @@ void GSymTable::newkeyorupdate(SymPtr sym, ValueT* val)
   else
   {
     pair->cdr(val);
-    GC(vm)->checkBarrier(pair);
+    g->getgc()->checkBarrier(pair);
   }
 }
 
@@ -699,6 +794,7 @@ void GSymTable::insert(SymPtr sym, PairPtr tv)
 
 void GSymTable::rehash()
 {
+  VM* vm = g->mainstk();
   int oldsize = twoto(lsizenode);
   lsizenode += 1;
   int size = twoto(lsizenode);
@@ -744,6 +840,7 @@ void GSymTable::getval(SymPtr sym, ValueT* v)
 
 void GSymTable::setslot(SymPtr sym, ValueT* val)
 {
+  VM* vm = g->mainstk();
   PairPtr pair = getslot(sym);
   Assert(vm, pair, "undefined global variable %s", Ssstr(sym));
   pair->cdr(val);
@@ -752,6 +849,7 @@ void GSymTable::setslot(SymPtr sym, ValueT* val)
 
 PairPtr GSymTable::getslot(SymPtr sym)
 {
+  VM* vm = g->mainstk();
   TSlot* node = getpos(sym);
   for (;;)
   {
@@ -816,7 +914,7 @@ const char* SCM::costatename(VM* vm, Stack* stk)
     return "suspended";
   if (stk->state == CO_DEAD)
     return "dead";
-  if (stk == vm->getstk())
+  if (stk == vm)
     return "running";
   if (stk->curfrm != NULL)
     return "normal";
@@ -1338,14 +1436,14 @@ void VM::regfullmark()
 
 void VM::checkgc()
 {
-  if (getgc()->state == GCSNone)
+  if (g->getgc()->getstate() == GCSNone)
   {
-    getobjgroup()->swapobjset();
-    getgc()->startstep();
-    getgc()->singlestep();
+    g->getobjgroup()->swapobjset();
+    g->getgc()->startstep();
+    g->getgc()->singlestep();
   }
   else
-    getgc()->singlestep();
+    g->getgc()->singlestep();
 }
 
 static ValueT scmcallcproc(VM* vm, NativeProcObj* np, ValueT* args)
@@ -1454,7 +1552,7 @@ void VM::printccode0(FILE *f, LambdaPtr lambda, int pc)
       fprintf(f, "(list ");
       OutputPortFileObj ofile;
       ofile.file = f;
-      printvalue0(&ofile, this->kconst[B], true);
+      printvalue0(&ofile, G(this)->kconst[B], true);
       fprintf(f, " %d)", A);
       break;
     }
@@ -1637,9 +1735,9 @@ void VM::printccode0(FILE *f, LambdaPtr lambda, int pc)
 
 void VM::printframe()
 {
-  Stack* stk = Stk(this);
+  Stack* vm = this;
   int n = 0;
-  CallFrame* frm  = stk->curfrm;
+  CallFrame* frm  = vm->curfrm;
   while (frm != NULL)
   {
     ValueT* base = frm->base;
@@ -1749,7 +1847,7 @@ static void shrinkapplyarity(VM* vm, ValueT* base, int* olen)
 {
   int len = *olen;
   Assert(vm, len >= 2, "apply: arity mismatch, provide %d need at least 2", len);
-  Stack* stk = Stk(vm);
+  Stack* stk = vm;
   ValueT* lastarg = stkvt(len);
   AssertVT(vm, SCM::listp(lastarg), lastarg, "apply: contract violation list?");
   for (int i = len-1; i >= 2; i--)
@@ -1805,7 +1903,6 @@ static void checkcallcc(VM* vm, CallFrame** frm, ValueT** procp, int len, CallAp
 {
   CallFrame* oldfrm = *frm;
   static const char* METHOD = "call-with-current-continuation";
-  Stack* stk = Stk(vm);
   ValueT* base = *procp;
   ValueT* cc = stkvt(1);
   if (callstate->fromapply)
@@ -1836,12 +1933,12 @@ static void checkcallcc(VM* vm, CallFrame** frm, ValueT** procp, int len, CallAp
     Error(vm, "%s: needs closure object", METHOD);
   *stkvt(0) = cc;
   ContinuationObj* newcont = Sr3(vm, ContinuationObj, oldfrm, base, callstate->istail);
-  newcont->dywind = Stk(vm)->dywind;
-  newcont->dystage = Stk(vm)->dywind ? (int)Stk(vm)->dywind->state : 0;
+  newcont->dywind = vm->dywind;
+  newcont->dystage = vm->dywind ? (int)vm->dywind->state : 0;
   setcontinuation(stkvt(1), newcont);
   if (argrest) *stkvt(2) = Snullref;
   callstate->callcc = true;
-  stk->curfrm = *frm = cowfrm(vm, oldfrm);
+  vm->curfrm = *frm = cowfrm(vm, oldfrm);
   *procp = (*frm)->base + (base - oldfrm->base);
 }
 
@@ -1882,7 +1979,7 @@ static void closeoportstr(VM* vm, CallFrame* frm)
   StrObj* str = vm->strintern(oport->strbuf.buf, oport->strbuf.count);
   ValueT out;
   setstr(&out, str);
-  vm->ac0 = *frm->start = out;
+  G(vm)->ac0 = *frm->start = out;
   oport->close();
 }
 
@@ -1926,7 +2023,7 @@ static void closecuroport(VM* vm, CallFrame* frm)
 static void callwithfile(VM* vm, ValueT* base, int len, CallFileInfo* info, const char* METHOD)
 {
   CallAppState* callstate = info->state;
-  Stack* stk = Stk(vm);
+
   ValueT* cw = stkvt(1);
   ValueT* proc = NULL, *file = NULL;
   if (callstate->fromapply)
@@ -1967,7 +2064,7 @@ static void callwithfile(VM* vm, ValueT* base, int len, CallFileInfo* info, cons
 static void withinputfromfile(VM* vm, CallFrame* frm, ValueT* base, int* olen, CallAppState* callstate)
 {
   const static char* METHOD = "with-input-from-file";
-  Stack* stk = Stk(vm);
+
   CallFileInfo info;
   info.state = callstate;
   info.argnum = 0;
@@ -2001,7 +2098,7 @@ static void withinputfromfile(VM* vm, CallFrame* frm, ValueT* base, int* olen, C
 static void withoutputtofile(VM* vm, CallFrame* frm, ValueT* base, int* olen, CallAppState* callstate)
 {
   const static char* METHOD = "with-output-to-file";
-  Stack* stk = Stk(vm);
+
   CallFileInfo info;
   info.state = callstate;
   info.argnum = 0;
@@ -2035,7 +2132,7 @@ static void withoutputtofile(VM* vm, CallFrame* frm, ValueT* base, int* olen, Ca
 static void callwithinputfile(VM* vm, CallFrame* frm, ValueT* base, int* olen, CallAppState* callstate)
 {
   const static char* METHOD = "call-with-input-file";
-  Stack* stk = Stk(vm);
+
   ValueT* cw = stkvt(1);
   CallFileInfo info;
   info.state = callstate;
@@ -2063,7 +2160,7 @@ static void callwithinputfile(VM* vm, CallFrame* frm, ValueT* base, int* olen, C
 static void callwithoutputfile(VM* vm, CallFrame* frm, ValueT* base, int* olen, CallAppState* callstate)
 {
   const static char* METHOD = "call-with-output-file";
-  Stack* stk = Stk(vm);
+
   ValueT* cw = stkvt(1);
   CallFileInfo info;
   info.state = callstate;
@@ -2092,7 +2189,7 @@ static void callwithoutputstr(VM* vm, CallFrame* frm, ValueT* base, int* olen, C
 {
   int len = *olen;
   const static char* METHOD = "call-with-output-string";
-  Stack* stk = Stk(vm);
+
   ValueT* cw = stkvt(1);
   ValueT* proc = NULL;
   if (callstate->fromapply)
@@ -2140,7 +2237,7 @@ static bool callforce(VM* vm, CallFrame* frm, ValueT* base, int* olen, CallAppSt
 {
   int len = *olen;
   const static char* METHOD = "force";
-  Stack* stk = Stk(vm);
+
   ValueT* cw = stkvt(1);
   ValueT* proc = NULL;
   if (state->fromapply)
@@ -2202,7 +2299,7 @@ static void calldynamicwind(VM* vm, CallFrame* frm, ValueT* base, int* olen, Cal
 {
   int len = *olen;
   const static char* METHOD = "dynamic-wind";
-  Stack* stk = Stk(vm);
+
   ValueT* cw = stkvt(1);
   ValueT* before = NULL, *body = NULL, *after = NULL;
   if (state->fromapply)
@@ -2230,8 +2327,8 @@ static void calldynamicwind(VM* vm, CallFrame* frm, ValueT* base, int* olen, Cal
   checkdywindlambda(vm, body, METHOD);
   checkdywindlambda(vm, after, METHOD);
   DynamicWindObj* dywind = Sr0(vm, DynamicWindObj);
-  dywind->parent = Stk(vm)->dywind;
-  Stk(vm)->dywind = dywind;
+  dywind->parent = vm->dywind;
+  vm->dywind = dywind;
   dywind->before = before;
   dywind->body = body;
   dywind->after = after;
@@ -2261,7 +2358,7 @@ static DyWindStep dywindadvance(VM* vm, DynamicWindObj* dywind, ValueT* slot)
     return DYWIND_STEP_CALL;
   case DW_AFTER:
     dywind->state = -1;
-    Stk(vm)->dywind = dywind->parent;
+    vm->dywind = dywind->parent;
     *slot = dywind->retval;
     return DYWIND_STEP_DONE;
   default:
@@ -2273,7 +2370,7 @@ static DyWindStep dywindadvance(VM* vm, DynamicWindObj* dywind, ValueT* slot)
 static void boxcapturedlocals(VM* vm, CallFrame* frm, LambdaPtr lambda);
 static CallFrame* recallforce(VM* vm, CallFrame* frm, ValueT* base)
 {
-  Stack* stk = Stk(vm);
+
   PromiseObj* prom = promiseref(base);
   frm->force->cell = prom->cell;
   ClosureObj* newcall = prom->cell->clo;
@@ -2291,13 +2388,14 @@ static CallFrame* recallforce(VM* vm, CallFrame* frm, ValueT* base)
   for (int j = 0; j <= newcall->lambda->argnum; j++)
     *(frm->base+j) = base+j;
   setclosure(frm->base, newcall);
-  stk->setvoid(frm->base+newcall->lambda->argnum+1, frm->top-1);
+  vm->setvoid(frm->base+newcall->lambda->argnum+1, frm->top-1);
   boxcapturedlocals(vm, frm, newcall->lambda);
   return frm;
 }
 
 static void callvalues(VM* vm, ValueT* base, int len, CallAppState* state)
 {
+
   ValueT* applyargs = NULL;
   if (state->fromapply)
   {
@@ -2340,7 +2438,7 @@ static void boxcapturedlocals(VM* vm, CallFrame* frm, LambdaPtr lambda)
 
 static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* base, int len, CallAppState* callstate)
 {
-  Stack* stk = Stk(vm);
+
   ClosurePtr newcall = closureref(base);
   if (!callstate->fromapply)
   {
@@ -2352,7 +2450,7 @@ static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* ba
   {
     if ((callstate->force || callstate->callcc || callstate->unwind) && istail)
       goto tail;
-    frm = stk->newfrm(frm, base, newcall->lambda->argnum, newcall->lambda->top);
+    frm = vm->newfrm(frm, base, newcall->lambda->argnum, newcall->lambda->top);
     frm->start = base;
     if (callstate->force)
     {
@@ -2388,7 +2486,7 @@ static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* ba
   }
   if (callstate->curiport) frm->env.curiport = callstate->curiport;
   if (callstate->curoport) frm->env.curoport = callstate->curoport;
-  stk->setvoid(frm->base+newcall->lambda->argnum+1, frm->top-1);
+  vm->setvoid(frm->base+newcall->lambda->argnum+1, frm->top-1);
   boxcapturedlocals(vm, frm, newcall->lambda);
   return frm;
 }
@@ -2412,23 +2510,19 @@ static void teardownstack(VM* vm);
 static void coresume_run(VM* vm, Stack* costk, CallFrame* target)
 {
   TRY {
-    vm->setcurstk(costk);
-    vm->execute0(target);
+    costk->execute0(target);
   }
   CATCH(err) {
     (void)err;
-    Stack* stk = Stk(vm);
-    stk->state = CO_DEAD;
-    vm->setcurstk(stk);
-    teardownstack(vm);
-    vm->ac0 = *stk->resslot = Svoidref;
-    vm->setcurstk(stk->callerstk);
+    costk->state = CO_DEAD;
+    teardownstack(costk);
+    G(vm)->ac0 = *costk->resslot = Svoidref;
   }
 }
 
 static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, Stack* costk, ValueT* arg, bool hasarg)
 {
-  Stack* callerstk = Stk(vm);
+  Stack* callerstk = vm;
   costk->state = CO_OK;
   costk->callerstk = callerstk;
   costk->resslot = base;
@@ -2447,18 +2541,18 @@ static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, Stack* cos
     return CALL_COMPLEX_RESUME_CC;
   }
     CallFrame* Y = costk->curfrm;
-    vm->ac0 = hasarg ? *arg : Svoidref;
+    G(vm)->ac0 = hasarg ? *arg : Svoidref;
     if (costk->tail)
     {
       ClosurePtr yclo = closureref(Y->base);
       LambdaPtr ylambda = yclo->lambda;
       ValueT* slot = Y->base + (1 + (ylambda->vars ? ylambda->vars->local.n : 0));
-      *slot = vm->ac0;
+      *slot = G(vm)->ac0;
     Y->setpc(PC_RET);
     coresume_run(vm, costk, Y);
     return CALL_COMPLEX_RESUME_CC;
   }
-  *costk->retreg = vm->ac0;
+  *costk->retreg = G(vm)->ac0;
   Y->setpc(Y->getpc() - 1);
   coresume_run(vm, costk, Y);
   return CALL_COMPLEX_RESUME_CC;
@@ -2466,15 +2560,14 @@ static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, Stack* cos
 
 static CallComplexAct coyield(VM* vm, CallFrame** frm, ValueT* base, bool istail)
 {
-  Stack* costk = Stk(vm);
+  Stack* costk = vm;
   Assert(vm, costk->state == CO_OK, "coroutine-yield: internal error, coroutine not running");
   ValueT value = *singlevalue(vm, base + 1, "coroutine-yield");
   Stack* callerstk = costk->callerstk;
-  vm->ac0 = *costk->resslot = value;
+  G(vm)->ac0 = *costk->resslot = value;
   costk->retreg = base;
   costk->tail = istail;
   costk->state = CO_SUSPENDED;
-  vm->setcurstk(callerstk);
   *frm = callerstk->curfrm;
   return CALL_COMPLEX_YIELD_CC;
 }
@@ -2514,7 +2607,7 @@ static CallComplexAct cocallresume(VM* vm, CallFrame** frm, ValueT** procp, int*
   }
   if (costk->state != CO_SUSPENDED)
   {
-    vm->ac0 = *base = Svoidref;
+    G(vm)->ac0 = *base = Svoidref;
     return CALL_COMPLEX_RESUME_CC;
   }
   return coresume(vm, frm, base, costk, &arg, hasarg);
@@ -2523,7 +2616,7 @@ static CallComplexAct cocallresume(VM* vm, CallFrame** frm, ValueT** procp, int*
 static CallComplexAct cocallyield(VM* vm, CallFrame** frm, ValueT** procp, int* len, CallAppState* state)
 {
   const static char* METHOD = "coroutine-yield";
-  Assert(vm, Stk(vm) != vm->mainstk(), "%s: yield outside a coroutine", METHOD);
+  Assert(vm, vm != G(vm)->mainstk(), "%s: yield outside a coroutine", METHOD);
   if (state->fromapply)
   {
     ValueT* lst = *procp + 1;
@@ -2655,14 +2748,14 @@ static bool indywindchain(DynamicWindObj* head, DynamicWindObj* dy)
 
 static void unwinddywindchain(VM* vm, DynamicWindObj* stop)
 {
-  Stack* stk = Stk(vm);
-  while (stk->dywind != NULL && !indywindchain(stop, stk->dywind))
+
+  while (vm->dywind != NULL && !indywindchain(stop, vm->dywind))
   {
-    DynamicWindObj* dy = stk->dywind;
+    DynamicWindObj* dy = vm->dywind;
     int dwstate = dy->state;
     Sgcvar1(vm, after);
     *after = dy->after;
-    stk->dywind = dy->parent;
+    vm->dywind = dy->parent;
     if (dwstate != DW_BODY)
       continue;
     TRY {
@@ -2688,12 +2781,12 @@ static void enterdywindchain(VM* vm, DynamicWindObj* target, DynamicWindObj* cur
     Print("\ndynamic-wind: before thunk raised: %s\n", e);
   }
   target->state = DW_BODY;
-  Stk(vm)->dywind = target;
+  vm->dywind = target;
 }
 
 static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len, bool istail, DynamicWindObj* dywind)
 {
-  Stack* stk = Stk(vm);
+
   CallAppState state;
   state.dywind = dywind;
   state.istail = istail;
@@ -2749,14 +2842,14 @@ static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len, bool ist
     if (cont->dystage == DW_BEFORE || cont->dystage == DW_AFTER)
     {
       DynamicWindObj* head = cont->dywind;
-      if (head != NULL && !indywindchain(Stk(vm)->dywind, head))
+      if (head != NULL && !indywindchain(vm->dywind, head))
         Error(vm, "dynamic-wind: illegal to re-enter a completed before/after thunk via continuation");
     }
-    enterdywindchain(vm, cont->dywind, Stk(vm)->dywind);
+    enterdywindchain(vm, cont->dywind, vm->dywind);
     CallFrame* top = cowfrm(vm, cont->frm);
     ValueT* rebased = top->base + (cont->base - cont->frm->base);
-    *frm = stk->curfrm = top;
-    vm->ac0 = *rebased = proc+1;
+    *frm = vm->curfrm = top;
+    G(vm)->ac0 = *rebased = proc+1;
     return cont->tail ? CALLACT_CC_TAILRET : CALLACT_RESUME_CC;
   }
   else
@@ -2775,7 +2868,7 @@ enum RtnFrmAct {
 
 static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lambda)
 {
-  Stack* stk = Stk(vm);
+
   CallFrame* owner = (*frm)->prev;
   ValueT* retslot = (*frm)->start;
   if (owner != NULL && owner->seg->frozen > 0 &&
@@ -2786,16 +2879,16 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
     (*frm)->prev = newowner;
   }
   if (owner == NULL)
-    vm->ac0 = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
+    G(vm)->ac0 = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
   else
-    vm->ac0 = *(*frm)->start = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
+    G(vm)->ac0 = *(*frm)->start = stkvt((1+(lambda->vars?lambda->vars->local.n:0)));
   if ((*frm)->force)
   {
     if ((*frm)->force->cell->state == PROMISE_EAGER)
     {
-      vm->ac0 = (*frm)->force->cell->val;
+      G(vm)->ac0 = (*frm)->force->cell->val;
       if (owner != NULL)
-        *(*frm)->start = vm->ac0;
+        *(*frm)->start = G(vm)->ac0;
       (*frm)->force = NULL;
     }
     else if (ispromise((*frm)->start))
@@ -2805,7 +2898,7 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
     }
     else
     {
-      (*frm)->force->cell->val = vm->ac0;
+      (*frm)->force->cell->val = G(vm)->ac0;
       (*frm)->force->cell->state = PROMISE_EAGER;
       (*frm)->force = NULL;
     }
@@ -2814,7 +2907,7 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
   ValueT* slot = (*frm)->start;
   CallFrame* dead = *frm;
   (*frm)->dynwind = NULL;
-  *frm = stk->rtnfrm(*frm);
+  *frm = vm->rtnfrm(*frm);
   if (dywind != NULL)
   {
     if (dywindadvance(vm, dywind, slot) == DYWIND_STEP_CALL)
@@ -2838,12 +2931,11 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
   }
   if (*frm != NULL)
     return RTN_RESUME;
-  if (stk->callerstk != NULL && dead == stk->c0)
+  if (vm->callerstk != NULL && dead == vm->c0)
   {
-    stk->state = CO_DEAD;
-    *stk->resslot = vm->ac0;
-    vm->setcurstk(stk->callerstk);
-    *frm = stk->callerstk->curfrm;
+    vm->state = CO_DEAD;
+    *vm->resslot = G(vm)->ac0;
+    *frm = vm->callerstk->curfrm;
     return RTN_COEND;
   }
     return RTN_DONE;
@@ -2851,7 +2943,7 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
 
 static void runthunk(VM* vm, ValueT* proc)
 {
-  Stack* stk = Stk(vm);
+
   if (isnativeproc(proc))
   {
     NativeProcObj* nproc = nativeprocref(proc);
@@ -2862,23 +2954,23 @@ static void runthunk(VM* vm, ValueT* proc)
   ClosurePtr c = closureref(proc);
   int argnum = c->lambda->argnum;
   int arity = c->lambda->top;
-  CallFrame* nf = stk->newfrm(NULL, NULL, argnum, arity);
+  CallFrame* nf = vm->newfrm(NULL, NULL, argnum, arity);
   *nf->base = *proc;
-  stk->setvoid(nf->base + argnum + 1, nf->top - 1);
-  stk->curfrm = nf;
+  vm->setvoid(nf->base + argnum + 1, nf->top - 1);
+  vm->curfrm = nf;
   nf->setpc(c->lambda->getcodestart());
   vm->execute0(nf);
 }
 
 static void unwinddynamichain(VM* vm)
 {
-  while (Stk(vm)->dywind != NULL)
+  while (vm->dywind != NULL)
   {
-    DynamicWindObj* dy = Stk(vm)->dywind;
+    DynamicWindObj* dy = vm->dywind;
     int dwstate = dy->state;
     Sgcvar1(vm, after);
     *after = dy->after;
-    Stk(vm)->dywind = dy->parent;
+    vm->dywind = dy->parent;
     if (dwstate != DW_BODY)
       continue;
     TRY {
@@ -2892,8 +2984,8 @@ static void unwinddynamichain(VM* vm)
 
 static void teardowndeadframes(VM* vm)
 {
-  Stack* stk = Stk(vm);
-  CallFrame** f = &stk->curfrm;
+
+  CallFrame** f = &vm->curfrm;
   CallFrame* fr = *f;
   while (fr != NULL)
   {
@@ -2928,7 +3020,7 @@ void VM::execute(CallFrame* frm)
 
 void VM::execute0(CallFrame* frm)
 {
-  Stack* stk = Stk(this);
+  Stack* vm = this;
   ValueT* base = frm->base;
   ClosurePtr call = closureref(base);
   LambdaPtr lambda = call->lambda;
@@ -2962,7 +3054,7 @@ void VM::execute0(CallFrame* frm)
   }
   case OP_LISTK: {
     int A, B; getcode_listk(i, A, B);
-    setpair(stkvt(A), SCM::list(this, this->kconst[B], stkvt(A)));
+    setpair(stkvt(A), SCM::list(this, G(vm)->kconst[B], stkvt(A)));
     break;
   }
   case OP_LIST2VEC: {
@@ -3002,8 +3094,8 @@ void VM::execute0(CallFrame* frm)
     ValueT* k = lambda->getk(from);
     SymPtr name = symref(k);
     ValueT val;
-    GEnv(this)->getval(name, &val);
-    Assert(this, !isundefined(&val), "undefined global var %s", Ssstr(name));
+    GEnv(vm)->getval(name, &val);
+    Assert(vm, !isundefined(&val), "undefined global var %s", Ssstr(name));
     *stkvt(target) = val;
     break;
   }
@@ -3099,7 +3191,7 @@ void VM::execute0(CallFrame* frm)
     int on = newlambda->vars->bvar.n;
     ValueT* tval = stkvt(target);
     ClosurePtr clo = NULL;
-    setclosure(tval, clo = newclosure(on));
+    setclosure(tval, clo = G(vm)->newclosure(on));
     clo->lambda = newlambda;
     clo->initouters(this, frm->seg, base, call->outers);
     break;
@@ -3197,7 +3289,7 @@ retlab: {
 { size_t t = (size_t)(e);                         \
   memcpy(b + p, &t, sizeof(t)); p += sizeof(t); } \
 
-void VM::makeseed()
+void GlobalVM::makeseed()
 {
   char buff[3 * sizeof(size_t)];
   int h = time(NULL);
@@ -3211,19 +3303,21 @@ void VM::makeseed()
   Debug(Print("vm make seed %d time %d\n", seed, h));
 }
 
-void VM::regNative(const char* name, CProc f, int argn, bool rest)
+void GlobalVM::regNative(const char* name, CProc f, int argn, bool rest)
 {
+  VM* vm = mainstk();
   SymPtr sym = getintern()->internsym(name);
   PairPtr pair = getgenv()->getslot(sym);
   Assert(this, !pair, "key already exists %s", name);
   Sgcvar1(this, cf);
-  setnativeproc(cf, Sr4(this, NativeProcObj, sym, f, argn, rest));
+  setnativeproc(cf, Sr4(vm, NativeProcObj, sym, f, argn, rest));
   getgenv()->newkey(sym, cf);
   DebugReg(Print("register global native proc %s[hash %d]\n", name, sym->hash));
 }
 
-void VM::regComplex(const char* name, int id)
+void GlobalVM::regComplex(const char* name, int id)
 {
+  VM* vm = mainstk();
   Assert(this, id >= 0 && id < NATIVE_COMPLEX_MAX, "wrong id of complex proc %d", id);
   SymPtr sym = getintern()->internsym(name);
   PairPtr pair = getgenv()->getslot(sym);
@@ -3234,7 +3328,7 @@ void VM::regComplex(const char* name, int id)
   DebugReg(Print("register global complex native proc %s[hash %d]\n", name, Sshash(sym)));
 }
 
-void VM::regcproc(RegCProc reg)
+void GlobalVM::regcproc(RegCProc reg)
 {
   if (reg.cf.cp0)
     regNative(reg.name, reg.cf, reg.argnum, reg.argrest);
@@ -3267,29 +3361,30 @@ static void constvalinit(VM* vm)
   initreserve2(uquotesvt, "unquote-splicing");
   initreserve2(qquotevt, "quasiquote");
 
-  vm->kconst[K_NULL] = Snullref;
-  vm->kconst[K_UNDEFINED] = Sundefined;
-  vm->kconst[K_UNQUOTE] = &vm->uquotevt;
-  vm->kconst[K_QQUOTE] = &vm->qquotevt;
-  vm->kconst[K_UNQUOTES] = &vm->uquotesvt;
+  G(vm)->kconst[K_NULL] = Snullref;
+  G(vm)->kconst[K_UNDEFINED] = Sundefined;
+  G(vm)->kconst[K_UNQUOTE] = &G(vm)->uquotevt;
+  G(vm)->kconst[K_QQUOTE] = &G(vm)->qquotevt;
+  G(vm)->kconst[K_UNQUOTES] = &G(vm)->uquotesvt;
 }
 
-void VM::init()
+void GlobalVM::init()
 {
+  VM* vm = mainstk();
   iport = Sr0(this, InputPortObj);
   iport->file = stdin;  // default input = stdin; interactive REPL can rely on it
   OutputPortFileObj* ofile = NULL;
-  oport = ofile = Sr0(this, OutputPortFileObj);
+  oport = ofile = Sr0(vm, OutputPortFileObj);
   ofile->file = stderr;
   getintern()->init();
   getgenv()->init();
-  constvalinit(this);
-  SCMBasic::init(this);
-  SCMMath::init(this);
-  SCMPort::init(this);
-  SCMStr::init(this);
-  SCMVector::init(this);
-  SCMTable::init(this);
+  constvalinit(vm);
+  SCMBasic::init(vm);
+  SCMMath::init(vm);
+  SCMPort::init(vm);
+  SCMStr::init(vm);
+  SCMVector::init(vm);
+  SCMTable::init(vm);
   regComplex("apply", NATIVE_COMPLEX_APPLY);
   regComplex("call-with-current-continuation", NATIVE_COMPLEX_CALLCC);
   regComplex("call/cc", NATIVE_COMPLEX_CALLCC);
@@ -3307,12 +3402,13 @@ void VM::init()
   regComplex("coroutine-yield", NATIVE_COMPLEX_COROUTINE_YIELD);
 
   /* Scheme bootstrap code (was init.scm) */
-  SCMInit::init(this);
+  SCMInit::init(vm);
 }
 
-void VM::getuniquesym(SymPtr sym, ValueT* out)
+void GlobalVM::getuniquesym(SymPtr sym, ValueT* out)
 {
-  Lbuffer buff(this);
+  VM* vm = mainstk();
+  Lbuffer buff(vm);
   char temp[32] = {0};
   snprintf(temp, sizeof(temp), "-%d-%d-", rand(), ++uniquen);
   buff.put(Ssstr(sym));
@@ -3321,17 +3417,17 @@ void VM::getuniquesym(SymPtr sym, ValueT* out)
   setsym(out, this->ninstrintern(buff.buf, buff.count));
 }
 
-VM::VM(ScmAlloc a):
-  frealloc(a), gc(this), stk(this), curstk(&stk), objGroup(this),
+GlobalVM::GlobalVM(ScmAlloc a):
+  frealloc(a), gc(this), main(this), objGroup(this),
   intern(this), cacheGroup(this),
-  genv(this),uniquen(0)
+  genv(this),uniquen(0), g(this)
 {
   makeseed();
   init();
-  GC(this)->setthreshold();
+  this->getgc()->setthreshold();
 }
 
-void* VM::shrinkvec(void* ptr, int *psize, int fn, int esize)
+void* GlobalVM::shrinkvec(void* ptr, int *psize, int fn, int esize)
 {
   int olds = esize * (*psize);
   int news = esize * fn;
@@ -3341,7 +3437,7 @@ void* VM::shrinkvec(void* ptr, int *psize, int fn, int esize)
   return newptr;
 }
 
-void* VM::growvec(void *ptr, int *psize, int ne, int esize, int limit, const char* what)
+void* GlobalVM::growvec(void *ptr, int *psize, int ne, int esize, int limit, const char* what)
 {
   int size = *psize;
   if (ne + 1 <= size)
@@ -3360,7 +3456,7 @@ void* VM::growvec(void *ptr, int *psize, int ne, int esize, int limit, const cha
   return newptr;
 }
 
-void* VM::realloc(void* ptr, size_t osize, size_t nsize)
+void* GlobalVM::realloc(void* ptr, size_t osize, size_t nsize)
 {
   long debt = getgc()->debt();
   void* block = frealloc(ptr, nsize);
@@ -3376,7 +3472,7 @@ void* VM::realloc(void* ptr, size_t osize, size_t nsize)
   return block;
 }
 
-void* VM::alloc(size_t size)
+void* GlobalVM::alloc(size_t size)
 {
   long debt = getgc()->debt();
   void* block = frealloc(NULL, size);
@@ -3392,56 +3488,56 @@ void* VM::alloc(size_t size)
   return block;
 }
 
-StrObj* VM::newstr(int len, int h)
+StrObj* GlobalVM::newstr(int len, int h)
 {
   int size = StrObj::totalsize(len);
   return new (alloc(size)) StrObj(len, h);
 }
 
-StrObj* VM::newstr(char c, int len, int h)
+StrObj* GlobalVM::newstr(char c, int len, int h)
 {
   int size = StrObj::totalsize(len);
   return new (alloc(size)) StrObj(c, len, h);
 }
 
-StrObj* VM::newstr(const char* str, int len, int h)
+StrObj* GlobalVM::newstr(const char* str, int len, int h)
 {
   int size = StrObj::totalsize(len);
   return new (alloc(size)) StrObj(str, len, h);
 }
 
-NumBigObj* VM::newnumbig(int len, char sign)
+NumBigObj* GlobalVM::newnumbig(int len, char sign)
 {
   int size = NumBigObj::totalsize(len);
   return (NumBigObj*)getobjgroup()->recobj(new (alloc(size)) NumBigObj(len, sign));
 }
 
-ClosurePtr VM::newclosure(int no)
+ClosurePtr GlobalVM::newclosure(int no)
 {
   int size = ClosureObj::totalsize(no);
   return (ClosurePtr)getobjgroup()->recobj(new (alloc(size)) ClosureObj(no));
 }
 
-PairPtr VM::getonepairnor()
+PairPtr GlobalVM::getonepairnor()
 {
-  PairPtr pair = Cache(this)->getonepair();
+  PairPtr pair = this->getcachegroup()->getonepair();
   if (pair == NULL)
     pair = new (alloc(sizeof(PairObj))) PairObj();
   pair->gcnxt = NULL;
   return pair;
 }
 
-StrObj* VM::strintern(const char* str)
+StrObj* GlobalVM::strintern(const char* str)
 {
   return strintern(str, strlen(str));
 }
 
-StrObj* VM::ninstrintern(const char* str, int len)
+StrObj* GlobalVM::ninstrintern(const char* str, int len)
 {
   return (StrObj*)getobjgroup()->recobj(newstr(str, len, -1));
 }
 
-StrObj* VM::strintern(const char* str, int len)
+StrObj* GlobalVM::strintern(const char* str, int len)
 {
   if (len <= MAXSHORTLEN)
     return getintern()->intern(str, len);
@@ -3449,17 +3545,17 @@ StrObj* VM::strintern(const char* str, int len)
     return ninstrintern(str, len);
 }
 
-StrObj* VM::strintern(int len)
+StrObj* GlobalVM::strintern(int len)
 {
   return (StrObj*)getobjgroup()->recobj(newstr(len, -1));
 }
 
-StrObj* VM::strintern(int len, char c)
+StrObj* GlobalVM::strintern(int len, char c)
 {
   return (StrObj*)getobjgroup()->recobj(newstr(c, len, -1));
 }
 
-const char* VM::gettopsource()
+const char* GlobalVM::gettopsource()
 {
   LambdaPtr lambda = gettoplambda();
   if (lambda == NULL || lambda->source == NULL)
@@ -3467,10 +3563,10 @@ const char* VM::gettopsource()
   return lambda->source->str;
 }
 
-LambdaPtr VM::gettoplambda()
+LambdaPtr GlobalVM::gettoplambda()
 {
-  Stack* stk = Stk(this);
-  CallFrame* frm  = stk->curfrm;
+  Stack* vm = mainstk();
+  CallFrame* frm  = vm->curfrm;
   if (frm == NULL)  // compile/lex error, no frame is pushed yet
     return NULL;
   ValueT* base = frm->base;
@@ -3480,13 +3576,13 @@ LambdaPtr VM::gettoplambda()
   return closureref(basevt)->lambda;
 }
 
-bool VM::dolex(Lexer* lex, StrPtr source)
+bool GlobalVM::dolex(Lexer* lex, StrPtr source)
 {
-  ReserveStack _reservestk_(this);
-  Stack* stk = Stk(this);
-  Sgcvar2(this, expr, lambdavt);
+  Stack* vm = mainstk();
+  ReserveStack _reservestk_(vm);
+  Sgcvar2(vm, expr, lambdavt);
   LambdaPtr lambda = NULL;
-  setlambda(lambdavt, lambda = Sr0(this, LambdaObj));
+  setlambda(lambdavt, lambda = Sr0(vm, LambdaObj));
   lambda->source = source;
   setundefined(expr);
   lex->readOne(expr);
@@ -3500,7 +3596,7 @@ bool VM::dolex(Lexer* lex, StrPtr source)
     Print("\n");
 #endif
 
-    SCompiler compiler(this, lambda, NULL);
+    SCompiler compiler(vm, lambda, NULL);
     compiler.prevline = lambda->defline;
     compiler.compile(1, expr, Sreturn, true);
 
@@ -3511,14 +3607,14 @@ bool VM::dolex(Lexer* lex, StrPtr source)
 #endif
 
     ac0 = Sundefined;
-    CallFrame* frm = stk->curfrm;
-    frm = stk->newfrm(frm, frm != NULL ? frm->top : NULL, 0, lambda->top);
+    CallFrame* frm = vm->curfrm;
+    frm = vm->newfrm(frm, frm != NULL ? frm->top : NULL, 0, lambda->top);
     ClosurePtr closure = newclosure(0);
     setclosure(frm->base, closure);
     closure->lambda = lambda;
-    stk->setvoid(frm->base+1, frm->top-1);
+    vm->setvoid(frm->base+1, frm->top-1);
     frm->setpc(lambda->getcodestart());
-    execute(frm);
+    vm->execute(frm);
 
 #ifdef DebugVT
     if (!isvoid(&ac0) && !isundefined(&ac0))
@@ -3533,43 +3629,45 @@ bool VM::dolex(Lexer* lex, StrPtr source)
   return false;
 }
 
-void VM::loadfile(const char* fname)
+void GlobalVM::loadfile(const char* fname)
 {
+  VM* vm = mainstk();
   ReaderF reader(fname);
-  Lexer lex(this, &reader);
-  Sgcvar1(this, source);
+  Lexer lex(vm, &reader);
+  Sgcvar1(vm, source);
   setstr(source, strintern(fname));
   bool flag = false;
   do {
     flag = dolex(&lex, strref(source));
   } while(flag);
-  GC(this)->fullgc();
+  this->getgc()->fullgc();
 }
 
-ValueT VM::evalstr(const char* str)
+ValueT GlobalVM::evalstr(const char* str)
 {
+  VM* vm = mainstk();
   ReaderS reader(str);
-  Lexer lex(this, &reader);
-  Sgcvar1(this, source);
+  Lexer lex(vm, &reader);
+  Sgcvar1(vm, source);
   setstr(source, strintern(str));
   bool flag = false;
   do {
     flag = dolex(&lex, strref(source));
   } while(flag);
-  GC(this)->fullgc();
+  this->getgc()->fullgc();
   return this->ac0;
 }
 
-ValueT VM::call(const char* name, ValueT** argv, int argc)
+ValueT GlobalVM::call(const char* name, ValueT** argv, int argc)
 {
-  ReserveStack _reservestk_(this);
-  Stack* stk = Stk(this);
+  Stack* vm = mainstk();
+  ReserveStack _reservestk_(vm);
   SymPtr sym = strintern(name);
-  Sgcvar1(this, proc);
-  GEnv(this)->getval(sym, proc);
-  Assert(this, !isundefined(proc), "undefined global var %s", name);
-  Assert(this, !iscontinuation(proc), "call: continuation %s not supported", name);
-  CallFrame* frm = stk->newfrm(NULL, NULL, 0, 2 + argc);
+  Sgcvar1(vm, proc);
+  this->getgenv()->getval(sym, proc);
+  Assert(vm, !isundefined(proc), "undefined global var %s", name);
+  Assert(vm, !iscontinuation(proc), "call: continuation %s not supported", name);
+  CallFrame* frm = vm->newfrm(NULL, NULL, 0, 2 + argc);
   ValueT* base = frm->base;
   ClosurePtr closure = newclosure(0);
   setclosure(stkvt(0), closure);
@@ -3577,23 +3675,24 @@ ValueT VM::call(const char* name, ValueT** argv, int argc)
   for (int i = 0; i < argc; i++)
     *stkvt(2+i) = *argv[i];
   *stkvt(2+argc) = Svoidref;
-  LambdaPtr lambda = closure->lambda = Sr0(this, LambdaObj);
-  int pc = lambda->pushcode(this, code_tailcallapp(1, argc));
-  lambda->saveline(this, pc, -1, -1);
+  LambdaPtr lambda = closure->lambda = Sr0(vm, LambdaObj);
+  int pc = lambda->pushcode(vm, code_tailcallapp(1, argc));
+  lambda->saveline(vm, pc, -1, -1);
   frm->setpc(lambda->getcodestart());
-  execute(frm);
+  vm->execute(frm);
   return this->ac0;
 }
 
-void VM::dorepl()
+void GlobalVM::dorepl()
 {
-  ReaderI reader(this);
-  Sgcvar1(this, source);
+  VM* vm = mainstk();
+  ReaderI reader(vm);
+  Sgcvar1(vm, source);
   setstr(source, strintern("=stdin"));
  loop:
   TRY
   {
-    Lexer lex(this, &reader);
+    Lexer lex(vm, &reader);
     reader.lexer = &lex;
     dolex(&lex, strref(source));
     fflush(stderr);
@@ -3601,7 +3700,7 @@ void VM::dorepl()
   CATCH(err)
   {
     Print("\n%s\n", err);
-    GC(this)->fullgc();
+    this->getgc()->fullgc();
   }
   goto loop;
 }
@@ -3611,10 +3710,10 @@ void VM::printvalue(ValueT* val)
   switch (vttype(val)) {
   case VT_REF_PAIR:
   case VT_REF_ARRAY:
-    oport->writechar('\'');
+    G(this)->oport->writechar('\'');
     break;
   }
-  printvalue0(this->oport, val);
+  printvalue0(G(this)->oport, val);
 }
 
 static bool checkpairform(VM* vm, bool strip, ValueT* val, ValueT* form, ValueT* out, const char* what)
@@ -3642,6 +3741,9 @@ static bool checkpairform(VM* vm, bool strip, ValueT* val, ValueT* form, ValueT*
   }
   return false;
 }
+
+void VM::printvalue0(ValueT* val) { printvalue0(G(this)->oport, val); }
+void VM::printvalue0(ValueT* val, bool strip) { printvalue0(G(this)->oport, val, strip); }
 
 void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
 {
@@ -3833,22 +3935,22 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
     break;
   case VT_REF_PAIR: {
     ValueT out;
-    if (checkpairform(this, stripanno, val, &quotevt, &out, "quote"))
+    if (checkpairform(this, stripanno, val, &G(this)->quotevt, &out, "quote"))
     {
       oport->writechar('\'');
       printvalue0(oport, &out, stripanno);
     }
-    else if (checkpairform(this, stripanno, val, &qquotevt, &out, "quasiquote"))
+    else if (checkpairform(this, stripanno, val, &G(this)->qquotevt, &out, "quasiquote"))
     {
       oport->writechar('`');
       printvalue0(oport, &out, stripanno);
     }
-    else if (checkpairform(this, stripanno, val, &uquotevt, &out, "unquote"))
+    else if (checkpairform(this, stripanno, val, &G(this)->uquotevt, &out, "unquote"))
     {
       oport->writechar(',');
       printvalue0(oport, &out, stripanno);
     }
-    else if (checkpairform(this, stripanno, val, &uquotesvt, &out, "unquote-splicing"))
+    else if (checkpairform(this, stripanno, val, &G(this)->uquotesvt, &out, "unquote-splicing"))
     {
       oport->writestr(",@");
       printvalue0(oport, &out, stripanno);
@@ -4729,25 +4831,25 @@ void Lexer::readValueT(ValueT* v)
 	case TOKEN_QUOTE: {
     aheadToken = dLex();
     readValueT(v);
-    SCM::tokwform(vm, &vm->quotevt, v, line, anno);
+    SCM::tokwform(vm, &G(vm)->quotevt, v, line, anno);
     break;
   }
 	case TOKEN_UNQUOTE: {
     aheadToken = dLex();
     readValueT(v);
-    SCM::tokwform(vm, &vm->uquotevt, v, line, anno);
+    SCM::tokwform(vm, &G(vm)->uquotevt, v, line, anno);
     break;
   }
 	case TOKEN_QUASIQUOTE: {
     aheadToken = dLex();
     readValueT(v);
-    SCM::tokwform(vm, &vm->qquotevt, v, line, anno);
+    SCM::tokwform(vm, &G(vm)->qquotevt, v, line, anno);
     break;
   }
 	case TOKEN_UNQUOTE_SPLICING: {
     aheadToken = dLex();
     readValueT(v);
-    SCM::tokwform(vm, &vm->uquotesvt, v, line, anno);
+    SCM::tokwform(vm, &G(vm)->uquotesvt, v, line, anno);
     break;
   }
   case TOKEN_END:

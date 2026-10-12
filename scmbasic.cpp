@@ -377,7 +377,7 @@ static void cocreate(VM* vm, Stack* costk, ValueT* body)
   C0->top = C0->base + 1 + lambda->top;
   Assert(vm, C0->top < C0->seg->end(),
          "coroutine-create: alloc stack seg error, arity: %d too big", lambda->top);
-  C0->env = Stk(vm)->curfrm->env;
+  C0->env = vm->curfrm->env;
   C0->setpc(-1);
   costk->setvoid(C0->base + lambda->argnum + 1, C0->top - 1);
   costk->curfrm = C0;
@@ -388,9 +388,8 @@ static ValueT scm_stub_coroutine_create(VM* vm, ValueT* body)
 {
   AssertArg(vm, isclosure(body), "coroutine-create", body, "not a closure");
   Sgcvar2(vm, out, costkvt);
-  Stack* costk = Sr0(vm, Stack);
+  Stack* costk = Sr1(vm, VM, G(vm));
   setref(costkvt, costk);
-  costk->vm = vm;
   costk->dywind = NULL;
   costk->sv = NULL;
   costk->state = CO_SUSPENDED;
@@ -410,8 +409,8 @@ static ValueT scm_stub_coroutine_status(VM* vm, ValueT* co)
 
 static ValueT scm_stub_coroutine_running(VM* vm)
 {
-  Stack* cur = Stk(vm);
-  if (cur == vm->mainstk())
+  Stack* cur = vm;
+  if (cur == G(vm)->mainstk())
     return Sfalseref;
   ValueT out;
   setstack(&out, cur);

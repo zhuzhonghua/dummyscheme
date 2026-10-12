@@ -183,8 +183,9 @@ typedef double scm_float;
  DebugAssertStop(*((int*)0) = 0);                 \
  } while(0)
 
+class GlobalVM;
 class VM;
-class Stack;
+typedef VM Stack;
 
 struct Lbuffer {
   static const int INIT_LEN;
@@ -485,21 +486,21 @@ struct NumBigObj;
 #define ishykeyword(VT, VD) (ishygienesym(VT) && hygienesymref(VT)->sym == symref(VD))
 #define iskeyword(VT, VD) ((issym(VT) && symref(VT) == symref(VD)) || ishykeyword(VT, VD))
 
-#define iskwdefine(vm, VT) (iskeyword(VT, &vm->definevt))
-#define iskwset(vm, VT) (iskeyword(VT, &vm->setvt))
-#define iskwbegin(vm, VT) (iskeyword(VT, &vm->beginvt))
-#define iskwif(vm, VT) (iskeyword(VT, &vm->ifvt))
-#define iskwlambda(vm, VT) (iskeyword(VT, &vm->lambdavt))
-#define iskwsyntaxrules(vm, VT) (iskeyword(VT, &vm->syntaxrvt))
-#define iskwsyntaxerr(vm, VT) (iskeyword(VT, &vm->syntaxerrvt))
-#define iskwdefsyntax(vm, VT) (iskeyword(VT, &vm->defsyntaxvt))
-#define iskwellipsis(vm, VT) (iskeyword(VT, &vm->ellipsisvt))
-#define iskwdelay(vm, VT) (iskeyword(VT, &vm->delayvt))
+#define iskwdefine(vm, VT) (iskeyword(VT, &G(vm)->definevt))
+#define iskwset(vm, VT) (iskeyword(VT, &G(vm)->setvt))
+#define iskwbegin(vm, VT) (iskeyword(VT, &G(vm)->beginvt))
+#define iskwif(vm, VT) (iskeyword(VT, &G(vm)->ifvt))
+#define iskwlambda(vm, VT) (iskeyword(VT, &G(vm)->lambdavt))
+#define iskwsyntaxrules(vm, VT) (iskeyword(VT, &G(vm)->syntaxrvt))
+#define iskwsyntaxerr(vm, VT) (iskeyword(VT, &G(vm)->syntaxerrvt))
+#define iskwdefsyntax(vm, VT) (iskeyword(VT, &G(vm)->defsyntaxvt))
+#define iskwellipsis(vm, VT) (iskeyword(VT, &G(vm)->ellipsisvt))
+#define iskwdelay(vm, VT) (iskeyword(VT, &G(vm)->delayvt))
 
-#define iskwquote(vm, VT) (iskeyword(VT, &vm->quotevt))
-#define iskwqquote(vm, VT) (iskeyword(VT, &vm->qquotevt))
-#define iskwuquote(vm, VT) (iskeyword(VT, &vm->uquotevt))
-#define iskwuquotes(vm, VT) (iskeyword(VT, &vm->uquotesvt))
+#define iskwquote(vm, VT) (iskeyword(VT, &G(vm)->quotevt))
+#define iskwqquote(vm, VT) (iskeyword(VT, &G(vm)->qquotevt))
+#define iskwuquote(vm, VT) (iskeyword(VT, &G(vm)->uquotevt))
+#define iskwuquotes(vm, VT) (iskeyword(VT, &G(vm)->uquotesvt))
 
 enum ValueTEnum {
   VT_UNDEFINED = 0, // internal use
@@ -610,7 +611,7 @@ private:
     bitmask[0] = fullgcmask | bit0mask;             \
     bitmask[1] = fullgcmask | bit1mask; } while(0)
 
-#define Check(a) GC(vm)->trace(a)
+#define Check(a) G(vm)->getgc()->trace(a)
 
 #define Visit1(a) virtual void visit(VM* vm) {Check(a);}
 #define Visit2(a, b) virtual void visit(VM* vm) {Check(a);Check(b);}
@@ -930,7 +931,9 @@ struct StkVar {
   StkVar* next;
   VM* vm;
 
+  void init(VM*);
   StkVar(VM* v);
+  StkVar(GlobalVM* v);
   ~StkVar();
 };
 
@@ -943,7 +946,6 @@ public:
   ValueT* first() { return &slots[0]; }
   ValueT* end() { return &slots[SEGMENT_SLOTS_SIZE]; }
 
-  virtual void finz(VM* vm);
   GetSize(StackSegment)
 
   int frozen;
@@ -987,7 +989,7 @@ struct CallFrame : public RefObject {
 };
 
 struct DynamicWindObj;
-class Stack;
+class VM;
 
 enum CoState {
   CO_OK = 0,
@@ -995,23 +997,58 @@ enum CoState {
   CO_DEAD,
 };
 
-class Stack : public RefObject {
+class SGC;
+class RefObjGroup;
+class Interns;
+class Lexer;
+class VM : public RefObject {
 public:
-  Stack(): vm(NULL), sv(NULL), dywind(NULL), curfrm(NULL),
-    state(CO_OK), callerstk(NULL), resslot(NULL), retreg(NULL), tail(false),
-    c0(NULL) {}
-  Stack(VM* v);
-
+  VM(GlobalVM* v);
   void fullmark();
   void stepmark();
   virtual void visit(VM* vm);
-  GetSize(Stack)
+  GetSize(VM)
   void setvoid(ValueT* s, ValueT* e);
+
+  StrObj* strintern(int len);
+  StrObj* strintern(int len, char c);
+  ValueT evalstr(const char* str);
+  void loadfile(const char* fname);
+  NumBigObj* newnumbig(int, char);
+  bool dolex(Lexer* lex, StrPtr source);
+  template<class T>
+  void shrinkvec(VecT<T> *arr) { arr->ptr = (T*)shrinkvec(arr->ptr, &arr->size, arr->n, sizeof(T)); }
+  template<class T>
+  void growvec(VecT<T> *arr) { arr->ptr = (T*)growvec(arr->ptr, &arr->size, arr->n + 1, sizeof(T), INT_MAX, ""); }
+  void* shrinkvec(void* ptr, int *psize, int fn, int esize);
+  void* growvec(void* ptr, int *psize, int ne, int esize, int limit, const char* what);
+  void free(void* ptr, size_t size);
+  void getuniquesym(SymPtr sym, ValueT* out);
+  const char* gettopsource();
+  Interns* getintern();
+  StrObj* strintern(const char* str, int len);
+  void* alloc(size_t size);
+  void* realloc(void* ptr, size_t osize, size_t nsize);
+
+  void printvalue(ValueT* val);
+  void printvalue0(OutputPortObj*, ValueT* val, bool stripanno);
+  void printvalue0(OutputPortObj* o, ValueT* val) { printvalue0(o, val, false); }
+  void printvalue0(ValueT* val);
+  void printvalue0(ValueT* val, bool strip);
+  void printframe();
+  void printccode0(FILE *f, LambdaPtr lambda, int pc);
+  void printccode(FILE *f, LambdaPtr lambda);
+  void printccode(LambdaObj* lambda) { printccode(stderr, lambda); }
+  void stepmarkframes();
+  void regfullmark();
+  void checkgc();
+  void execute(CallFrame* frm);
+  void execute0(CallFrame* frm);
 
   CallFrame* rtnfrm(CallFrame*);
   CallFrame* newfrm(CallFrame*, ValueT* base, int argnum, int arity);
 
-  VM* vm;
+  GlobalVM* g;
   StkVar* sv;
   DynamicWindObj* dywind;
   CallFrame* curfrm;
@@ -1033,7 +1070,6 @@ public:
   ~ReserveStack();
 protected:
   VM* vm;
-  Stack* curstk;
   CallFrame* curfrm;
   DynamicWindObj* dywind;
   StkVar oldfrm;   // keep the saved chain alive while detached
@@ -1061,9 +1097,9 @@ protected:
     gclst[idx] = ref;
   }
 
-  friend class VM;
-  RefObjGroup(VM* v) {
-    vm = v;
+  friend class GlobalVM;
+  RefObjGroup(GlobalVM* v) {
+    g = v;
 
     gclst[0] = NULL;
     gclst[1] = NULL;
@@ -1074,7 +1110,7 @@ protected:
     othIdx = 1;
   }
 protected:
-  VM* vm;
+  GlobalVM* g;
 
   static const int SIZE = 2;
 
@@ -1092,10 +1128,10 @@ public:
   PairPtr getonepair();
   void fullsweep();
 protected:
-  friend class VM;
-  CacheGroup(VM* v): vm(v) { pairs = NULL; }
+  friend class GlobalVM;
+  CacheGroup(GlobalVM* v): g(v) { pairs = NULL; }
 protected:
-  VM* vm;
+  GlobalVM* g;
   PairPtr pairs;
 };
 
@@ -1118,7 +1154,7 @@ protected:
   TouchPtr ftouchptr;
 
   void addgraylst(RefPtr ptr);
-  void touchchild(RefPtr ptr) { ptr->visit(vm); }
+  void touchchild(RefPtr ptr);
 public:
   void stepfullgc();
 
@@ -1155,9 +1191,9 @@ protected:
   void sweepgray();
   void clearDel();
 
-  friend class VM;
-  SGC(VM* v):threshold(0) {
-    vm = v;
+  friend class GlobalVM;
+  SGC(GlobalVM* v):threshold(0) {
+    g = v;
     state = GCSNone;
     toDelLst = NULL;
     graylstLast = graylst = NULL;
@@ -1165,7 +1201,7 @@ protected:
     debtbytes = 0;
   }
 protected:
-  VM* vm;
+  GlobalVM* g;
 
   int state;
 
@@ -1193,8 +1229,8 @@ public:
 protected:
   void rehash(int oldl, int newl);
 
-  friend class VM;
-  Interns(VM* v):vm(v),buf(v),bidx(0),bucketlist(0),blistlen(0),bcount(0) {}
+  friend class GlobalVM;
+  Interns(GlobalVM* v);
 
   ~Interns();
   void init();
@@ -1202,7 +1238,7 @@ protected:
   Lbuffer buf;
 
 protected:
-  VM* vm;
+  GlobalVM* g;
 
   const static int INIT_LEN;
 
@@ -1232,7 +1268,7 @@ public:
   void newkey(SymPtr sym, ValueT* val);
   void newkeyorupdate(SymPtr sym, ValueT* val);
 protected:
-  GSymTable(VM* v):vm(v) {}
+  GSymTable(GlobalVM* v);
 
   void init();
   TSlot* getpos(SymPtr sym);
@@ -1240,20 +1276,20 @@ protected:
   void rehash();
   void insert(SymPtr sym, PairPtr tv);
 protected:
-  friend class VM;
-  VM* vm;
+  friend class GlobalVM;
+  GlobalVM* g;
 
   byte lsizenode;
   TSlot* slots;
   TSlot* lastfree;
 };
 
-#define GC(vm) (vm)->getgc()
-#define Stk(vm) (vm)->getstk()
-#define Cache(vm) (vm)->getcachegroup()
-#define ObjGroup(vm) (vm)->getobjgroup()
-#define Intern(vm) (vm)->getintern()
-#define GEnv(vm) (vm)->getgenv()
+#define G(vm) ((vm)->g)
+#define GC(vm) G(vm)->getgc()
+#define Cache(vm) G(vm)->getcachegroup()
+#define ObjGroup(vm) G(vm)->getobjgroup()
+#define Intern(vm) G(vm)->getintern()
+#define GEnv(vm) G(vm)->getgenv()
 
 #define Snew0(vm, TYPE) new (vm->alloc(sizeof(TYPE))) TYPE ()
 #define Snew1(vm, TYPE, a) new (vm->alloc(sizeof(TYPE))) TYPE (a)
@@ -1271,7 +1307,7 @@ protected:
 
 #define regcfunc(vm, FUNCS) do{                             \
  for (const RegCProc *l = FUNCS; l->name != NULL; l++)      \
-   (vm)->regcproc(*l);                                      \
+   G(vm)->regcproc(*l);                                      \
  }while(0)
 
 #define REGCPROC(CTYPE, n, cp)                                      \
@@ -1337,7 +1373,7 @@ class Lexer;
 struct InputPortObj;
 struct OutputPortObj;
 
-class VM {
+class GlobalVM {
 public:
   ValueT* kconst[K_ConstMax];
 
@@ -1361,7 +1397,7 @@ public:
   InputPortObj* iport;
   OutputPortObj* oport;
 public:
-  VM(ScmAlloc a = salloc);
+  GlobalVM(ScmAlloc a = salloc);
 
   void regcproc(RegCProc regc);
   void regComplex(const char* name, int id);
@@ -1371,23 +1407,6 @@ public:
   int uniquen;
 
 public:
-  void stepmarkframes();
-  void regfullmark();
-  void checkgc();
-
-public:
-  void printvalue(ValueT* val);
-  void printvalue0(OutputPortObj*, ValueT* val, bool stripanno);
-  void printvalue0(OutputPortObj* o, ValueT* val) { printvalue0(o, val, false); }
-  void printvalue0(ValueT* val) { printvalue0(oport, val); }
-  void printvalue0(ValueT* val, bool strip) { printvalue0(oport, val, strip); }
-  void printframe();
-
-  void execute(CallFrame* frm);
-  void execute0(CallFrame* frm);
-  void printccode0(FILE *f, LambdaPtr lambda, int pc);
-  void printccode(FILE *f, LambdaPtr lambda);
-  void printccode(LambdaObj* lambda) { printccode(stderr, lambda); }
 public:
   void dorepl();
   void loadfile(const char* fname);
@@ -1395,6 +1414,9 @@ public:
   ValueT call(const char* name, ValueT** argv, int argc);
   bool dolex(Lexer* lex, StrPtr source);
 
+  void printvalue0(ValueT* val, bool strip) { main.printvalue0(val, strip); }
+  void printvalue0(ValueT* val) { main.printvalue0(val); }
+  void printframe() { main.printframe(); }
 public:
   LambdaPtr gettoplambda();
   const char* gettopsource();
@@ -1448,18 +1470,20 @@ protected:
   void initprimitive();
 
 public:
-  Stack* getstk() { return curstk; }
-  void setcurstk(Stack* s) { curstk = s; }
   CacheGroup* getcachegroup() { return &cacheGroup; }
   SGC* getgc() { return &gc; }
   RefObjGroup* getobjgroup() { return &objGroup; }
   Interns* getintern() { return &intern; }
   GSymTable* getgenv() { return &genv; }
-  Stack* mainstk() { return &stk; }
+  Stack* mainstk() { return &main; }
+  void fullmark() { mainstk()->fullmark(); }
+  void stepmarkframes() { mainstk()->stepmarkframes(); }
+  void regfullmark() { mainstk()->regfullmark(); }
+  void printccode(LambdaObj* lambda) { mainstk()->printccode(lambda); }
 
 protected:
-  Stack stk;
-  Stack* curstk;
+  VM main;
+  GlobalVM* g;
   RefObjGroup objGroup;
   CacheGroup cacheGroup;
   SGC gc;

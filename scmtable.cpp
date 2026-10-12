@@ -39,7 +39,7 @@ uint HashTableObj::gethash(ValueT* v)
   case VT_REF_SYM: {
     StrObj* s = strref(v);
     if (s->hash < 0)
-      s->hash = (int)SCM::hash(Ssstr(s), s->len, vm->seed);
+      s->hash = (int)SCM::hash(Ssstr(s), s->len, G(vm)->seed);
     return (uint)s->hash;
   }
   default:

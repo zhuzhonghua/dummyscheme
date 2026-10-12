@@ -25,16 +25,16 @@ static InputPortObj* getiportrest(VM* vm, ValueT* args, const char* METHOD)
 
 static InputPortObj* getcuriport(VM* vm)
 {
-  CallFrame* fm = Stk(vm)->curfrm;
+  CallFrame* fm = vm->curfrm;
   if (fm->env.curiport) return fm->env.curiport;
-  return vm->iport;
+  return G(vm)->iport;
 }
 
 static OutputPortObj* getcuroport(VM* vm)
 {
-  CallFrame* fm = Stk(vm)->curfrm;
+  CallFrame* fm = vm->curfrm;
   if (fm->env.curoport) return fm->env.curoport;
-  return vm->oport;
+  return G(vm)->oport;
 }
 
 static ValueT scm_stub_current_iport(VM* vm)
@@ -268,7 +268,7 @@ static ValueT scm_stub_write_char(VM* vm, ValueT* cvt, ValueT* args)
   if (oport)
     oport->writechar(c);
   else
-    vm->oport->writechar(c);
+    G(vm)->oport->writechar(c);
   return Svoidref;
 }
 
