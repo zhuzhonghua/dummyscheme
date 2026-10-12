@@ -1280,6 +1280,104 @@
 (check 'co-yield-long (call-with-values (lambda () (coroutine-resume co-yl))
                                       (lambda vs (length vs))) 100)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 19. error / pcall / xpcall  (moved from try-error-test.scm)
+
+(section "19. error / pcall / xpcall")
+
+;; xpcall: protected call with error handler (Lua xpcall semantics)
+(check 'xpcall-normal (xpcall (lambda () 42) (lambda (e) 'oops)) 42)
+(check 'xpcall-error (xpcall (lambda () (error "boom")) (lambda (e) e)) "boom")
+(check 'xpcall-error-args (xpcall (lambda () (error "a" "b" 42)) (lambda (e) e))
+       "a b 42")
+(check 'xpcall-write-obj (xpcall (lambda () (error '(1 2))) (lambda (e) e)) "(1 2)")
+(check 'xpcall-internal (xpcall (lambda () (car 1)) (lambda (e) e)) "car: not a pair")
+(check 'xpcall-nested
+       (xpcall (lambda ()
+                 (xpcall (lambda () (error "inner"))
+                         (lambda (e) (string-append "got:" e))))
+               (lambda (e) 'outer-error))
+       "got:inner")
+(check 'xpcall-handler-error
+       (xpcall (lambda ()
+                 (xpcall (lambda () (error "x"))
+                         (lambda (e) (error "handler-fail"))))
+               (lambda (e) e))
+       "handler-fail")
+
+;; dynamic-wind after thunk still runs when thunk raises
+(set! *log* '())
+(xpcall (lambda ()
+          (dynamic-wind (lambda () #f)
+                        (lambda () (error "dw"))
+                        (lambda () (set! *log* (cons 'after *log*)))))
+        (lambda (e) #f))
+(check 'xpcall-dw-after *log* '(after))
+
+;; (error) with no argument is itself an error (caught by outer xpcall)
+(check 'error-noargs
+       (xpcall (lambda () (xpcall (lambda () (error)) (lambda (e) e)))
+               (lambda (e) e))
+       "error: needs at least 1 argument")
+
+;; xpcall requires closures / arity
+(check 'xpcall-nonclosure
+       (xpcall (lambda () (xpcall 1 (lambda (e) e))) (lambda (e) e))
+       "xpcall: not a closure")
+(check 'xpcall-thunk-arity
+       (xpcall (lambda () (xpcall (lambda (x) x) (lambda (e) e))) (lambda (e) e))
+       "xpcall: thunk must take no arguments")
+(check 'xpcall-handler-arity
+       (xpcall (lambda () (xpcall (lambda () 1) (lambda (a b) b))) (lambda (e) e))
+       "xpcall: handler must take exactly 1 argument")
+
+;; xpcall inside a coroutine
+(check 'xpcall-in-coroutine
+       (coroutine-resume
+        (coroutine-create
+         (lambda ()
+           (coroutine-yield
+            (xpcall (lambda () (error "in-co")) (lambda (e) e))))))
+       "in-co")
+
+;; rest lambda as thunk is allowed (no fixed args)
+(check 'xpcall-rest-thunk
+       (xpcall (lambda args (if (null? args) 'ok 'bad)) (lambda (e) e))
+       'ok)
+
+;; xpcall result can be a string built by handler
+(check 'xpcall-handler-string
+       (xpcall (lambda () (error "k1" "k2")) (lambda (e) (string-length e)))
+       5)  ; "k1 k2" length 5
+
+;; pcall (Lua-style): (ok . result) / (false . err-string)
+(check 'pcall-ok (pcall (lambda () 42)) '(#t . 42))
+(check 'pcall-ok-list (pcall (lambda () (list 1 2 3))) '(#t 1 2 3))
+(check 'pcall-err (pcall (lambda () (error "boom"))) '(#f . "boom"))
+(check 'pcall-internal (pcall (lambda () (car 1))) '(#f . "car: not a pair"))
+(check 'pcall-recover
+       (begin
+         (pcall (lambda () (error "x")))
+         (pcall (lambda () (+ 1 2))))
+       '(#t . 3))
+(check 'pcall-nonclosure
+       (xpcall (lambda () (pcall 7)) (lambda (e) e))
+       "pcall: not a closure")
+(check 'pcall-thunk-arity
+       (xpcall (lambda () (pcall (lambda (x) x))) (lambda (e) e))
+       "pcall: thunk must take no arguments")
+(check 'pcall-err-len
+       (let ((res (pcall (lambda () (error "k1" "k2")))))
+         (if (car res) 'bad (string-length (cdr res))))
+       5)
+(check 'pcall-in-coroutine
+       (coroutine-resume
+        (coroutine-create
+         (lambda ()
+           (coroutine-yield
+            (pcall (lambda () (error "in-co")))))))
+       '(#f . "in-co"))
+
 (display "aftertest passed ") (display *npass*)
 (display " failed ") (display *nfail*)
 (newline)

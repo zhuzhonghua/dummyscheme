@@ -417,6 +417,77 @@ static ValueT scm_stub_coroutine_running(VM* vm)
   return out;
 }
 
+static ValueT scm_stub_error(VM* vm, ValueT* rest)
+{
+  const static char* METHOD = "error";
+  Assert(vm, !isnull(rest), "%s: needs at least 1 argument", METHOD);
+  Lbuffer buf(vm);
+  int n = 0;
+  for (ValueT* p = rest; !isnull(p); p = Scdr(p))
+  {
+    if (n > 0) buf.put(' ');
+    ValueT* arg = Scar(p);
+    if (isstr(arg))
+      buf.put(vtstr(arg), vtstrlen(arg));
+    else
+    {
+      Sgcvar1(vm, oport);
+      OutputPortStrObj* op = Sr1(vm, OutputPortStrObj, vm);
+      setoport(oport, op);
+      vm->printvalue0(op, arg, true);
+      buf.put(op->strbuf.buf, op->strbuf.count);
+      op->close();
+    }
+    n++;
+  }
+  StrObj* s = G(vm)->ninstrintern(buf.buf, buf.count);
+  throw s->str;
+}
+
+static ValueT scm_stub_pcall(VM* vm, ValueT* thunk)
+{
+  const static char* METHOD = "pcall";
+  AssertArg(vm, isclosure(thunk), METHOD, thunk, "not a closure");
+  Assert(vm, closureref(thunk)->lambda->argnum == (closureref(thunk)->lambda->argrest ? 1 : 0),
+         "%s: thunk must take no arguments", METHOD);
+  ReserveStack _reservestk_(vm);
+  Sgcvar3(vm, r0, r1, r2);
+  TRY {
+    SCM::invokecall(vm, thunk, NULL, 0);
+    *r0 = Strueref;
+    *r1 = G(vm)->ac0;
+  }
+  CATCH(err) {
+    *r0 = Sfalseref;
+    setstr(r1, G(vm)->ninstrintern(err, err ? (int)strlen(err) : 0));
+  }
+  setpair(r2, SCM::cons(vm, r0, r1));         /* r2 = (ok . result) / (false . err) */
+  return *r2;
+}
+
+static ValueT scm_stub_xpcall(VM* vm, ValueT* thunk, ValueT* handler)
+{
+  const static char* METHOD = "xpcall";
+  AssertArg(vm, isclosure(thunk), METHOD, thunk, "not a closure");
+  AssertArg(vm, isclosure(handler), METHOD, handler, "not a closure");
+  Assert(vm, closureref(thunk)->lambda->argnum == (closureref(thunk)->lambda->argrest ? 1 : 0),
+         "%s: thunk must take no arguments", METHOD);
+  Assert(vm, closureref(handler)->lambda->argnum == (closureref(handler)->lambda->argrest ? 2 : 1),
+         "%s: handler must take exactly 1 argument", METHOD);
+  ReserveStack _reservestk_(vm);
+  TRY {
+    SCM::invokecall(vm, thunk, NULL, 0);
+  }
+  CATCH(err) {
+    Sgcvar1(vm, e);
+    setstr(e, G(vm)->ninstrintern(err, err ? (int)strlen(err) : 0));
+    ValueT* args[1] = { e };
+    SCM::invokecall(vm, handler, args, 1);
+    return G(vm)->ac0;
+  }
+  return G(vm)->ac0;
+}
+
 void SCMBasic::init(VM* vm)
 {
   const RegCProc basics[] = {
@@ -497,6 +568,10 @@ void SCMBasic::init(VM* vm)
     RegCProc("coroutine-create", scm_stub_coroutine_create),
     RegCProc("coroutine-status", scm_stub_coroutine_status),
     RegCProc("coroutine-running", scm_stub_coroutine_running),
+
+    RegCProc("error", scm_stub_error, true),
+    RegCProc("pcall", scm_stub_pcall),
+    RegCProc("xpcall", scm_stub_xpcall),
 
     RegCProc(NULL, -1)
   };

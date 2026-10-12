@@ -35,6 +35,24 @@ void Print(const char* fmt, ...)
   va_end(ap);
 }
 
+ValueT SCM::invokecall(Stack* vm, ValueT* proc, ValueT** argv, int argc)
+{
+  CallFrame* frm = vm->newfrm(NULL, NULL, 0, 2 + argc);
+  ValueT* base = frm->base;
+  ClosurePtr closure = G(vm)->newclosure(0);
+  setclosure(base, closure);
+  *(base + 1) = *proc;
+  for (int i = 0; i < argc; i++)
+    *(base + 2 + i) = *argv[i];
+  *(base + 2 + argc) = Svoidref;
+  LambdaPtr lambda = closure->lambda = Sr0(vm, LambdaObj);
+  int pc = lambda->pushcode(vm, code_tailcallapp(1, argc));
+  lambda->saveline(vm, pc, -1, -1);
+  frm->setpc(lambda->getcodestart());
+  vm->execute(frm);
+  return G(vm)->ac0;
+}
+
 static const char* scm_errv(VM* vm, const char* fmt, va_list ap)
 {
   char buf[SCM_ERRBUF_SIZE] = {0};
@@ -3904,20 +3922,25 @@ ValueT GlobalVM::call(const char* name, ValueT** argv, int argc)
   this->getgenv()->getval(sym, proc);
   Assert(vm, !isundefined(proc), "undefined global var %s", name);
   Assert(vm, !iscontinuation(proc), "call: continuation %s not supported", name);
-  CallFrame* frm = vm->newfrm(NULL, NULL, 0, 2 + argc);
-  ValueT* base = frm->base;
-  ClosurePtr closure = newclosure(0);
-  setclosure(stkvt(0), closure);
-  *stkvt(1) = proc;
-  for (int i = 0; i < argc; i++)
-    *stkvt(2+i) = *argv[i];
-  *stkvt(2+argc) = Svoidref;
-  LambdaPtr lambda = closure->lambda = Sr0(vm, LambdaObj);
-  int pc = lambda->pushcode(vm, code_tailcallapp(1, argc));
-  lambda->saveline(vm, pc, -1, -1);
-  frm->setpc(lambda->getcodestart());
-  vm->execute(frm);
-  return this->ac0;
+  return SCM::invokecall(vm, proc, argv, argc);
+}
+
+bool GlobalVM::pcall(ValueT* fn, ValueT** argv, int argc, ValueT* out)
+{
+  Stack* vm = mainstk();
+  ReserveStack _reservestk_(vm);
+  TRY {
+    Sgcvar1(vm, proc);
+    *proc = *fn;
+    Assert(vm, isclosure(proc) || isnativeproc(proc), "pcall: not a procedure");
+    Assert(vm, !iscontinuation(proc), "pcall: continuation not supported");
+    *out = SCM::invokecall(vm, proc, argv, argc);
+    return true;
+  }
+  CATCH(err) {
+    setstr(out, G(vm)->ninstrintern(err ? err : "", err ? (int)strlen(err) : 0));
+    return false;
+  }
 }
 
 void GlobalVM::dorepl()

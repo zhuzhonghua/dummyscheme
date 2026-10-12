@@ -728,6 +728,8 @@ public:
   static void numbig2str(VM* vm, NumBigObj* num, Lbuffer* buf);
 
   static const char* costatename(VM* vm, Stack* stk);
+
+  static ValueT invokecall(Stack* vm, ValueT* proc, ValueT** argv, int argc);
   static void copystripanno(VM* vm, ValueT* out, ValueT* a);
   static ValueT* copylist(VM* vm, ValueT* out, ValueT* a);
   static void vector2cons(VM* vm, ValueT* out, ArrayObj* arr);
@@ -1358,6 +1360,7 @@ public:
   void loadfile(const char* fname);
   ValueT evalstr(const char* str);
   ValueT call(const char* name, ValueT** argv, int argc);
+  bool pcall(ValueT* fn, ValueT** argv, int argc, ValueT* out);
   bool dolex(Lexer* lex, StrPtr source);
 
   void printvalue0(ValueT* val, bool strip) { main.printvalue0(val, strip); }
