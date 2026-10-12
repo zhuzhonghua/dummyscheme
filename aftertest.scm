@@ -1243,12 +1243,25 @@
 (newline)
 (check 'co-err-status (coroutine-status co-e) 'dead)
 
+;; 17. rest body lambda: excess first-resume args collected off the source
+;;     (apply tail referenced / plain slots consed), no unbounded laying out
+(define (co-mk n acc) (if (= n 0) acc (co-mk (- n 1) (cons n acc))))
+(define co-rl (coroutine-create (lambda args (apply + args))))
+(check 'co-rest-apply (apply coroutine-resume co-rl (co-mk 100 '())) 5050)
+(define co-rl2 (coroutine-create (lambda args (apply + args))))
+(check 'co-rest-plain (coroutine-resume co-rl2 1 2 3 4 5 6 7 8 9 10) 55)
+
 ;; 16. apply form: resume with multiple args / zero args
 (define co-ac (coroutine-create (lambda ()
   (call-with-values (lambda () (coroutine-yield 'go))
                     (lambda (p q) (coroutine-yield (+ p q)))))))
 (check 'co-apply-first (coroutine-resume co-ac) 'go)
 (check 'co-apply-multi (call-with-values (lambda () (apply coroutine-resume co-ac '(5 7))) list) '(12))
+(define co-ao (coroutine-create (lambda ()
+  (call-with-values (lambda () (coroutine-yield 'go))
+                    (lambda (p q) (apply coroutine-yield (list p q)))))))
+(check 'co-apply-first-o (coroutine-resume co-ao) 'go)
+(check 'co-apply-order (call-with-values (lambda () (apply coroutine-resume co-ao '(5 7))) list) '(5 7))
 (define co-ac2 (coroutine-create (lambda ()
   (call-with-values (lambda () (coroutine-yield 'go))
                     (lambda () (coroutine-yield 'done2))))))

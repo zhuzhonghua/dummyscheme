@@ -2021,6 +2021,22 @@ static ValueT packvals(VM* vm, ValueT* base, int len)
   return out;
 }
 
+/* packlist: apply path, pack the arg list into a single-slot value straight off
+   the list — no data stack involved, so it cannot overflow any frame top.
+   The ValuesObj references the list as-is: order kept, no copy. */
+static ValueT packlist(VM* vm, ValueT* lst)
+{
+  if (isnull(lst))
+    return Snullref;
+  if (isnull(Scdr(lst)))
+    return Scar(lst);
+  ValuesObj* obj = Sr0(vm, ValuesObj);
+  obj->data = lst;
+  ValueT out;
+  setvaluesobj(&out, obj);
+  return out;
+}
+
 static void shrinkapplyarity(VM* vm, ValueT* base, int* olen)
 {
   int len = *olen;
@@ -2700,7 +2716,7 @@ static void coresume_run(VM* vm, Stack* costk, CallFrame* target)
 }
 
 static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, Stack* costk,
-                               ValueT* args, int nargs, bool istail)
+                               ValueT* args, int nargs, bool fromapply, bool istail)
 {
   Stack* callerstk = vm;
   costk->state = CO_OK;
@@ -2711,19 +2727,51 @@ static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, Stack* cos
     CallFrame* C0 = costk->curfrm;
     ClosurePtr body = closureref(C0->base);
     LambdaPtr lambda = body->lambda;
-    /* first resume: lay the args out directly on the coroutine data stack */
-    for (int i = 0; i < nargs; i++)
+    /* first resume: the args are the body lambda's parameters. Count them up
+       front and check arity BEFORE laying anything out. Fixed params go into
+       the param slots; excess (rest) args are collected straight off the source
+       (list tail or call-site slots) into the rest slot — nothing is laid out
+       unboundedly on the coroutine frame */
+    int n = fromapply ? SCM::thlength(args) : nargs;
+    if (lambda->argrest)
+      Assert(vm, n >= lambda->argnum - 1, "coroutine: arity mismatch, provide %d need at least %d", n, lambda->argnum - 1);
+    else
+      Assert(vm, n == lambda->argnum, "coroutine: arity mismatch, provide %d need %d", n, lambda->argnum);
+    int fixed = lambda->argrest ? lambda->argnum - 1 : lambda->argnum;
+    if (fromapply)
+    {
+      ValueT* p = args;
+      for (int i = 0; i < fixed; i++, p = Scdr(p))
+        *(C0->base + 1 + i) = Scar(p);
+      if (lambda->argrest)
+        *(C0->base + lambda->argnum) = p;   /* rest = the list tail */
+    }
+    else
+    {
+      for (int i = 0; i < fixed; i++)
       *(C0->base + 1 + i) = *(args + i);
-    ensurearity(vm, C0->base, nargs, lambda->argnum, lambda->argrest,
-                "coroutine", false);
+      if (lambda->argrest)
+      {
+        if (n > fixed)
+        {
+          Sgcvar1(vm, rvals);
+          for (int i = n - 1; i >= fixed; i--)
+            setpair(rvals, SCM::cons(vm, args + i, rvals));
+          *(C0->base + lambda->argnum) = *rvals;
+        }
+        else
+          setnull(C0->base + lambda->argnum);
+      }
+    }
     boxcapturedlocals(vm, C0, lambda);
     C0->setpc(lambda->getcodestart());
     coresume_run(vm, costk, C0);
     return istail ? CALL_COMPLEX_RESUME_TAIL : CALL_COMPLEX_RESUME_CC;
   }
     CallFrame* Y = costk->curfrm;
-  /* later resume: pack 0..N args into the yield return slot (single slot) */
-  ValueT packed = packvals(vm, args, nargs);
+  /* later resume: pack 0..N args into the yield return slot (single slot);
+     apply packs straight off the list, plain call packs the call-site slots */
+  ValueT packed = fromapply ? packlist(vm, args) : packvals(vm, args, nargs);
   G(vm)->ac0 = packed;
     if (costk->tail)
     {
@@ -2764,6 +2812,7 @@ static CallComplexAct cocallresume(VM* vm, CallFrame** frm, ValueT** procp, int*
   Stack* costk = NULL;
   ValueT* args = NULL;
   int nargs = 0;
+  bool fromapply = state->fromapply;
   if (state->fromapply)
   {
     AssertVT(vm, ispair(coarg), coarg, "%s: internal error in apply", METHOD);
@@ -2771,14 +2820,8 @@ static CallComplexAct cocallresume(VM* vm, CallFrame** frm, ValueT** procp, int*
     *coarg = Scar(coarg);
     AssertVT(vm, isstack(coarg), coarg, "%s: not a coroutine", METHOD);
     costk = stackref(coarg);
-    /* expand the apply arg list onto the caller stack */
-    args = base + 2;
-    for (ValueT* p = rest; ispair(p); p = Scdr(p))
-    {
-      Assert(vm, args + nargs < vm->curfrm->top, "%s: too many arguments in apply", METHOD);
-      *(args + nargs) = Scar(p);
-      nargs++;
-    }
+    args = rest;                   /* the arg list; handled in coresume */
+    nargs = 0;
     state->fromapply = false;
   }
   else
@@ -2794,7 +2837,7 @@ static CallComplexAct cocallresume(VM* vm, CallFrame** frm, ValueT** procp, int*
     G(vm)->ac0 = *base = Svoidref;
     return state->istail ? CALL_COMPLEX_RESUME_TAIL : CALL_COMPLEX_RESUME_CC;
   }
-  return coresume(vm, frm, base, costk, args, nargs, state->istail);
+  return coresume(vm, frm, base, costk, args, nargs, fromapply, state->istail);
 }
 
 static CallComplexAct cocallyield(VM* vm, CallFrame** frm, ValueT** procp, int* len, CallAppState* state)
