@@ -114,77 +114,39 @@ typedef double scm_float;
 
 #define STR(s) #s
 
-#define Print0(file, fmt, ...) fprintf(file, fmt, ##__VA_ARGS__)
-#define Print(fmt, ...) Print0(stderr, fmt, ##__VA_ARGS__)
+/* Portability: avoid the GNU-style ##__VA_ARGS__ macro extension. The former
+ * Assert/Error macros are now ordinary variadic functions (same names, same
+ * call signature) defined in vm.cpp. On failure the formatted message is
+ * truncated to a fixed buffer with vsnprintf, wrapped into a non-interned
+ * Scheme string, stored in GlobalVM::ac0, and thrown. */
 
-#define Assert(vm, cond, fmt, ...) do{                  \
-    if (!(cond)) {Print("\nException\n");               \
-      Print(fmt, ##__VA_ARGS__);                        \
-      vm->printframe();                                 \
-      DebugAssert(vm);                                  \
-      throw STR(cond);                                  \
-    }}while(0)
-
-#define AssertVT(vm, cond, vt, fmt, ...) do{            \
-    if (!(cond)) {Print("\nException\n");               \
-      vm->printvalue0(vt);Print("\n");                  \
-      Print(fmt, ##__VA_ARGS__);                        \
-      vm->printframe();                                 \
-      DebugAssert(vm);                                  \
-      throw STR(cond);                                  \
-    }}while(0)
-
-#define AssertVT2(vm, cond, vt, vt2, fmt, ...) do{      \
-    if (!(cond)) {Print("\nException\n");               \
-      vm->printvalue0(vt);Print("\n");                  \
-      vm->printvalue0(vt2);Print("\n");                 \
-      Print(fmt, ##__VA_ARGS__);                        \
-      vm->printframe();                                 \
-      DebugAssert(vm);                                  \
-      throw STR(cond);                                  \
-    }}while(0)
-
-#define AssertArgPair(vm, p, op) AssertArg(vm, ispair(p), op, p, " not a pair")
-
-#define AssertArg(vm, cond, op, vt, fmt, ...) do{   \
-    if (!(cond)) {Print("\nException in %s: ", op); \
-      vm->printvalue0(vt);                          \
-      Print(fmt, ##__VA_ARGS__);                    \
-      vm->printframe();                             \
-      DebugAssert(vm);                              \
-      throw STR(cond);                              \
-    }}while(0)
-
-#define Error(vm, fmt, ...) do{                   \
-    Print(fmt, ##__VA_ARGS__);                    \
-    vm->printframe();                             \
-    DebugAssert(vm);                              \
-    throw "Error ";                               \
-  }while(0)
-
-#define ErrorVT(vm, vt, fmt, ...) do{             \
-    Print("\nError:\n");                          \
-    vm->printvalue0(vt);                          \
-    Print("\n");                                  \
-    Print(fmt, ##__VA_ARGS__);                    \
-    vm->printframe();                             \
-    DebugAssert(vm);                              \
-    throw "Error ";                               \
-  }while(0)
-
-#define Serrorvt(vm, vt, fmt, ...) do {           \
-    Print(fmt, ##__VA_ARGS__);                    \
-    vm->printvalue0(vt, true);                    \
-    DebugAssertStop(*((int*)0) = 0);              \
- } while(0)
-
-#define Serror(fmt, ...) do {                     \
- Print(fmt, ##__VA_ARGS__);                       \
- DebugAssertStop(*((int*)0) = 0);                 \
- } while(0)
-
-class GlobalVM;
+struct ValueT;
 class VM;
+class GlobalVM;
+
+/* console output (replaces the old Print0/Print vararg macros) */
+void Print0(FILE* file, const char* fmt, ...);
+void Print(const char* fmt, ...);
+
+/* fixed size for the formatted error message; longer messages are truncated. */
+#define SCM_ERRBUF_SIZE 1024
+
+/* condition-checking wrappers: return normally when cond is true. */
+void Assert(VM* vm, bool cond, const char* fmt, ...);
+void Assert(GlobalVM* g, bool cond, const char* fmt, ...);
+void AssertVT(VM* vm, bool cond, ValueT* vt, const char* fmt, ...);
+void AssertVT2(VM* vm, bool cond, ValueT* vt, ValueT* vt2, const char* fmt, ...);
+void AssertArg(VM* vm, bool cond, const char* op, ValueT* vt, const char* fmt, ...);
+void AssertArgPair(VM* vm, ValueT* p, const char* op);
+
+/* unconditional error reporting. */
+void Error(VM* vm, const char* fmt, ...);
+void ErrorVT(VM* vm, ValueT* vt, const char* fmt, ...);
+
+/* non-throwing diagnostics (print only, like the old Serror* macros). */
+void Serror(const char* fmt, ...);
+void Serrorvt(VM* vm, ValueT* vt, const char* fmt, ...);
+
 typedef VM Stack;
 
 struct Lbuffer {

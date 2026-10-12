@@ -6,24 +6,48 @@
 
 using namespace Scheme;
 
-#define compileassert(vm, cond, expr, fmt, ...) do {      \
- if (!(cond)) compileerror(vm, expr, fmt, ##__VA_ARGS__); \
- } while(0)
+static const char* compile_errv(VM* vm, ValueT* expr, const char* fmt, va_list ap)
+{
+  char buf[SCM_ERRBUF_SIZE] = {0};
+  vsnprintf(buf, sizeof(buf), fmt, ap);
 
-#define compileerror(vm, expr, fmt, ...) do {                    \
- Print(fmt, ##__VA_ARGS__);                                      \
- Print(" %s:%d: ", vm->gettopsource(), annotateref(expr)->line); \
- Print("\nexpr:");                                               \
- vm->printvalue0(expr, true);                                    \
- DebugAssertStop(*((int*)0) = 0);                                \
- Print("\n");                                                    \
- throw "compile error";                                          \
- } while(0)
+  fprintf(stderr, "%s %s:%d: \nexpr:", buf, vm->gettopsource(), annotateref(expr)->line);
+  vm->printvalue0(expr, true);
+  fprintf(stderr, "\n");
 
-#define Serrorannotate(vm, vt, fmt, ...) do {   \
- Serror(fmt, ##__VA_ARGS__);                    \
- vm->printvalue0(vt, true);             \
- } while(0)
+  GlobalVM* g = G(vm);
+  StrObj* s = g->ninstrintern(buf, (int)strlen(buf));
+  setstr(&g->ac0, s);
+  return strref(&g->ac0)->str;
+}
+
+#define throwerror(vm, expr, fmt, ap)                 \
+{ va_start(ap, fmt);                                  \
+  const char* err = compile_errv(vm, expr, fmt, ap);  \
+  va_end(ap);                                         \
+  throw err; }
+
+static void compileerror(VM* vm, ValueT* expr, const char* fmt, ...)
+{
+  va_list ap;
+  throwerror(vm, expr, fmt, ap);
+}
+
+static void compileassert(VM* vm, bool cond, ValueT* expr, const char* fmt, ...)
+{
+  if (cond) return;
+  va_list ap;
+  throwerror(vm, expr, fmt, ap);
+}
+
+static void Serrorannotate(VM* vm, ValueT* vt, const char* fmt, ...)
+{
+  va_list ap;
+  va_start(ap, fmt);
+  vfprintf(stderr, fmt, ap);
+  va_end(ap);
+  vm->printvalue0(vt, true);
+}
 
 static void checkhygienesym(ValueT* hsym, ValueT* out)
 {

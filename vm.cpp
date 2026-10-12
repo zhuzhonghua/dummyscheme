@@ -17,16 +17,169 @@ using namespace Scheme;
 
 #define PC_RET -2   /* special code in execute0 */
 
-#define lexassert(vm, cond, line, fmt, ...) do {       \
- if (!(cond)) lexerror(vm, line, fmt, ##__VA_ARGS__);  \
- } while(0)
+namespace Scheme {
 
-#define lexerror(vm, line, fmt, ...) do {        \
- Print(fmt, ##__VA_ARGS__);                      \
- Print(" %s:%d: ", vm->gettopsource(), line);    \
- DebugAssertStop(*((int*)0) = 0);                \
- throw "lex error";                              \
- } while (0)
+void Print0(FILE* file, const char* fmt, ...)
+{
+  va_list ap;
+  va_start(ap, fmt);
+  vfprintf(file, fmt, ap);
+  va_end(ap);
+}
+
+void Print(const char* fmt, ...)
+{
+  va_list ap;
+  va_start(ap, fmt);
+  vfprintf(stderr, fmt, ap);
+  va_end(ap);
+}
+
+static const char* scm_errv(VM* vm, const char* fmt, va_list ap)
+{
+  char buf[SCM_ERRBUF_SIZE] = {0};
+  vsnprintf(buf, sizeof(buf), fmt, ap);
+
+  fprintf(stderr, "%s\n", buf);
+  vm->printframe();
+
+  GlobalVM* g = G(vm);
+  StrObj* s = g->ninstrintern(buf, (int)strlen(buf));
+  setstr(&g->ac0, s);
+  return strref(&g->ac0)->str;
+}
+
+static const char* scm_errf(VM* vm, const char* fmt, ...)
+{
+  va_list ap;
+  va_start(ap, fmt);
+  const char* err = scm_errv(vm, fmt, ap);
+  va_end(ap);
+  return err;
+}
+
+#define throwscm(vm, fmt, ap)                   \
+  { va_start(ap, fmt);                          \
+    const char* err = scm_errv(vm, fmt, ap);    \
+    va_end(ap);                                 \
+    throw err; }
+
+void Assert(VM* vm, bool cond, const char* fmt, ...)
+{
+  if (cond) return;
+  va_list ap;
+  throwscm(vm, fmt, ap);
+}
+
+void Assert(GlobalVM* g, bool cond, const char* fmt, ...)
+{
+  if (cond) return;
+  va_list ap;
+  throwscm(g->mainstk(), fmt, ap);
+}
+
+void AssertVT(VM* vm, bool cond, ValueT* vt, const char* fmt, ...)
+{
+  if (cond) return;
+  fprintf(stderr, "\nException\n");
+  vm->printvalue0(vt);
+  fprintf(stderr, "\n");
+  va_list ap;
+  throwscm(vm, fmt, ap);
+}
+
+void AssertVT2(VM* vm, bool cond, ValueT* vt, ValueT* vt2, const char* fmt, ...)
+{
+  if (cond) return;
+  fprintf(stderr, "\nException\n");
+  vm->printvalue0(vt);
+  fprintf(stderr, "\n");
+  vm->printvalue0(vt2);
+  fprintf(stderr, "\n");
+  va_list ap;
+  throwscm(vm, fmt, ap);
+}
+
+void AssertArg(VM* vm, bool cond, const char* op, ValueT* vt, const char* fmt, ...)
+{
+  if (cond) return;
+  fprintf(stderr, "\nException in %s: ", op);
+  vm->printvalue0(vt);
+  char buf[SCM_ERRBUF_SIZE] = {0};
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(buf, sizeof(buf), fmt, ap);
+  va_end(ap);
+  throw scm_errf(vm, "%s: %s", op, buf);
+}
+
+void AssertArgPair(VM* vm, ValueT* p, const char* op)
+{
+  if (ispair(p)) return;
+  fprintf(stderr, "\nException in %s: ", op);
+  vm->printvalue0(p);
+  throw scm_errf(vm, "%s: not a pair", op);
+}
+
+void Error(VM* vm, const char* fmt, ...)
+{
+  va_list ap;
+  throwscm(vm, fmt, ap);
+}
+
+void ErrorVT(VM* vm, ValueT* vt, const char* fmt, ...)
+{
+  fprintf(stderr, "\nError:\n");
+  vm->printvalue0(vt);
+  fprintf(stderr, "\n");
+  va_list ap;
+  throwscm(vm, fmt, ap);
+}
+
+void Serror(const char* fmt, ...)
+{
+  va_list ap;
+  va_start(ap, fmt);
+  vfprintf(stderr, fmt, ap);
+  va_end(ap);
+}
+
+void Serrorvt(VM* vm, ValueT* vt, const char* fmt, ...)
+{
+  va_list ap;
+  va_start(ap, fmt);
+  vfprintf(stderr, fmt, ap);
+  va_end(ap);
+  vm->printvalue0(vt, true);
+}
+
+static const char* lexerrorv(VM* vm, int line, const char* fmt, va_list ap)
+{
+  char buf[SCM_ERRBUF_SIZE] = {0};
+  vsnprintf(buf, sizeof(buf), fmt, ap);
+  return scm_errf(vm, "%s %s:%d", buf, vm->gettopsource(), line);
+}
+
+#define throwlex(vm, line, fmt, ap)                  \
+{ va_start(ap, fmt);                                \
+  const char* err = lexerrorv(vm, line, fmt, ap);   \
+  va_end(ap);                                       \
+  throw err; }
+
+static void lexerror(VM* vm, int line, const char* fmt, ...)
+{
+  va_list ap;
+  throwlex(vm, line, fmt, ap);
+}
+
+static void lexassert(VM* vm, bool cond, int line, const char* fmt, ...)
+{
+  if (cond) return;
+  va_list ap;
+  throwlex(vm, line, fmt, ap);
+}
+
+} /* namespace Scheme */
 
 ValueT ValueT::undefined(VT_UNDEFINED);
 ValueT ValueT::eofref(VT_EOF);
