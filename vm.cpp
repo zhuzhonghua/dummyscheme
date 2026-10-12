@@ -40,6 +40,16 @@ static const char* scm_errv(VM* vm, const char* fmt, va_list ap)
   char buf[SCM_ERRBUF_SIZE] = {0};
   vsnprintf(buf, sizeof(buf), fmt, ap);
 
+  CallFrame* frm = vm->curfrm;
+  if (frm != NULL && isclosure(frm->base))
+  {
+    LambdaPtr top = closureref(frm->base)->lambda;
+    if (top != NULL && top->source != NULL)
+      fprintf(stderr, "%s  at %s:%d\n", buf, top->source->str, top->getline(frm->getpc()));
+    else
+      fprintf(stderr, "%s\n", buf);
+  }
+  else
   fprintf(stderr, "%s\n", buf);
   vm->printframe();
 
@@ -81,9 +91,7 @@ void Assert(GlobalVM* g, bool cond, const char* fmt, ...)
 void AssertVT(VM* vm, bool cond, ValueT* vt, const char* fmt, ...)
 {
   if (cond) return;
-  fprintf(stderr, "\nException\n");
-  vm->printvalue0(vt);
-  fprintf(stderr, "\n");
+  (void)vt;
   va_list ap;
   throwscm(vm, fmt, ap);
 }
@@ -91,11 +99,8 @@ void AssertVT(VM* vm, bool cond, ValueT* vt, const char* fmt, ...)
 void AssertVT2(VM* vm, bool cond, ValueT* vt, ValueT* vt2, const char* fmt, ...)
 {
   if (cond) return;
-  fprintf(stderr, "\nException\n");
-  vm->printvalue0(vt);
-  fprintf(stderr, "\n");
-  vm->printvalue0(vt2);
-  fprintf(stderr, "\n");
+  (void)vt;
+  (void)vt2;
   va_list ap;
   throwscm(vm, fmt, ap);
 }
@@ -103,8 +108,7 @@ void AssertVT2(VM* vm, bool cond, ValueT* vt, ValueT* vt2, const char* fmt, ...)
 void AssertArg(VM* vm, bool cond, const char* op, ValueT* vt, const char* fmt, ...)
 {
   if (cond) return;
-  fprintf(stderr, "\nException in %s: ", op);
-  vm->printvalue0(vt);
+  (void)vt;
   char buf[SCM_ERRBUF_SIZE] = {0};
   va_list ap;
   va_start(ap, fmt);
@@ -116,8 +120,7 @@ void AssertArg(VM* vm, bool cond, const char* op, ValueT* vt, const char* fmt, .
 void AssertArgPair(VM* vm, ValueT* p, const char* op)
 {
   if (ispair(p)) return;
-  fprintf(stderr, "\nException in %s: ", op);
-  vm->printvalue0(p);
+  (void)p;
   throw scm_errf(vm, "%s: not a pair", op);
 }
 
@@ -129,9 +132,7 @@ void Error(VM* vm, const char* fmt, ...)
 
 void ErrorVT(VM* vm, ValueT* vt, const char* fmt, ...)
 {
-  fprintf(stderr, "\nError:\n");
-  vm->printvalue0(vt);
-  fprintf(stderr, "\n");
+  (void)vt;
   va_list ap;
   throwscm(vm, fmt, ap);
 }
@@ -153,30 +154,32 @@ void Serrorvt(VM* vm, ValueT* vt, const char* fmt, ...)
   vm->printvalue0(vt, true);
 }
 
-static const char* lexerrorv(VM* vm, int line, const char* fmt, va_list ap)
+static const char* lexerrorv(Lexer* lex, int line, const char* fmt, va_list ap)
 {
   char buf[SCM_ERRBUF_SIZE] = {0};
   vsnprintf(buf, sizeof(buf), fmt, ap);
-  return scm_errf(vm, "%s %s:%d", buf, vm->gettopsource(), line);
+  VM* vm = lex->getvm();
+  const char* src = lex->getsource() != NULL ? lex->getsource() : vm->gettopsource();
+  return scm_errf(vm, "%s %s:%d", buf, src, line);
 }
 
-#define throwlex(vm, line, fmt, ap)                  \
+#define throwlex(lex, line, fmt, ap)                  \
 { va_start(ap, fmt);                                \
-  const char* err = lexerrorv(vm, line, fmt, ap);   \
+  const char* err = lexerrorv(lex, line, fmt, ap);    \
   va_end(ap);                                       \
   throw err; }
 
-static void lexerror(VM* vm, int line, const char* fmt, ...)
+static void lexerror(Lexer* lex, int line, const char* fmt, ...)
 {
   va_list ap;
-  throwlex(vm, line, fmt, ap);
+  throwlex(lex, line, fmt, ap);
 }
 
-static void lexassert(VM* vm, bool cond, int line, const char* fmt, ...)
+static void lexassert(Lexer* lex, bool cond, int line, const char* fmt, ...)
 {
   if (cond) return;
   va_list ap;
-  throwlex(vm, line, fmt, ap);
+  throwlex(lex, line, fmt, ap);
 }
 
 } /* namespace Scheme */
@@ -1898,7 +1901,9 @@ void VM::printframe()
     ClosurePtr call = closureref(basevt);
     LambdaPtr lambda = call->lambda;
     fprintf(stderr, "\n");
-    fprintf(stderr, "Frame %d\n", n);
+    fprintf(stderr, "Frame %d %s:%d\n", n,
+            lambda->source != NULL ? lambda->source->str : "<unknown source>",
+            lambda->getline(frm->pc));
     printccode0(stderr, lambda, frm->pc);
     fprintf(stderr, "Frame %d End\n\n", n++);
     frm = frm->prev;
@@ -3787,6 +3792,7 @@ void GlobalVM::loadfile(const char* fname)
   VM* vm = mainstk();
   ReaderF reader(fname);
   Lexer lex(vm, &reader);
+  lex.setsource(fname);
   Sgcvar1(vm, source);
   setstr(source, strintern(fname));
   bool flag = false;
@@ -3801,6 +3807,7 @@ ValueT GlobalVM::evalstr(const char* str)
   VM* vm = mainstk();
   ReaderS reader(str);
   Lexer lex(vm, &reader);
+  lex.setsource(str);
   Sgcvar1(vm, source);
   setstr(source, strintern(str));
   bool flag = false;
@@ -3846,6 +3853,7 @@ void GlobalVM::dorepl()
   TRY
   {
     Lexer lex(vm, &reader);
+    lex.setsource("=stdin");
     reader.lexer = &lex;
     dolex(&lex, strref(source));
     fflush(stderr);
@@ -4202,9 +4210,7 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
     break;
   }
   default:
-    fprintf(stderr, "printvalue unknown type %d\n", vttype(val));
-    *((int*)0) = 0;
-    //Error(this, "printvalue unknown type %d", vttype(val));
+    Error(this, "printvalue unknown type %d", vttype(val));
   }
 }
 
@@ -4237,6 +4243,29 @@ void LambdaObj::saveline(VM* vm, int pc, int line, int preline)
     diff = ABSLINE;
   }
   lines[pc] = diff;
+}
+
+int LambdaObj::getline(int pc)
+{
+  if (pc < 0 || lines == NULL || pc >= sizelines)
+    return defline;
+  int line = defline;
+  int absi = 0;               /* index into abslines, advances as pc grows */
+  for (int i = 0; i <= pc; i++)
+  {
+    byte d = lines[i];
+    if ((signed char)d == ABSLINE)
+    {
+      /* delta overflows a byte: use the absolute anchor for this pc */
+      while (absi < abslines.n && abslines.get(absi).pc < i)
+        absi++;
+      if (absi < abslines.n && abslines.get(absi).pc == i)
+        line = abslines.get(absi).line;
+    }
+    else
+      line += (signed char)d; /* delta-encoded: accumulate */
+  }
+  return line;
 }
 
 int LambdaObj::pushcode(VM* vm, Instruction i)
@@ -4526,7 +4555,7 @@ void Lbuffer::put(char c)
 
 void Lexer::plusline()
 {
-  lexassert(vm, ++linenum < INT_MAX, linenum, "too many lines");
+  lexassert(this, ++linenum < INT_MAX, linenum, "too many lines");
   int old = curchar;
   nextc();
   // \n\r or \r\n
@@ -4587,7 +4616,7 @@ int Lexer::dLex()
   case ']':
   case '{':
   case '}':
-		lexerror(vm, startline, "unexpected char near %c", curchar);
+		lexerror(this, startline, "unexpected char near %c", curchar);
     return TOKEN_UNKNOWN;
   case '.': {
     nextc();
@@ -4600,7 +4629,7 @@ int Lexer::dLex()
       case ']':
       case '{':
       case '}':
-        lexerror(vm, linenum, "unexpected char near %c", curchar);
+        lexerror(this, linenum, "unexpected char near %c", curchar);
         token = TOKEN_UNKNOWN;
         break;
       case CASE_BLANK:
@@ -4636,7 +4665,7 @@ int Lexer::dLex()
     }
     else
     {
-      lexerror(vm, startline, "unexpected end");
+      lexerror(this, startline, "unexpected end");
       token = TOKEN_UNKNOWN;
     }
     break;
@@ -4667,7 +4696,7 @@ int Lexer::dLex()
         token = readNum('#');
         break;
       default:
-        lexerror(vm, startline, "unexpected char near %c", curchar);
+        lexerror(this, startline, "unexpected char near %c", curchar);
         return TOKEN_UNKNOWN;
       }
     }
@@ -4870,7 +4899,7 @@ void Lexer::readVector(ValueT* v)
   aheadToken = dLex();
   if (aheadToken != TOKEN_RIGHT_PAREN)
   {
-    lexassert(vm, aheadToken != TOKEN_DOT, line, "illegal form, not proper list in vector");
+    lexassert(this, aheadToken != TOKEN_DOT, line, "illegal form, not proper list in vector");
     ArrayObj* arr = NULL;
     setarray(v, arr = Sr0(vm, ArrayObj));
     int idx = arr->add(vm, Snullref);
@@ -4879,8 +4908,8 @@ void Lexer::readVector(ValueT* v)
     aheadToken = dLex();
     while (aheadToken != TOKEN_RIGHT_PAREN)
     {
-      lexassert(vm, aheadToken != TOKEN_DOT, line, "illegal form, not proper list in vector");
-      lexassert(vm, aheadToken != TOKEN_END, line, "unterminated vector, unexpected end of file");
+      lexassert(this, aheadToken != TOKEN_DOT, line, "illegal form, not proper list in vector");
+      lexassert(this, aheadToken != TOKEN_END, line, "unterminated vector, unexpected end of file");
       idx = arr->add(vm, Snullref);
       v2 = arr->get(idx);
       readValueT(v2);
@@ -4899,7 +4928,7 @@ void Lexer::readListT0(ValueT* v)
 {
   int line = startline;
   aheadToken = dLex();
-  lexassert(vm, aheadToken != TOKEN_END, line, "unterminated list, unexpected end of file");
+  lexassert(this, aheadToken != TOKEN_END, line, "unterminated list, unexpected end of file");
   if (aheadToken == TOKEN_RIGHT_PAREN)
   {
     setnull(v);
@@ -4910,7 +4939,7 @@ void Lexer::readListT0(ValueT* v)
     aheadToken = dLex();
     readValueT(v);
     aheadToken = dLex();
-    lexassert(vm, aheadToken == TOKEN_RIGHT_PAREN, line, "must have only one item after dot");
+    lexassert(this, aheadToken == TOKEN_RIGHT_PAREN, line, "must have only one item after dot");
     return;
   }
   readValueT(v);
@@ -4933,7 +4962,7 @@ void Lexer::readListT(ValueT* v)
   }
   else
   {
-    lexassert(vm, aheadToken != TOKEN_DOT, line, "illegal form: dot cannot be the first item");
+    lexassert(this, aheadToken != TOKEN_DOT, line, "illegal form: dot cannot be the first item");
     readValueT(v);
     Sgcvar1(vm, v2);
     readListT0(v2);
@@ -4949,7 +4978,7 @@ void Lexer::readValueT(ValueT* v)
   switch(aheadToken) {
 	case TOKEN_NUM:
     if (!SCMMath::str2num(vm, buff.buf, buff.count, v))
-      lexerror(vm, line, "unexpected num token %.*s", buff.count, buff.buf);
+      lexerror(this, line, "unexpected num token %.*s", buff.count, buff.buf);
     if (anno)
       SCM::toAnnotation(vm, v, line);
     break;
@@ -5008,7 +5037,7 @@ void Lexer::readValueT(ValueT* v)
   case TOKEN_END:
     return;
 	default:
-		lexerror(vm, line, "read error unknown token");
+		lexerror(this, line, "read error unknown token");
     break;
 	}
 }

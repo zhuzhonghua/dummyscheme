@@ -101,12 +101,6 @@ typedef double scm_float;
 //#define DebugSRule
 //#define DebugCCode
 //#define DebugQQuote
-#define DebugPrintLine Print("\n%s:%d\n", __FILE__, __LINE__);
-
-//#define DebugAssertStop(x) DebugPrintLine; x
-#define DebugAssertStop(x)
-
-#define DebugAssert(vm) DebugAssertStop(vm->printframe();*((int*)0) = 0)
 
 #define TRY try
 
@@ -1572,6 +1566,7 @@ struct LambdaObj : public RefObject {
 
   int getcodestart() { return code.n-1; }
   void saveline(VM* vm, int pc, int line, int preline);
+  int getline(int pc);
   int pushcode(VM* vm, Instruction i);
   VecT<Instruction>* fetchcode() { return &code; }
   int fetchi(int pc) { return code.get(pc); }
@@ -1922,10 +1917,14 @@ enum TokenType {
 class Lexer {
 public:
   Lexer(VM* v, Reader* r):anno(true),
-                          vm(v), reader(r), buff(v), aheadToken(TOKEN_UNKNOWN),linenum(1) {
+                          vm(v), reader(r), buff(v), aheadToken(TOKEN_UNKNOWN),linenum(1),
+                          srcname(NULL) {
     nextc();
   }
 
+  void setsource(const char* s) { srcname = s; }
+  VM* getvm() { return vm; }
+  const char* getsource() { return srcname; }
   bool anno;
   int aheadToken;
   void readOne(ValueT* v);
@@ -1962,6 +1961,7 @@ protected:
   int curchar;
   int startline;
   int linenum;
+  const char* srcname;
 };
 
 };
