@@ -2715,23 +2715,8 @@ static void coresume_run(VM* vm, Stack* costk, CallFrame* target)
   }
 }
 
-static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, Stack* costk,
-                               ValueT* args, int nargs, bool fromapply, bool istail)
+static void placefirstargs(VM* vm, CallFrame* C0, LambdaPtr lambda, ValueT* args, int nargs, bool fromapply)
 {
-  Stack* callerstk = vm;
-  costk->state = CO_OK;
-  costk->callerstk = callerstk;
-  costk->resslot = base;
-  if (costk->curfrm->getpc() < 0)
-  {
-    CallFrame* C0 = costk->curfrm;
-    ClosurePtr body = closureref(C0->base);
-    LambdaPtr lambda = body->lambda;
-    /* first resume: the args are the body lambda's parameters. Count them up
-       front and check arity BEFORE laying anything out. Fixed params go into
-       the param slots; excess (rest) args are collected straight off the source
-       (list tail or call-site slots) into the rest slot — nothing is laid out
-       unboundedly on the coroutine frame */
     int n = fromapply ? SCM::thlength(args) : nargs;
     if (lambda->argrest)
       Assert(vm, n >= lambda->argnum - 1, "coroutine: arity mismatch, provide %d need at least %d", n, lambda->argnum - 1);
@@ -2763,6 +2748,20 @@ static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, Stack* cos
           setnull(C0->base + lambda->argnum);
       }
     }
+}
+
+static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, Stack* costk, ValueT* args, int nargs, bool fromapply, bool istail)
+{
+  Stack* callerstk = vm;
+  costk->state = CO_OK;
+  costk->callerstk = callerstk;
+  costk->resslot = base;
+  if (costk->curfrm->getpc() < 0)
+  {
+    CallFrame* C0 = costk->curfrm;
+    ClosurePtr body = closureref(C0->base);
+    LambdaPtr lambda = body->lambda;
+    placefirstargs(vm, C0, lambda, args, nargs, fromapply);
     boxcapturedlocals(vm, C0, lambda);
     C0->setpc(lambda->getcodestart());
     coresume_run(vm, costk, C0);
