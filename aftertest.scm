@@ -1101,6 +1101,167 @@
 (check 'co16g-stA (coroutine-status co16g-a) 'dead)
 (display "end") (newline)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 18. coroutines: Lua-style multi-value resume/yield (values packing)
+;; (merged from coroutine-test.scm)
+
+(section "18. coroutine multi-value")
+
+;; 1. basic round-trip + argument passing
+(define mco1 (coroutine-create (lambda (x)
+  (let ((y (coroutine-yield (+ x 1))))
+    (coroutine-yield (+ y 1))))))
+(check 'co-status-created (coroutine-status mco1) 'suspended)
+(check 'co-resume1 (coroutine-resume mco1 10) 11)
+(check 'co-status-yielded (coroutine-status mco1) 'suspended)
+(check 'co-resume2 (coroutine-resume mco1 20) 21)
+(check 'co-status-yielded2 (coroutine-status mco1) 'suspended)
+(check 'co-resume3 (coroutine-resume mco1 30) 30)
+(check 'co-status-done (coroutine-status mco1) 'dead)
+
+;; 2. generator: loop yield
+(define (co-gen n)
+  (coroutine-create (lambda ()
+    (let loop ((i 0))
+      (if (< i n)
+        (begin (coroutine-yield i) (loop (+ i 1)))
+        'done)))))
+(define co-g (co-gen 3))
+(check 'co-gen1 (coroutine-resume co-g) 0)
+(check 'co-gen2 (coroutine-resume co-g) 1)
+(check 'co-gen3 (coroutine-resume co-g) 2)
+(check 'co-gen4 (coroutine-resume co-g) 'done)
+(check 'co-gen-dead (coroutine-status co-g) 'dead)
+
+;; 3. resume a dead coroutine returns void (error sentinel)
+(define co-d (coroutine-create (lambda () 42)))
+(check 'co-dead-res1 (coroutine-resume co-d) 42)
+(check 'co-dead-status (coroutine-status co-d) 'dead)
+
+;; 4. coroutine-running / status inside the body
+(define co-r (coroutine-create (lambda ()
+  (check 'co-running-in (coroutine-running) co-r)
+  (check 'co-status-in (coroutine-status co-r) 'running)
+  (coroutine-yield 'x)
+  (check 'co-status-in2 (coroutine-status co-r) 'running))))
+(coroutine-resume co-r)
+(check 'co-status-running (coroutine-status co-r) 'suspended)
+
+;; 5. nested resume: A resumes B, B yields back, A yields back
+(define co-b (coroutine-create (lambda ()
+  (coroutine-yield 'from-b)
+  (coroutine-yield 'from-b2))))
+(define co-a (coroutine-create (lambda ()
+  (check 'co-nested-stb (coroutine-status co-b) 'suspended)
+  (check 'co-nested-rb (coroutine-resume co-b) 'from-b)
+  (check 'co-nested-stb2 (coroutine-status co-b) 'suspended)
+  (check 'co-nested-sta (coroutine-status co-a) 'running)
+  (coroutine-yield 'from-a)
+  (coroutine-yield 'from-a2))))
+(check 'co-nested-ra (coroutine-resume co-a) 'from-a)
+(check 'co-nested-sta2 (coroutine-status co-a) 'suspended)
+(check 'co-nested-ra2 (coroutine-resume co-a) 'from-a2)
+(check 'co-nested-ra3 (coroutine-resume co-a 0) 0)
+(check 'co-nested-adead (coroutine-status co-a) 'dead)
+(check 'co-nested-rb2 (coroutine-resume co-b) 'from-b2)
+(check 'co-nested-rb3 (coroutine-resume co-b 0) 0)
+(check 'co-nested-bdead (coroutine-status co-b) 'dead)
+
+;; 6. call/cc inside a coroutine
+(define co-cc (coroutine-create (lambda ()
+  (call/cc (lambda (k)
+    (coroutine-yield 'cc-enter)))
+  (coroutine-yield 'cc-after))))
+(check 'co-cc-r1 (coroutine-resume co-cc) 'cc-enter)
+(check 'co-cc-r2 (coroutine-resume co-cc) 'cc-after)
+
+;; 7. dynamic-wind: yield does not run after; coroutine end does
+(define co-w (coroutine-create (lambda ()
+  (dynamic-wind
+    (lambda () (display "wind-before\n"))
+    (lambda ()
+      (coroutine-yield 'w-yield)
+      'w-body-done)
+    (lambda () (display "wind-after\n"))))))
+(display "co-dw-r1: ") (display (coroutine-resume co-w)) (newline)
+(display "co-dw-r2: ") (display (coroutine-resume co-w)) (newline)
+(display "co-dw-status: ") (display (coroutine-status co-w)) (newline)
+
+;; 8. tail-call yield: last expression of the body
+(define co-t (coroutine-create (lambda (x)
+  (display "tail-body-start\n")
+  (coroutine-yield (+ x 100)))))
+(check 'co-tail-r1 (coroutine-resume co-t 1) 101)
+(check 'co-tail-r2 (coroutine-resume co-t 2) 2)
+(check 'co-tail-st (coroutine-status co-t) 'dead)
+
+;; 9. nested tail-call yield: resume = inner fn returns, coroutine continues
+(define co-nt (coroutine-create (lambda ()
+  (define (inner)
+    (coroutine-yield 'inner-yield))
+  (inner)
+  'coro-done)))
+(check 'co-nt-r1 (coroutine-resume co-nt) 'inner-yield)
+(check 'co-nt-r2 (coroutine-resume co-nt) 'coro-done)
+(check 'co-nt-st (coroutine-status co-nt) 'dead)
+
+;; 10. multi-value yield -> resume returns multiple values
+(define co-m (coroutine-create (lambda () (coroutine-yield 'a 'b 'c))))
+(check 'co-multi-yield (call-with-values (lambda () (coroutine-resume co-m)) list) '(a b c))
+(check 'co-multi-st (coroutine-status co-m) 'suspended)
+(check 'co-multi-2 (call-with-values (lambda () (coroutine-resume co-m)) list) '())
+(check 'co-multi-st2 (coroutine-status co-m) 'dead)
+
+;; 11. first resume with multiple args: laid out as body lambda params
+(define co-f (coroutine-create (lambda (a b c) (coroutine-yield (+ a b c)))))
+(check 'co-first-resume-3 (coroutine-resume co-f 1 2 3) 6)
+
+;; 12. later resume with multiple args -> yield returns multiple values
+(define co-r2 (coroutine-create (lambda ()
+  (call-with-values (lambda () (coroutine-yield 'ignored))
+                    (lambda (p q) (coroutine-yield (+ p q)))))))
+(check 'co-r2-first (coroutine-resume co-r2) 'ignored)
+(check 'co-r2-multi (call-with-values (lambda () (coroutine-resume co-r2 10 20)) list) '(30))
+
+;; 13. zero args: yield with no values -> resume returns 0 values
+(define co-z (coroutine-create (lambda () (coroutine-yield))))
+(check 'co-zero-yield (call-with-values (lambda () (coroutine-resume co-z)) list) '())
+
+;; 14. zero args: first and later resumes with no args
+(define co-z2 (coroutine-create (lambda ()
+  (call-with-values (lambda () (coroutine-yield 'x))
+                    (lambda () (coroutine-yield 'done))))))
+(check 'co-zero-first (coroutine-resume co-z2) 'x)
+(check 'co-zero-r2 (call-with-values (lambda () (coroutine-resume co-z2)) list) '(done))
+(check 'co-zero-r3 (call-with-values (lambda () (coroutine-resume co-z2)) list) '())
+
+;; 15. error sentinel: error inside coroutine is swallowed, resume returns void
+(define co-e (coroutine-create (lambda () (car '()))))
+(display "co-err-void: ")
+(display (coroutine-resume co-e))
+(display " [expect <void>]")
+(newline)
+(check 'co-err-status (coroutine-status co-e) 'dead)
+
+;; 16. apply form: resume with multiple args / zero args
+(define co-ac (coroutine-create (lambda ()
+  (call-with-values (lambda () (coroutine-yield 'go))
+                    (lambda (p q) (coroutine-yield (+ p q)))))))
+(check 'co-apply-first (coroutine-resume co-ac) 'go)
+(check 'co-apply-multi (call-with-values (lambda () (apply coroutine-resume co-ac '(5 7))) list) '(12))
+(define co-ac2 (coroutine-create (lambda ()
+  (call-with-values (lambda () (coroutine-yield 'go))
+                    (lambda () (coroutine-yield 'done2))))))
+(check 'co-apply-first2 (coroutine-resume co-ac2) 'go)
+(check 'co-apply-zero (call-with-values (lambda () (apply coroutine-resume co-ac2 '())) list) '(done2))
+
+;; 17. apply form: yield with multiple args
+(define co-y (coroutine-create (lambda ()
+  (call-with-values (lambda () (apply coroutine-yield '(a b)))
+                    (lambda (x y) (coroutine-yield (list x y)))))))
+(check 'co-yield-apply (call-with-values (lambda () (coroutine-resume co-y)) list) '(a b))
+(check 'co-yield-apply2 (call-with-values (lambda () (coroutine-resume co-y 'x 'y)) list) '((x y)))
+
 (display "aftertest passed ") (display *npass*)
 (display " failed ") (display *nfail*)
 (newline)

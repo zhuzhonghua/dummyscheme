@@ -1915,6 +1915,7 @@ enum CallAct {
   CALLACT_DONE,
   CALLACT_ENTER,
   CALLACT_RESUME_CC,
+  CALLACT_RESUME_TAIL,
   CALLACT_YIELD_CC,
   CALLACT_TAILRET,
   CALLACT_CC_TAILRET
@@ -1999,6 +2000,25 @@ static ValueT* singlevalue(VM* vm, ValueT* value, const char* who)
     Error(vm, "%s: expected one value, got %d", who, SCM::length(vm, vals));
   }
   return value;
+}
+
+/* packvals: pack base[0..len) into a single-slot value, same convention as values:
+   0 values -> null (align with Lua: no values); 1 value -> bare value (fast path);
+   >=2 -> ValuesObj */
+static ValueT packvals(VM* vm, ValueT* base, int len)
+{
+  if (len == 0)
+    return Snullref;
+  if (len == 1)
+    return *base;
+  Sgcvar1(vm, vals);
+  for (int i = len - 1; i >= 0; i--)
+    setpair(vals, SCM::cons(vm, base + i, vals));
+  ValuesObj* obj = Sr0(vm, ValuesObj);
+  obj->data = *vals;
+  ValueT out;
+  setvaluesobj(&out, obj);
+  return out;
 }
 
 static void shrinkapplyarity(VM* vm, ValueT* base, int* olen)
@@ -2655,6 +2675,7 @@ enum CallComplexAct {
   CALL_COMPLEX_AFTER,
   CALL_COMPLEX_ENTER,
   CALL_COMPLEX_RESUME_CC,
+  CALL_COMPLEX_RESUME_TAIL,
   CALL_COMPLEX_YIELD_CC,
   CALL_COMPLEX_TAIL_RETURN,
 };
@@ -2678,7 +2699,8 @@ static void coresume_run(VM* vm, Stack* costk, CallFrame* target)
   }
 }
 
-static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, Stack* costk, ValueT* arg, bool hasarg)
+static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, Stack* costk,
+                               ValueT* args, int nargs, bool istail)
 {
   Stack* callerstk = vm;
   costk->state = CO_OK;
@@ -2689,40 +2711,44 @@ static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, Stack* cos
     CallFrame* C0 = costk->curfrm;
     ClosurePtr body = closureref(C0->base);
     LambdaPtr lambda = body->lambda;
-    if (hasarg)
-      *(C0->base + 1) = *arg;
-    ensurearity(vm, C0->base, hasarg ? 1 : 0, lambda->argnum, lambda->argrest,
+    /* first resume: lay the args out directly on the coroutine data stack */
+    for (int i = 0; i < nargs; i++)
+      *(C0->base + 1 + i) = *(args + i);
+    ensurearity(vm, C0->base, nargs, lambda->argnum, lambda->argrest,
                 "coroutine", false);
     boxcapturedlocals(vm, C0, lambda);
     C0->setpc(lambda->getcodestart());
     coresume_run(vm, costk, C0);
-    return CALL_COMPLEX_RESUME_CC;
+    return istail ? CALL_COMPLEX_RESUME_TAIL : CALL_COMPLEX_RESUME_CC;
   }
     CallFrame* Y = costk->curfrm;
-    G(vm)->ac0 = hasarg ? *arg : Svoidref;
+  /* later resume: pack 0..N args into the yield return slot (single slot) */
+  ValueT packed = packvals(vm, args, nargs);
+  G(vm)->ac0 = packed;
     if (costk->tail)
     {
       ClosurePtr yclo = closureref(Y->base);
       LambdaPtr ylambda = yclo->lambda;
       ValueT* slot = Y->base + (1 + (ylambda->vars ? ylambda->vars->local.n : 0));
-      *slot = G(vm)->ac0;
+    *slot = packed;
     Y->setpc(PC_RET);
     coresume_run(vm, costk, Y);
-    return CALL_COMPLEX_RESUME_CC;
+    return istail ? CALL_COMPLEX_RESUME_TAIL : CALL_COMPLEX_RESUME_CC;
   }
-  *costk->retreg = G(vm)->ac0;
+  *costk->retreg = packed;
   Y->setpc(Y->getpc() - 1);
   coresume_run(vm, costk, Y);
-  return CALL_COMPLEX_RESUME_CC;
+  return istail ? CALL_COMPLEX_RESUME_TAIL : CALL_COMPLEX_RESUME_CC;
 }
 
-static CallComplexAct coyield(VM* vm, CallFrame** frm, ValueT* base, bool istail)
+static CallComplexAct coyield(VM* vm, CallFrame** frm, ValueT* base, int nargs, bool istail)
 {
   Stack* costk = vm;
   Assert(vm, costk->state == CO_OK, "coroutine-yield: internal error, coroutine not running");
-  ValueT value = *singlevalue(vm, base + 1, "coroutine-yield");
+  /* pack the yield args straight off the call-site slots (base+1..) */
+  ValueT packed = packvals(vm, base + 1, nargs);
   Stack* callerstk = costk->callerstk;
-  G(vm)->ac0 = *costk->resslot = value;
+  G(vm)->ac0 = *costk->resslot = packed;
   costk->retreg = base;
   costk->tail = istail;
   costk->state = CO_SUSPENDED;
@@ -2736,8 +2762,8 @@ static CallComplexAct cocallresume(VM* vm, CallFrame** frm, ValueT** procp, int*
   ValueT* base = *procp;
   ValueT* coarg = base + 1;
   Stack* costk = NULL;
-  ValueT arg;
-  bool hasarg = false;
+  ValueT* args = NULL;
+  int nargs = 0;
   if (state->fromapply)
   {
     AssertVT(vm, ispair(coarg), coarg, "%s: internal error in apply", METHOD);
@@ -2745,46 +2771,59 @@ static CallComplexAct cocallresume(VM* vm, CallFrame** frm, ValueT** procp, int*
     *coarg = Scar(coarg);
     AssertVT(vm, isstack(coarg), coarg, "%s: not a coroutine", METHOD);
     costk = stackref(coarg);
-    if (ispair(rest))
+    /* expand the apply arg list onto the caller stack */
+    args = base + 2;
+    for (ValueT* p = rest; ispair(p); p = Scdr(p))
     {
-      arg = Scar(rest);
-      hasarg = true;
+      Assert(vm, args + nargs < vm->curfrm->top, "%s: too many arguments in apply", METHOD);
+      *(args + nargs) = Scar(p);
+      nargs++;
     }
     state->fromapply = false;
   }
   else
   {
-    Assert(vm, *len == 1 || *len == 2, "%s: needs 1 or 2 arguments, not %d", METHOD, *len);
+    Assert(vm, *len >= 1, "%s: needs at least 1 argument, not %d", METHOD, *len);
     AssertVT(vm, isstack(coarg), coarg, "%s: not a coroutine", METHOD);
     costk = stackref(coarg);
-    if (*len == 2)
-    {
-      arg = *singlevalue(vm, base + 2, METHOD);
-      hasarg = true;
-    }
+    args = base + 2;
+    nargs = *len - 1;
   }
   if (costk->state != CO_SUSPENDED)
   {
     G(vm)->ac0 = *base = Svoidref;
-    return CALL_COMPLEX_RESUME_CC;
+    return state->istail ? CALL_COMPLEX_RESUME_TAIL : CALL_COMPLEX_RESUME_CC;
   }
-  return coresume(vm, frm, base, costk, &arg, hasarg);
+  return coresume(vm, frm, base, costk, args, nargs, state->istail);
 }
 
 static CallComplexAct cocallyield(VM* vm, CallFrame** frm, ValueT** procp, int* len, CallAppState* state)
 {
   const static char* METHOD = "coroutine-yield";
   Assert(vm, vm != G(vm)->mainstk(), "%s: yield outside a coroutine", METHOD);
+  int nargs = *len;
   if (state->fromapply)
   {
     ValueT* lst = *procp + 1;
-    AssertVT(vm, ispair(lst), lst, "%s: internal error in apply", METHOD);
-    *(*procp + 1) = Scar(lst);
+    AssertVT(vm, SCM::listp(lst), lst, "%s: internal error in apply", METHOD);
+    nargs = 0;
+    if (!isnull(lst))
+    {
+      /* expand the apply arg list onto the yield call-site slots (base+1..) */
+      ValueT* base = *procp;
+      ValueT* rest = Scdr(lst);
+      *(base + 1) = Scar(lst);
+      nargs = 1;
+      for (ValueT* p = rest; ispair(p); p = Scdr(p))
+      {
+        Assert(vm, base + 1 + nargs < vm->curfrm->top, "%s: too many arguments in apply", METHOD);
+        *(base + 1 + nargs) = Scar(p);
+        nargs++;
+      }
+    }
     state->fromapply = false;
   }
-  else
-    Assert(vm, *len == 1, "%s: needs 1 argument, not %d", METHOD, *len);
-  return coyield(vm, frm, *procp, state->istail);
+  return coyield(vm, frm, *procp, nargs, state->istail);
 }
 
 static CallComplexAct callcomplexproc(VM* vm, CallFrame** frm, ValueT** procp, int* len, CallAppState* state)
@@ -2851,6 +2890,8 @@ static CallComplexAct callcomplexproc(VM* vm, CallFrame** frm, ValueT** procp, i
     ValueT out;
     if (isvaluesobj(arg))
       out = valuesobjref(arg)->data;
+    else if (isnull(arg))
+      out = Snullref;   /* coroutine resume/yield with no values */
     else
       setpair(&out, SCM::list(vm, arg));
     *arg = Svoidref;
@@ -2964,6 +3005,8 @@ static CallAct callproc(VM* vm, CallFrame** frm, ValueT* proc, int len, bool ist
         return CALLACT_ENTER;
       case CALL_COMPLEX_RESUME_CC:
         return CALLACT_RESUME_CC;
+      case CALL_COMPLEX_RESUME_TAIL:
+        return CALLACT_RESUME_TAIL;
       case CALL_COMPLEX_YIELD_CC:
         return CALLACT_YIELD_CC;
       case CALL_COMPLEX_TAIL_RETURN:
@@ -3368,6 +3411,11 @@ void VM::execute0(CallFrame* frm)
     CallFrame* before = frm;
     CallAct act = callproc(this, &frm, proc, len, icode == OP_TAILCALLAPP, NULL);
     switch (act) {
+    case CALLACT_RESUME_TAIL:
+      /* coroutine-resume as a tail call: move the value from the call-site
+         proc slot to the frame return slot, then frame-return normally */
+      *(base + (1 + (lambda->vars ? lambda->vars->local.n : 0))) = *stkvt(k);
+      goto retlab;
     case CALLACT_RESUME_CC:
       base = frm->base;
       call = closureref(base);
