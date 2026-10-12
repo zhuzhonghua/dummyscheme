@@ -54,7 +54,16 @@
 ```
 每个协程一个私有 Stack（独立帧链 + dynamic-wind 风链 + StkVar），
 resume/yield/结束 = 切换 VM 当前执行上下文（一协程一 Stack，对应 Lua 的 lua_State）。
-`yield`/`resume` 暂只支持一个参数。
+`yield`/`resume` 支持多值：resume 可向协程传入多个值（yield 以多值接收），
+yield 可产出多个值（resume 以多值返回），用 `call-with-values` 消费。
+
+-- error / pcall / xpcall（受 Lua 启发）
+```
+`(error msg irritant...)`      -- 抛 VM 错误，消息为文本：字符串直接用，其余按 write 语义转文本，空格连接
+`(pcall thunk)`                -- 受保护调用 0 参闭包，返回 (ok . result) 或 (false . err-string)，错误永不逃逸
+`(xpcall thunk handler)`       -- 受保护调用：成功返回 thunk 的值；失败先 unwind（含 dynamic-wind after），
+                                  再把错误串交给 handler 并返回其值；handler 自身出错向上传播
+```
 
 ## 怎么用
 
