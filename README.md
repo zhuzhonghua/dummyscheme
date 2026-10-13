@@ -50,8 +50,8 @@ It could be easily embed to many host programs, only need to copy some .h/.cpp f
 ```
 `coroutine-create` / `coroutine-resume` / `coroutine-yield` / `coroutine-status` / `coroutine-running`
 ```
-Each coroutine owns a private Stack (independent frame chain + dynamic-wind chain + StkVar);
-resume/yield/finish switch the VM's current execution context (one coroutine per Stack,).
+Each coroutine owns a private VM (independent frame chain + dynamic-wind chain + StkVar);
+resume/yield/finish switch the VM's current execution context (one coroutine per VM,).
 `yield`/`resume` support multiple values: resume may pass
 multiple values into the coroutine (received by yield as multiple values), yield may
 produce multiple values (returned by resume), consumed via `call-with-values`.

@@ -35,7 +35,7 @@ void Print(const char* fmt, ...)
   va_end(ap);
 }
 
-ValueT SCM::invokecall(Stack* vm, ValueT* proc, ValueT** argv, int argc)
+ValueT SCM::invokecall(VM* vm, ValueT* proc, ValueT** argv, int argc)
 {
   CallFrame* frm = vm->newfrm(NULL, NULL, 0, 2 + argc);
   ValueT* base = frm->base;
@@ -1082,7 +1082,7 @@ void SCM::assert(bool flag, const char* info, const char* fmt, ...)
   }
 }
 
-const char* SCM::costatename(VM* vm, Stack* stk)
+const char* SCM::costatename(VM* vm, VM* stk)
 {
   if (stk->state == CO_SUSPENDED)
     return "suspended";
@@ -1909,7 +1909,7 @@ void VM::printccode0(FILE *f, LambdaPtr lambda, int pc)
 
 void VM::printframe()
 {
-  Stack* vm = this;
+  VM* vm = this;
   int n = 0;
   CallFrame* frm  = vm->curfrm;
   while (frm != NULL)
@@ -2059,7 +2059,7 @@ static void shrinkapplyarity(VM* vm, ValueT* base, int* olen)
 {
   int len = *olen;
   Assert(vm, len >= 2, "apply: arity mismatch, provide %d need at least 2", len);
-  Stack* stk = vm;
+  VM* stk = vm;
   ValueT* lastarg = stkvt(len);
   AssertVT(vm, SCM::listp(lastarg), lastarg, "apply: contract violation list?");
   for (int i = len-1; i >= 2; i--)
@@ -2720,7 +2720,7 @@ static void unwinddynamichain(VM* vm);
 static void teardownstack(VM* vm);
 
 
-static void coresume_run(VM* vm, Stack* costk, CallFrame* target)
+static void coresume_run(VM* vm, VM* costk, CallFrame* target)
 {
   TRY {
     costk->execute0(target);
@@ -2768,9 +2768,9 @@ static void placefirstargs(VM* vm, CallFrame* C0, LambdaPtr lambda, ValueT* args
     }
 }
 
-static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, Stack* costk, ValueT* args, int nargs, bool fromapply, bool istail)
+static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, VM* costk, ValueT* args, int nargs, bool fromapply, bool istail)
 {
-  Stack* callerstk = vm;
+  VM* callerstk = vm;
   costk->state = CO_OK;
   costk->callerstk = callerstk;
   costk->resslot = base;
@@ -2808,11 +2808,11 @@ static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, Stack* cos
 
 static CallComplexAct coyield(VM* vm, CallFrame** frm, ValueT* base, int nargs, bool istail)
 {
-  Stack* costk = vm;
+  VM* costk = vm;
   Assert(vm, costk->state == CO_OK, "coroutine-yield: internal error, coroutine not running");
   /* pack the yield args straight off the call-site slots (base+1..) */
   ValueT packed = packvals(vm, base + 1, nargs);
-  Stack* callerstk = costk->callerstk;
+  VM* callerstk = costk->callerstk;
   G(vm)->ac0 = *costk->resslot = packed;
   costk->retreg = base;
   costk->tail = istail;
@@ -2826,7 +2826,7 @@ static CallComplexAct cocallresume(VM* vm, CallFrame** frm, ValueT** procp, int*
   const static char* METHOD = "coroutine-resume";
   ValueT* base = *procp;
   ValueT* coarg = base + 1;
-  Stack* costk = NULL;
+  VM* costk = NULL;
   ValueT* args = NULL;
   int nargs = 0;
   bool fromapply = state->fromapply;
@@ -3268,7 +3268,7 @@ void VM::execute(CallFrame* frm)
 
 void VM::execute0(CallFrame* frm)
 {
-  Stack* vm = this;
+  VM* vm = this;
   ValueT* base = frm->base;
   ClosurePtr call = closureref(base);
   LambdaPtr lambda = call->lambda;
@@ -3818,7 +3818,7 @@ const char* GlobalVM::gettopsource()
 
 LambdaPtr GlobalVM::gettoplambda()
 {
-  Stack* vm = mainstk();
+  VM* vm = mainstk();
   CallFrame* frm  = vm->curfrm;
   if (frm == NULL)  // compile/lex error, no frame is pushed yet
     return NULL;
@@ -3831,7 +3831,7 @@ LambdaPtr GlobalVM::gettoplambda()
 
 bool GlobalVM::dolex(Lexer* lex, StrPtr source)
 {
-  Stack* vm = mainstk();
+  VM* vm = mainstk();
   ReserveStack _reservestk_(vm);
   Sgcvar2(vm, expr, lambdavt);
   LambdaPtr lambda = NULL;
@@ -3915,7 +3915,7 @@ ValueT GlobalVM::evalstr(const char* str)
 
 ValueT GlobalVM::call(const char* name, ValueT** argv, int argc)
 {
-  Stack* vm = mainstk();
+  VM* vm = mainstk();
   ReserveStack _reservestk_(vm);
   SymPtr sym = strintern(name);
   Sgcvar1(vm, proc);
@@ -3927,7 +3927,7 @@ ValueT GlobalVM::call(const char* name, ValueT** argv, int argc)
 
 bool GlobalVM::pcall(ValueT* fn, ValueT** argv, int argc, ValueT* out)
 {
-  Stack* vm = mainstk();
+  VM* vm = mainstk();
   ReserveStack _reservestk_(vm);
   TRY {
     Sgcvar1(vm, proc);

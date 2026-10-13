@@ -131,8 +131,6 @@ void ErrorVT(VM* vm, ValueT* vt, const char* fmt, ...);
 void Serror(const char* fmt, ...);
 void Serrorvt(VM* vm, ValueT* vt, const char* fmt, ...);
 
-typedef VM Stack;
-
 struct Lbuffer {
   static const int INIT_LEN;
 
@@ -727,9 +725,9 @@ public:
   static NumBigObj* numbigmod(VM*, NumBigObj*, NumBigObj*);
   static void numbig2str(VM* vm, NumBigObj* num, Lbuffer* buf);
 
-  static const char* costatename(VM* vm, Stack* stk);
+  static const char* costatename(VM* vm, VM* stk);
 
-  static ValueT invokecall(Stack* vm, ValueT* proc, ValueT** argv, int argc);
+  static ValueT invokecall(VM* vm, ValueT* proc, ValueT** argv, int argc);
   static void copystripanno(VM* vm, ValueT* out, ValueT* a);
   static ValueT* copylist(VM* vm, ValueT* out, ValueT* a);
   static void vector2cons(VM* vm, ValueT* out, ArrayObj* arr);
@@ -1001,7 +999,7 @@ public:
   DynamicWindObj* dywind;
   CallFrame* curfrm;
   int state;
-  Stack* callerstk;
+  VM* callerstk;
   ValueT* resslot;
   ValueT* retreg;
   bool tail;
@@ -1010,7 +1008,7 @@ public:
 
 #define isstack(VT) istype(VT, VT_REF_STACK)
 #define setstack(VT, e) settyperef(VT, VT_REF_STACK, e)
-#define stackref(VT) toref(VT, Stack*)
+#define stackref(VT) toref(VT, VM*)
 
 class ReserveStack {
 public:
@@ -1424,7 +1422,7 @@ public:
   RefObjGroup* getobjgroup() { return &objGroup; }
   Interns* getintern() { return &intern; }
   GSymTable* getgenv() { return &genv; }
-  Stack* mainstk() { return &main; }
+  VM* mainstk() { return &main; }
   void fullmark() { mainstk()->fullmark(); }
   void stepmarkframes() { mainstk()->stepmarkframes(); }
   void regfullmark() { mainstk()->regfullmark(); }

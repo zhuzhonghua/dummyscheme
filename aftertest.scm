@@ -733,7 +733,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; 13. coroutine: basics (co_a..co_b12, co_min, cogc)
-;;    Lua-style asymmetric coroutines: create builds an independent Stack;
+;;    Lua-style asymmetric coroutines: create builds an independent VM;
 ;;    resume is like a call, yield like a return; when the body ends,
 ;;    resume returns the final value and status becomes dead.
 

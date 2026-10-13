@@ -52,8 +52,8 @@
 ```
 `coroutine-create` / `coroutine-resume` / `coroutine-yield` / `coroutine-status` / `coroutine-running`
 ```
-每个协程一个私有 Stack（独立帧链 + dynamic-wind 风链 + StkVar），
-resume/yield/结束 = 切换 VM 当前执行上下文（一协程一 Stack，对应 Lua 的 lua_State）。
+每个协程一个私有 VM（独立帧链 + dynamic-wind 风链 + StkVar），
+resume/yield/结束 = 切换 VM 当前执行上下文（一协程一 VM，对应 Lua 的 lua_State）。
 `yield`/`resume` 支持多值：resume 可向协程传入多个值（yield 以多值接收），
 yield 可产出多个值（resume 以多值返回），用 `call-with-values` 消费。
 

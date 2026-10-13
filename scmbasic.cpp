@@ -362,7 +362,7 @@ static ValueT scm_stub_list2vector(VM* vm, ValueT* lst)
   return out;
 }
 
-static void cocreate(VM* vm, Stack* costk, ValueT* body)
+static void cocreate(VM* vm, VM* costk, ValueT* body)
 {
   Sgcvar2(vm, c0vt, segvt);
   CallFrame* C0 = Sr0(vm, CallFrame);
@@ -388,7 +388,7 @@ static ValueT scm_stub_coroutine_create(VM* vm, ValueT* body)
 {
   AssertArg(vm, isclosure(body), "coroutine-create", body, "not a closure");
   Sgcvar2(vm, out, costkvt);
-  Stack* costk = Sr1(vm, VM, G(vm));
+  VM* costk = Sr1(vm, VM, G(vm));
   setref(costkvt, costk);
   costk->dywind = NULL;
   costk->sv = NULL;
@@ -409,7 +409,7 @@ static ValueT scm_stub_coroutine_status(VM* vm, ValueT* co)
 
 static ValueT scm_stub_coroutine_running(VM* vm)
 {
-  Stack* cur = vm;
+  VM* cur = vm;
   if (cur == G(vm)->mainstk())
     return Sfalseref;
   ValueT out;
