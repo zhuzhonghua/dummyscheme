@@ -6,7 +6,8 @@ A portable, embeddable Scheme implementation based on a register-oriented byteco
 
 [Try Online](https://zhuzhonghua.github.io/dummyscheme/repl.html)
 
-To test scheme code, please refer to r4rstest.scm, r5rs-tests.scm, aftertest.scm in the project
+To test scheme code, please refer to r4rstest.scm, r5rs-tests.scm, aftertest.scm in the project.
+aftertest.scm (449 checks) additionally covers pcall/xpcall/error, coroutine multi-values, and the language-layer additions below.
 
 # Thoughts
 
@@ -46,7 +47,7 @@ It could be easily embed to many host programs, only need to copy some .h/.cpp f
 (hash-table-set! table key val)
 (hash-table-for-each (lambda (key val) xxx) table)
 ```
--- coroutine
+- coroutine
 ```
 `coroutine-create` / `coroutine-resume` / `coroutine-yield` / `coroutine-status` / `coroutine-running`
 ```
@@ -56,7 +57,7 @@ resume/yield/finish switch the VM's current execution context (one coroutine per
 multiple values into the coroutine (received by yield as multiple values), yield may
 produce multiple values (returned by resume), consumed via `call-with-values`.
 
--- error / pcall / xpcall (inspired by Lua)
+- error / pcall / xpcall (inspired by Lua)
 ```
 `(error msg irritant...)`     -- raise a VM error; message is text: strings as-is,
                                  other objects printed with write semantics, joined by spaces
@@ -66,6 +67,45 @@ produce multiple values (returned by resume), consumed via `call-with-values`.
                                  unwinds (running dynamic-wind after thunks), passes the error
                                  string to handler and returns its value; errors inside handler
                                  propagate
+```
+
+- Language-layer additions: R7RS (bytevector/bitwise/random/format) + Lua (string-format/string-pack)
+```
+bytevector (R7RS-small builtin, binary data):
+`bytevector?` / `make-bytevector` / `bytevector` / `bytevector-length` /
+`bytevector-u8-ref` / `bytevector-u8-set!` / `bytevector=?` / `bytevector-copy` /
+`bytevector-copy!` / `bytevector-append` / `utf8->string` / `string->utf8`
+
+bitwise (SRFI-151 / R7RS-large (scheme bitwise), 64-bit integers):
+`bitwise-not` / `bitwise-and` / `bitwise-ior` / `bitwise-xor` (and/ior/xor variadic)
+`bitwise-arithmetic-shift` and alias `ash` (arithmetic; right shift keeps sign)
+`bitwise-arithmetic-shift-left` / `bitwise-arithmetic-shift-right`
+`bit-count` / `bit-length` / `bit-set?` / `bit-field` / `first-set-bit`
+SRFI-60 aliases: lognot / logand / logior / logxor / logcount / integer-length
+
+random (SRFI-27 names):
+`(random-integer n)` -- integer in [0, n); `(random-real)` -- float in [0, 1);
+`(random-seed n)` -- sets the seed; same seed reproduces the same sequence
+
+format (R7RS/SRFI-28 syntax + SRFI-159 numeric params):
+`~a` display  `~s` write  `~d` decimal  `~x` hex  `~o` octal  `~b` binary
+`~c` char  `~f` fixed  `~e` exp  `~g` general  `~%` newline  `~~` tilde
+numeric directives accept params: `~08x` (zero-padded width), `~,2f` (precision)
+
+string-format (Lua string.format, printf-style):
+`%s %d %i %u %o %x %X %c %f %e %E %g %G %%` with flags `- + # 0`,
+width/precision (`%08x %03d %.2f %8.2f %-35s`), no `*` (Lua rejects it too)
+
+string-pack / string-unpack / string-packsize (Lua syntax, strobj-backed, binary safe):
+endian `<` little / `>` big / `=` native; ints `b B h H l L j J T i[n] I[n]`;
+floats `f` 4-byte float / `d` `n` 8-byte double (Lua 'f'/'d'/'n'); `s[n]` length-prefixed string (prefix always big-endian);
+`z` NUL-terminated string; `c[n]` fixed-length string; `x` pad byte; `Xop` align
+`(string-pack fmt . args)`          -- binary string
+`(string-unpack fmt s [pos])`       -- multiple values (vals... nextpos); pos may be negative
+`(string-packsize fmt)`             -- fixed size (s/z/c error)
+`(string-char . bytes)`             -- Lua string.char
+`(string-byte s [i [j]])`           -- Lua string.byte (multiple byte values)
+indices/positions are 0-based (negative counts from the tail)
 ```
 
 ## How To Use

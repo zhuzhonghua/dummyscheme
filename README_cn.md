@@ -7,6 +7,7 @@
 [在线体验](https://zhuzhonghua.github.io/dummyscheme/repl.html)
 
 想测试 Scheme 代码，可以参考项目里的 r4rstest.scm、r5rs-tests.scm、aftertest.scm。
+aftertest.scm（449 项检查）另覆盖 pcall/xpcall/error、协程多值、以及下文语言层扩展。
 
 # 起因
 
@@ -48,7 +49,7 @@
 (hash-table-for-each (lambda (key val) xxx) table)
 ```
 
--- coroutine
+- coroutine
 ```
 `coroutine-create` / `coroutine-resume` / `coroutine-yield` / `coroutine-status` / `coroutine-running`
 ```
@@ -57,12 +58,51 @@ resume/yield/结束 = 切换 VM 当前执行上下文（一协程一 VM，对应
 `yield`/`resume` 支持多值：resume 可向协程传入多个值（yield 以多值接收），
 yield 可产出多个值（resume 以多值返回），用 `call-with-values` 消费。
 
--- error / pcall / xpcall（受 Lua 启发）
+- error / pcall / xpcall（受 Lua 启发）
 ```
 `(error msg irritant...)`      -- 抛 VM 错误，消息为文本：字符串直接用，其余按 write 语义转文本，空格连接
 `(pcall thunk)`                -- 受保护调用 0 参闭包，返回 (ok . result) 或 (false . err-string)，错误永不逃逸
 `(xpcall thunk handler)`       -- 受保护调用：成功返回 thunk 的值；失败先 unwind（含 dynamic-wind after），
                                   再把错误串交给 handler 并返回其值；handler 自身出错向上传播
+```
+
+- 语言层扩展：R7RS（bytevector/位运算/random/format）+ Lua（string-format/string-pack）
+```
+bytevector（R7RS-small 内建，二进制数据）：
+`bytevector?` / `make-bytevector` / `bytevector` / `bytevector-length` /
+`bytevector-u8-ref` / `bytevector-u8-set!` / `bytevector=?` / `bytevector-copy` /
+`bytevector-copy!` / `bytevector-append` / `utf8->string` / `string->utf8`
+
+位运算（SRFI-151 / R7RS-large (scheme bitwise)，64 位整数）：
+`bitwise-not` / `bitwise-and` / `bitwise-ior` / `bitwise-xor`（and/ior/xor 多参）
+`bitwise-arithmetic-shift` 与别名 `ash`（算术移位，右移保留符号）
+`bitwise-arithmetic-shift-left` / `bitwise-arithmetic-shift-right`
+`bit-count` / `bit-length` / `bit-set?` / `bit-field` / `first-set-bit`
+SRFI-60 别名：lognot / logand / logior / logxor / logcount / integer-length
+
+random（SRFI-27 命名）：
+`(random-integer n)` -- [0, n) 的整数；`(random-real)` -- [0, 1) 的浮点；
+`(random-seed n)` -- 设置种子，同种子序列可复现
+
+format（R7RS/SRFI-28 语法 + SRFI-159 数值参数）：
+`~a` display 语义  `~s` write 语义  `~d` 十进制  `~x` 十六进制  `~o` 八进制
+`~b` 二进制  `~c` 字符  `~f` 定点  `~e` 指数  `~g` 通用  `~%` 换行  `~~` 波浪号
+数值指令支持参数：`~08x`（零填充宽度）、`~,2f`（小数位数）
+
+string-format（Lua string.format，printf 风格）：
+`%s %d %i %u %o %x %X %c %f %e %E %g %G %%`，支持标志 `- + # 0`、
+宽度/精度（`%08x %03d %.2f %8.2f %-35s`）、不支持 `*`（Lua 同样拒绝）
+
+string-pack / string-unpack / string-packsize（Lua 语法，底层 strobj、二进制安全）：
+端序 `<` 小端 / `>` 大端 / `=` 主机序；整数 `b B h H l L j J T i[n] I[n]`；
+浮点 `f` 4 字节单精度 / `d` `n` 8 字节双精度（对齐 Lua 'f'/'d'/'n'）；`s[n]` 长度前缀串（前缀恒大端）；`z` NUL 终止串；`c[n]` 定长串；
+`x` 填充字节；`Xop` 对齐
+`(string-pack fmt . args)`          -- 二进制字符串
+`(string-unpack fmt s [pos])`       -- 多值 (值... 下一位)；pos 可为负（从尾部数）
+`(string-packsize fmt)`             -- 固定部分大小（s/z/c 报错）
+`(string-char . 字节)`              -- 对应 Lua string.char
+`(string-byte s [i [j]])`           -- 对应 Lua string.byte（多值字节）
+下标/位置均为 0 起始（负值从尾部数）
 ```
 
 ## 怎么用

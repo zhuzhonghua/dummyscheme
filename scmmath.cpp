@@ -2617,9 +2617,263 @@ static ValueT scm_stub_oddp(VM* vm, ValueT* p)
   return Sfalseref;
 }
 
+/* ---- SRFI-151 (scheme bitwise), R7RS-large ----
+   - operations computed on unsigned to avoid UB, cast back to signed
+   - shift count out of 64-bit range -> 0 (left) / sign-fill (right)
+   - ash / bitwise-arithmetic-shift is arithmetic: right shift keeps sign
+     (floor division by 2^n), per SRFI-151 */
+
+static scm_int bitop_ash(scm_int x, scm_int y)
+{
+  if (y < 0)
+  {
+    scm_uint cnt = (scm_uint)(-(y + 1)) + 1;
+    if (cnt >= 64)
+      return x < 0 ? -1 : 0;
+    scm_uint ur = (scm_uint)x >> cnt;      /* logical shift */
+    if (x < 0)
+      ur |= ~((((scm_uint)1) << (64 - cnt)) - 1);  /* sign-extend */
+    return (scm_int)ur;
+  }
+  else
+  {
+    scm_uint cnt = (scm_uint)y;
+    if (cnt >= 64)
+      return 0;
+    return (scm_int)((scm_uint)x << cnt);
+  }
+}
+
+static ValueT scm_stub_bitwise_not(VM* vm, ValueT* p)
+{
+  static const char* METHOD = "bitwise-not";
+  AssertArg(vm, isnumi(p), METHOD, p, " not an integer");
+  ValueT out;
+  setnumi(&out, (scm_int)~(scm_uint)numi(p));
+  return out;
+}
+
+static ValueT scm_stub_bitwise_and(VM* vm, ValueT* p, ValueT* args)
+{
+  static const char* METHOD = "bitwise-and";
+  scm_uint acc = ~(scm_uint)0;   /* identity: all ones */
+  ValueT* cur = p;
+  for (;;)
+  {
+    AssertArg(vm, isnumi(cur), METHOD, cur, " not an integer");
+    acc &= (scm_uint)numi(cur);
+    if (isnull(args)) break;
+    cur = Scar(args);
+    args = Scdr(args);
+  }
+  ValueT out;
+  setnumi(&out, (scm_int)acc);
+  return out;
+}
+
+static ValueT scm_stub_bitwise_ior(VM* vm, ValueT* p, ValueT* args)
+{
+  static const char* METHOD = "bitwise-ior";
+  scm_uint acc = 0;              /* identity: zero */
+  ValueT* cur = p;
+  for (;;)
+  {
+    AssertArg(vm, isnumi(cur), METHOD, cur, " not an integer");
+    acc |= (scm_uint)numi(cur);
+    if (isnull(args)) break;
+    cur = Scar(args);
+    args = Scdr(args);
+  }
+  ValueT out;
+  setnumi(&out, (scm_int)acc);
+  return out;
+}
+
+static ValueT scm_stub_bitwise_xor(VM* vm, ValueT* p, ValueT* args)
+{
+  static const char* METHOD = "bitwise-xor";
+  scm_uint acc = 0;              /* identity: zero */
+  ValueT* cur = p;
+  for (;;)
+  {
+    AssertArg(vm, isnumi(cur), METHOD, cur, " not an integer");
+    acc ^= (scm_uint)numi(cur);
+    if (isnull(args)) break;
+    cur = Scar(args);
+    args = Scdr(args);
+  }
+  ValueT out;
+  setnumi(&out, (scm_int)acc);
+  return out;
+}
+
+static ValueT scm_stub_bitwise_arithmetic_shift(VM* vm, ValueT* p, ValueT* n)
+{
+  static const char* METHOD = "bitwise-arithmetic-shift";
+  AssertArg(vm, isnumi(p), METHOD, p, " not an integer");
+  AssertArg(vm, isnumi(n), METHOD, n, " not an integer");
+  ValueT out;
+  setnumi(&out, bitop_ash(numi(p), numi(n)));
+  return out;
+}
+
+static ValueT scm_stub_bitwise_shift_left(VM* vm, ValueT* p, ValueT* n)
+{
+  static const char* METHOD = "bitwise-arithmetic-shift-left";
+  AssertArg(vm, isnumi(p), METHOD, p, " not an integer");
+  AssertArg(vm, isnumi(n), METHOD, n, " not an integer");
+  AssertArg(vm, numi(n) >= 0, METHOD, n, " negative count");
+  ValueT out;
+  setnumi(&out, bitop_ash(numi(p), numi(n)));
+  return out;
+}
+
+static ValueT scm_stub_bitwise_shift_right(VM* vm, ValueT* p, ValueT* n)
+{
+  static const char* METHOD = "bitwise-arithmetic-shift-right";
+  AssertArg(vm, isnumi(p), METHOD, p, " not an integer");
+  AssertArg(vm, isnumi(n), METHOD, n, " not an integer");
+  AssertArg(vm, numi(n) >= 0, METHOD, n, " negative count");
+  ValueT out;
+  setnumi(&out, bitop_ash(numi(p), -numi(n)));
+  return out;
+}
+
+static ValueT scm_stub_bit_count(VM* vm, ValueT* p)
+{
+  static const char* METHOD = "bit-count";
+  AssertArg(vm, isnumi(p), METHOD, p, " not an integer");
+  scm_int x = numi(p);
+  scm_uint ux = x < 0 ? ~(scm_uint)x : (scm_uint)x;
+  ValueT out;
+  setnumi(&out, (scm_int)__builtin_popcountll(ux));
+  return out;
+}
+
+static ValueT scm_stub_bit_length(VM* vm, ValueT* p)
+{
+  static const char* METHOD = "bit-length";
+  AssertArg(vm, isnumi(p), METHOD, p, " not an integer");
+  scm_int x = numi(p);
+  scm_uint ux = x < 0 ? ~(scm_uint)x : (scm_uint)x;
+  int len = 0;
+  while (ux != 0) { len++; ux >>= 1; }
+  ValueT out;
+  setnumi(&out, len);
+  return out;
+}
+
+static ValueT scm_stub_bit_setp(VM* vm, ValueT* idx, ValueT* p)
+{
+  static const char* METHOD = "bit-set?";
+  AssertArg(vm, isnumi(idx), METHOD, idx, " not an integer");
+  AssertArg(vm, isnumi(p), METHOD, p, " not an integer");
+  int i = numi(idx);
+  AssertArg(vm, i >= 0, METHOD, idx, " negative index");
+  if (i >= 64)
+    return frombool(false);
+  return frombool((((scm_uint)numi(p)) >> i) & 1);
+}
+
+static ValueT scm_stub_bit_field(VM* vm, ValueT* p, ValueT* start, ValueT* end)
+{
+  static const char* METHOD = "bit-field";
+  AssertArg(vm, isnumi(p), METHOD, p, " not an integer");
+  AssertArg(vm, isnumi(start), METHOD, start, " not an integer");
+  AssertArg(vm, isnumi(end), METHOD, end, " not an integer");
+  int s = numi(start), e = numi(end);
+  AssertArg(vm, s >= 0 && e >= s, METHOD, start, " bad range");
+  scm_uint x = (scm_uint)numi(p);
+  scm_uint r;
+  if (s >= 64)
+    r = 0;
+  else if (e - s >= 64)
+    r = x >> s;
+  else
+    r = (x >> s) & ((((scm_uint)1) << (e - s)) - 1);
+  ValueT out;
+  setnumi(&out, (scm_int)r);
+  return out;
+}
+
+static ValueT scm_stub_first_set_bit(VM* vm, ValueT* p)
+{
+  static const char* METHOD = "first-set-bit";
+  AssertArg(vm, isnumi(p), METHOD, p, " not an integer");
+  scm_int x = numi(p);
+  ValueT out;
+  if (x == 0)
+    setnumi(&out, -1);
+  else
+    setnumi(&out, (scm_int)__builtin_ctzll((scm_uint)x));
+  return out;
+}
+
+/* ---- SRFI-27 random (R7RS-large (scheme random)) ----
+   xorshift64 generator; state kept in GlobalVM::randstate. */
+
+static scm_uint rng_next(VM* vm)
+{
+  scm_uint x = G(vm)->randstate;
+  x ^= x << 13;
+  x ^= x >> 7;
+  x ^= x << 17;
+  G(vm)->randstate = x;
+  return x;
+}
+
+static ValueT scm_stub_random_seed(VM* vm, ValueT* p)
+{
+  static const char* METHOD = "random-seed";
+  AssertArg(vm, isnumi(p), METHOD, p, " not an integer");
+  G(vm)->randstate = (scm_uint)numi(p);
+  return Svoidref;
+}
+
+static ValueT scm_stub_random_real(VM* vm)
+{
+  ValueT out;
+  setnumreal(&out, (double)(rng_next(vm) >> 11) / (double)(((scm_uint)1) << 53));
+  return out;
+}
+
+static ValueT scm_stub_random_integer(VM* vm, ValueT* p)
+{
+  static const char* METHOD = "random-integer";
+  AssertArg(vm, isnumi(p), METHOD, p, " not an integer");
+  scm_int n = numi(p);
+  AssertArg(vm, n > 0, METHOD, p, " not a positive integer");
+  ValueT out;
+  setnumi(&out, (scm_int)(rng_next(vm) % (scm_uint)n));
+  return out;
+}
+
 void SCMMath::init(VM* vm)
 {
   const RegCProc mathlib[] = {
+    RegCProc("bitwise-not", scm_stub_bitwise_not),
+    RegCProc("lognot", scm_stub_bitwise_not),
+    RegCProc("bitwise-and", scm_stub_bitwise_and, true),
+    RegCProc("logand", scm_stub_bitwise_and, true),
+    RegCProc("bitwise-ior", scm_stub_bitwise_ior, true),
+    RegCProc("logior", scm_stub_bitwise_ior, true),
+    RegCProc("bitwise-xor", scm_stub_bitwise_xor, true),
+    RegCProc("logxor", scm_stub_bitwise_xor, true),
+    RegCProc("bitwise-arithmetic-shift", scm_stub_bitwise_arithmetic_shift),
+    RegCProc("arithmetic-shift", scm_stub_bitwise_arithmetic_shift),
+    RegCProc("ash", scm_stub_bitwise_arithmetic_shift),
+    RegCProc("bitwise-arithmetic-shift-left", scm_stub_bitwise_shift_left),
+    RegCProc("bitwise-arithmetic-shift-right", scm_stub_bitwise_shift_right),
+    RegCProc("bit-count", scm_stub_bit_count),
+    RegCProc("logcount", scm_stub_bit_count),
+    RegCProc("bit-length", scm_stub_bit_length),
+    RegCProc("integer-length", scm_stub_bit_length),
+    RegCProc("bit-set?", scm_stub_bit_setp),
+    RegCProc("bit-field", scm_stub_bit_field),
+    RegCProc("first-set-bit", scm_stub_first_set_bit),
+    RegCProc("random-integer", scm_stub_random_integer),
+    RegCProc("random-real", scm_stub_random_real),
+    RegCProc("random-seed", scm_stub_random_seed),
     RegCProc("+", scm_stub_add, true),
     RegCProc("-", scm_stub_subtract, true),
     RegCProc("*", scm_stub_multiply, true),

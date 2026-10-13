@@ -1131,6 +1131,7 @@ bool SCM::equalp(ValueT* p1, ValueT* p2)
   if (isnumber(p1)) return SCMMath::numequalp(p1, p2);
   if (issym(p1)) return symref(p1)->equalp(symref(p2));
   if (isstr(p1)) return strref(p1)->equalp(strref(p2));
+  if (isbytevector(p1)) return bytevectorref(p1)->equalp(bytevectorref(p2));
   if (ispair(p1))
   {
     ValueT* p1p = p1, *p2p = p2;
@@ -1312,6 +1313,22 @@ PairPtr SCM::cons(VM* vm, ValueT* h, ValueT* t)
     pair->cdr(t);
     return (PairPtr)ObjGroup(vm)->recobj(pair);
   }
+}
+
+/* packvalues: pack a result list into a single-slot value — no data stack
+   involved, so it cannot overflow any frame top. The ValuesObj references
+   the list as-is: order kept, no copy. */
+ValueT SCM::packvalues(VM* vm, ValueT* lst)
+{
+  if (isnull(lst))
+    return Snullref;
+  if (isnull(Scdr(lst)))
+    return Scar(lst);
+  ValuesObj* obj = Sr0(vm, ValuesObj);
+  obj->data = lst;
+  ValueT out;
+  setvaluesobj(&out, obj);
+  return out;
 }
 
 ValueT* SCM::lastappend(VM* vm, ValueT* h, ValueT* t)
@@ -2021,8 +2038,8 @@ static ValueT* singlevalue(VM* vm, ValueT* value, const char* who)
 }
 
 /* packvals: pack base[0..len) into a single-slot value, same convention as values:
-   0 values -> null (align with Lua: no values); 1 value -> bare value (fast path);
-   >=2 -> ValuesObj */
+   0 values -> null; 1 value -> bare value (fast path); >=2 -> ValuesObj
+   (R7RS values convention) */
 static ValueT packvals(VM* vm, ValueT* base, int len)
 {
   if (len == 0)
@@ -2034,22 +2051,6 @@ static ValueT packvals(VM* vm, ValueT* base, int len)
     setpair(vals, SCM::cons(vm, base + i, vals));
   ValuesObj* obj = Sr0(vm, ValuesObj);
   obj->data = *vals;
-  ValueT out;
-  setvaluesobj(&out, obj);
-  return out;
-}
-
-/* packlist: apply path, pack the arg list into a single-slot value straight off
-   the list — no data stack involved, so it cannot overflow any frame top.
-   The ValuesObj references the list as-is: order kept, no copy. */
-static ValueT packlist(VM* vm, ValueT* lst)
-{
-  if (isnull(lst))
-    return Snullref;
-  if (isnull(Scdr(lst)))
-    return Scar(lst);
-  ValuesObj* obj = Sr0(vm, ValuesObj);
-  obj->data = lst;
   ValueT out;
   setvaluesobj(&out, obj);
   return out;
@@ -2788,7 +2789,7 @@ static CallComplexAct coresume(VM* vm, CallFrame** frm, ValueT* base, VM* costk,
     CallFrame* Y = costk->curfrm;
   /* later resume: pack 0..N args into the yield return slot (single slot);
      apply packs straight off the list, plain call packs the call-site slots */
-  ValueT packed = fromapply ? packlist(vm, args) : packvals(vm, args, nargs);
+  ValueT packed = fromapply ? SCM::packvalues(vm, args) : packvals(vm, args, nargs);
   G(vm)->ac0 = packed;
     if (costk->tail)
     {
@@ -2866,7 +2867,7 @@ static CallComplexAct cocallyield(VM* vm, CallFrame** frm, ValueT** procp, int* 
   {
     ValueT* lst = *procp + 1;
     AssertVT(vm, SCM::listp(lst), lst, "%s: internal error in apply", METHOD);
-    *(*procp + 1) = packlist(vm, lst);
+    *(*procp + 1) = SCM::packvalues(vm, lst);
       nargs = 1;
     state->fromapply = false;
   }
@@ -3676,6 +3677,7 @@ GlobalVM::GlobalVM(ScmAlloc a):
   genv(this),uniquen(0), g(this)
 {
   makeseed();
+  randstate = (scm_uint)seed;
   init();
   this->getgc()->setthreshold();
 }
@@ -3763,6 +3765,11 @@ NumBigObj* GlobalVM::newnumbig(int len, char sign)
 {
   int size = NumBigObj::totalsize(len);
   return (NumBigObj*)getobjgroup()->recobj(new (alloc(size)) NumBigObj(len, sign));
+}
+
+StrObj* GlobalVM::newbytevector(int n)
+{
+  return strintern(n, (char)0);  /* zero-filled; recobj-registered, not interned */
 }
 
 ClosurePtr GlobalVM::newclosure(int no)
@@ -4298,6 +4305,20 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
   case VT_REF_HASH:
     oport->writestr("#<hash-table>");
     break;
+  case VT_REF_BYTEVECTOR: {
+    oport->writestr("#u8(");
+    StrObj* bv = bytevectorref(val);
+    for (int i = 0; i < bv->len; i++)
+    {
+      char buf[16] = {0};
+      snprintf(buf, sizeof(buf), "%u", (unsigned)(unsigned char)bv->str[i]);
+      oport->writestr(buf);
+      if (i != bv->len - 1)
+        oport->writechar(' ');
+    }
+    oport->writechar(')');
+    break;
+  }
   case VT_REF_VALUESOBJ: {
     ValuesObj* obj = valuesobjref(val);
     oport->writestr("#<values");

@@ -210,6 +210,8 @@ struct StrObj;
 typedef StrObj* SymPtr;
 typedef StrObj* StrPtr;
 
+typedef StrObj* ByteVectorPtr;
+
 struct HygieneSymObj;
 typedef HygieneSymObj* HygieneSymPtr;
 
@@ -277,6 +279,11 @@ struct CallFrame;
 #define ishashtable(VT) istype(VT, VT_REF_HASH)
 #define sethashtable(VT, e) settyperef(VT, VT_REF_HASH, e)
 #define hashtableref(VT) toref(VT, HashTableObj*)
+
+/* R7RS bytevector (scheme bytevector), stored as StrObj with bytevector tag */
+#define isbytevector(VT) istype(VT, VT_REF_BYTEVECTOR)
+#define setbytevector(VT, e) settyperef(VT, VT_REF_BYTEVECTOR, e)
+#define bytevectorref(VT) toref(VT, StrPtr)
 
 /* NativeProc */
 #define isnativeproc(VT) istype(VT, VT_REF_NATIVE)
@@ -481,6 +488,7 @@ enum ValueTEnum {
   VT_REF_FRAMESEG,
   VT_REF_BOX,
   VT_REF_HASH,
+  VT_REF_BYTEVECTOR,
   VT_REF_STACK,
 };
 
@@ -698,6 +706,7 @@ public:
   static bool strcaseeql(const char* str1, int len1, const char* str2);
 public:
   static PairPtr list(VM* vm, ValueT* a);
+  static ValueT packvalues(VM* vm, ValueT* lst);  /* list -> 0/1/multi values */
   static int length(VM* vm, ValueT* a, const char* prompt);
   static int length(VM* vm, ValueT* a) { return length(vm, a, NULL); }
   static int length(ValueT* a);
@@ -1374,6 +1383,7 @@ public:
   StrObj* newstr(char c, int len, int h);
   StrObj* newstr(int len, int h);
   NumBigObj* newnumbig(int, char);
+  ByteVectorPtr newbytevector(int n);
 public:
   ClosurePtr newclosure(int n);
 public:
@@ -1412,6 +1422,7 @@ public:
 public:
   void makeseed();
   int seed;
+  scm_uint randstate;  /* SRFI-27 random source state */
 protected:
   void init();
   void initprimitive();
