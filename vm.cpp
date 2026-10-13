@@ -262,8 +262,24 @@ void RefObjGroup::fullsweep()
   while (*lst != NULL)
   {
     RefPtr item = *lst;
-    lst = &(*lst)->gcnxt;
+    *lst = (*lst)->gcnxt;
     g->getgc()->toDelOrMark(item);
+  }
+}
+
+void RefObjGroup::releaseall()
+{
+  VM* vm = g->mainstk();
+  for (int i = 0; i < 2; i++)
+  {
+    RefPtr item = gclst[i];
+    while (item != NULL)
+    {
+      RefPtr nx = item->gcnxt;  /* save next before finz() frees the object itself */
+      item->finz(vm);
+      item = nx;
+    }
+    gclst[i] = NULL;
   }
 }
 
@@ -3677,8 +3693,8 @@ void GlobalVM::getuniquesym(SymPtr sym, ValueT* out)
   setsym(out, this->ninstrintern(buff.buf, buff.count));
 }
 
-GlobalVM::GlobalVM(ScmAlloc a):
-  frealloc(a), gc(this), main(this), objGroup(this),
+GlobalVM::GlobalVM(ScmAlloc a, void* ud):
+  frealloc(a), allocud(ud), gc(this), main(this), objGroup(this),
   intern(this), cacheGroup(this),
   genv(this),uniquen(0), g(this)
 {
@@ -3720,11 +3736,11 @@ void* GlobalVM::growvec(void *ptr, int *psize, int ne, int esize, int limit, con
 void* GlobalVM::realloc(void* ptr, size_t osize, size_t nsize)
 {
   long debt = getgc()->debt();
-  void* block = frealloc(ptr, nsize);
+  void* block = frealloc(allocud, ptr, osize, nsize);
   if (block == NULL)
   {
     getgc()->fullgc();
-    block = frealloc(ptr, nsize);
+    block = frealloc(allocud, ptr, osize, nsize);
   }
   if (osize < nsize) memset((byte*)block + osize, 0, nsize - osize);
   getgc()->debt(debt + nsize - osize);
@@ -3736,11 +3752,11 @@ void* GlobalVM::realloc(void* ptr, size_t osize, size_t nsize)
 void* GlobalVM::alloc(size_t size)
 {
   long debt = getgc()->debt();
-  void* block = frealloc(NULL, size);
+  void* block = frealloc(allocud, NULL, 0, size);
   if (block == NULL)
   {
     getgc()->fullgc();
-    block = frealloc(NULL, size);
+    block = frealloc(allocud, NULL, 0, size);
   }
   memset(block, 0, size);
   getgc()->debt(debt + size);

@@ -4,7 +4,6 @@
 // =====================================================================
 
 #include "vm.h"
-#include "scmapi.h"
 
 namespace Scheme {
 
@@ -390,15 +389,32 @@ void scm_error(VM* vm, const char* fmt, ...)
 
 // ---------- VM entry ----------
 
-VM* scm_create_vm(ScmAlloc a)
+VM* scm_create_vm(ScmAlloc a, void* ud)
 {
-  static GlobalVM g(a);  /* process singleton for now; returns the main VM */
-  return g.mainstk();
+  int gsize = sizeof(GlobalVM);
+  void* mem = a(ud, NULL, 0, gsize);
+  if (!mem)
+    return NULL;
+  GlobalVM* g = NULL;
+  TRY {
+    g = new (mem) GlobalVM(a, ud);
+  }
+  CATCH(err) {
+    a(ud, mem, gsize, 0);  /* release the raw block before propagating */
+    throw;
+  }
+  return g->mainstk();
 }
 
 void scm_destroy_vm(VM* vm)
 {
-  (void)vm;  /* singleton: no-op; future multi-instance mode frees the GlobalVM (like lua_close) */
+  GlobalVM* g = vm->g;
+  ScmAlloc a = g->getfrealloc();
+  void* ud = g->getallocud();
+  g->getcachegroup()->fullsweep();   /* release cached pair pool (same path as GC) */
+  g->getobjgroup()->releaseall();    /* free all runtime objects, like Lua's freeall */
+  g->~GlobalVM();                    /* run member destructors (intern table, genv, ...) */
+  a(ud, g, sizeof(GlobalVM), 0);     /* free the GlobalVM itself via its allocator */
 }
 
 // ---------- global registry ----------

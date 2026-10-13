@@ -11,6 +11,7 @@
 #include <ctime>
 #include <climits>
 #include <algorithm>
+#include <new>
 
 #if defined(__cplusplus) && __cplusplus >= 201703L
 #include <charconv>
@@ -39,7 +40,14 @@ namespace Scheme {
 
 //#define SCHEME_STD_R4RS
 
-static void *salloc(void *ptr, size_t nsize) {
+/* Allocator contract (realloc semantics):
+   a(ud, NULL, 0, n)     -> allocate n bytes
+   a(ud, ptr, osize, n)  -> resize the block at ptr from osize to n bytes
+   a(ud, ptr, osize, 0)  -> free the block at ptr
+   ud is an opaque context passed through every call.
+   The default allocator ignores ud/osize. */
+static void *salloc(void *ud, void *ptr, size_t osize, size_t nsize) {
+  (void)ud; (void)osize;
   if (nsize == 0) {
     free(ptr);
     return NULL;
@@ -172,7 +180,7 @@ struct Lbuffer {
   }
 };
 
-typedef void * (*ScmAlloc) (void *ptr, size_t nsize);
+typedef void * (*ScmAlloc) (void *ud, void *ptr, size_t osize, size_t nsize);
 
 struct ValueT;
 typedef ValueT (*CProc0)(VM* vm);
@@ -1047,6 +1055,9 @@ public:
   void unsetfullgcmask() { setgcmask(bitmask); }
   void setfullgcmask() { setfullgc(bitmask); }
 
+  /* teardown: finz + delete every object still tracked */
+  void releaseall();
+
 protected:
   void addref(RefPtr ref, int idx) {
     ref->link(gclst[idx]);
@@ -1353,7 +1364,7 @@ public:
   InputPortObj* iport;
   OutputPortObj* oport;
 public:
-  GlobalVM(ScmAlloc a = salloc);
+  GlobalVM(ScmAlloc a = salloc, void* ud = NULL);
 
   void regcproc(RegCProc regc);
   void regComplex(const char* name, int id);
@@ -1379,6 +1390,7 @@ public:
   const char* gettopsource();
 protected:
   ScmAlloc frealloc;
+  void* allocud;  /* opaque allocator context */
 public:
   StrObj* newstr(const char* str, int len, int h);
   StrObj* newstr(char c, int len, int h);
@@ -1404,7 +1416,7 @@ public:
   void* shrinkvec(void* ptr, int *psize, int fn, int esize);
   void* growvec(void *ptr, int *psize, int ne, int esize, int limit, const char* what);
   void free(void* ptr, size_t size) {
-    frealloc(ptr, 0);
+    frealloc(allocud, ptr, size, 0);
     long debt = getgc()->debt();
     getgc()->debt(debt - size);
     debt = getgc()->debt();
@@ -1436,6 +1448,8 @@ public:
   Interns* getintern() { return &intern; }
   GSymTable* getgenv() { return &genv; }
   VM* mainstk() { return &main; }
+  ScmAlloc getfrealloc() { return frealloc; }
+  void* getallocud() { return allocud; }
   void fullmark() { mainstk()->fullmark(); getgc()->trace(registry); }
   void stepmarkframes() { mainstk()->stepmarkframes(); }
   void regfullmark() { mainstk()->regfullmark(); }

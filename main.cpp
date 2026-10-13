@@ -14,6 +14,8 @@ int main(int argc, char **argv)
     return 1;
   }
 
+  scm_destroy_vm(vm);
+
   //vm->dorepl();
 
   //getchar();

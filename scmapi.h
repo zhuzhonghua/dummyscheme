@@ -124,16 +124,8 @@ SCM_API void scm_registry_set(VM* vm, const char* name, ValueT v);
 SCM_API ValueT scm_registry_get(VM* vm, const char* name);   // null when absent (like Lua registry nil)
 SCM_API void scm_registry_unset(VM* vm, const char* name);   // remove a slot (stores null, like luaL_unref)
 
-// ---------- VM entry (GlobalVM is never exposed; external code holds only VM*) ----------
-// Threading model mirrors skynet: one VM per service, messages processed serially
-// per VM (a VM is used by at most one worker at a time), so the VM itself is
-// lock-free. The allocator parameter parallels skynet's lua_newstate(lalloc, ctx)
-// in service_snlua.c. Current implementation is a process singleton; the interface
-// already allows repeated calls to create independent environments for multi-VM /
-// multi-thread use.
-SCM_API VM* scm_create_vm(ScmAlloc a = salloc);
-// Releases a VM's environment (like lua_close). No-op while create_vm is a
-// singleton; becomes the per-service teardown for the future multi-instance mode.
+// ---------- VM entry ----------
+SCM_API VM* scm_create_vm(ScmAlloc a = salloc, void* ud = NULL);
 SCM_API void scm_destroy_vm(VM* vm);
 
 // ---------- option args / type names (all take VM only; GlobalVM is never exposed) ----------
