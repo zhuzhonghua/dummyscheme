@@ -102,6 +102,9 @@ string-pack / string-unpack / string-packsize（Lua 语法，底层 strobj、二
 `(string-packsize fmt)`             -- 固定部分大小（s/z/c 报错）
 `(string-char . 字节)`              -- 对应 Lua string.char
 `(string-byte s [i [j]])`           -- 对应 Lua string.byte（多值字节）
+`(type x)`                          -- 对应 Lua type；返回类型 symbol（number/string/boolean/
+                                        char/symbol/pair/null/vector/hash-table/bytevector/
+                                        closure/values/void）
 下标/位置均为 0 起始（负值从尾部数）
 ```
 

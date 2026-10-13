@@ -111,6 +111,7 @@ typedef double scm_float;
 struct ValueT;
 class VM;
 class GlobalVM;
+class HashTableObj;
 
 void Print0(FILE* file, const char* fmt, ...);
 void Print(const char* fmt, ...);
@@ -1423,6 +1424,7 @@ public:
   void makeseed();
   int seed;
   scm_uint randstate;  /* SRFI-27 random source state */
+  ValueT registry;  /* GC-root value registry (like LUA_REGISTRYINDEX); traced in fullmark */
 protected:
   void init();
   void initprimitive();
@@ -1434,7 +1436,7 @@ public:
   Interns* getintern() { return &intern; }
   GSymTable* getgenv() { return &genv; }
   VM* mainstk() { return &main; }
-  void fullmark() { mainstk()->fullmark(); }
+  void fullmark() { mainstk()->fullmark(); getgc()->trace(registry); }
   void stepmarkframes() { mainstk()->stepmarkframes(); }
   void regfullmark() { mainstk()->regfullmark(); }
   void printccode(LambdaObj* lambda) { mainstk()->printccode(lambda); }
@@ -1977,3 +1979,7 @@ protected:
 };
 
 };
+
+// scmapi.h declares the C-facing extension API (registry / tostring / predicates /
+// constructors / table access / error). Every file only needs to include "vm.h".
+#include "scmapi.h"

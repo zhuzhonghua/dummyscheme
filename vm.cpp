@@ -434,6 +434,11 @@ void VM::loadfile(const char* fname)
   g->loadfile(fname);
 }
 
+ValueT VM::evalstr(const char* str)
+{
+  return g->evalstr(str);
+}
+
 NumBigObj* VM::newnumbig(int n, char c)
 {
   return g->newnumbig(n, c);
@@ -3630,6 +3635,7 @@ void GlobalVM::init()
   OutputPortFileObj* ofile = NULL;
   oport = ofile = Sr0(vm, OutputPortFileObj);
   ofile->file = stderr;
+  sethashtable(&registry, Sr1(vm, HashTableObj, vm));  /* GC-root value registry (like LUA_REGISTRYINDEX); traced in GlobalVM::fullmark */
   getintern()->init();
   getgenv()->init();
   constvalinit(vm);

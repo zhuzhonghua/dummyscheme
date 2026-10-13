@@ -117,6 +117,38 @@ SCM_API ValueT scm_table_ref(VM* vm, ValueT* tbl, ValueT* key);
 // ---------- error (throws Scheme exception after printing fmt) ----------
 SCM_API void scm_error(VM* vm, const char* fmt, ...);
 
+// ---------- global registry (GC-root value slots; like LUA_REGISTRYINDEX) ----------
+// Registry is a ValueT field on GlobalVM and traced by GC (GlobalVM::fullmark),
+// so values survive across calls.
+SCM_API void scm_registry_set(VM* vm, const char* name, ValueT v);
+SCM_API ValueT scm_registry_get(VM* vm, const char* name);   // null when absent (like Lua registry nil)
+SCM_API void scm_registry_unset(VM* vm, const char* name);   // remove a slot (stores null, like luaL_unref)
+
+// ---------- VM entry (GlobalVM is never exposed; external code holds only VM*) ----------
+// Threading model mirrors skynet: one VM per service, messages processed serially
+// per VM (a VM is used by at most one worker at a time), so the VM itself is
+// lock-free. The allocator parameter parallels skynet's lua_newstate(lalloc, ctx)
+// in service_snlua.c. Current implementation is a process singleton; the interface
+// already allows repeated calls to create independent environments for multi-VM /
+// multi-thread use.
+SCM_API VM* scm_create_vm(ScmAlloc a = salloc);
+// Releases a VM's environment (like lua_close). No-op while create_vm is a
+// singleton; becomes the per-service teardown for the future multi-instance mode.
+SCM_API void scm_destroy_vm(VM* vm);
+
+// ---------- option args / type names (all take VM only; GlobalVM is never exposed) ----------
+SCM_API scm_int      scm_opt_int(VM* vm, ValueT* p, scm_int def);  // like luaL_optinteger: nil/absent -> def, non-integer -> error
+SCM_API bool         scm_is_none_or_nil(VM* vm, ValueT* p);         // like lua_isnoneornil: absent arg (NULL p) or null
+SCM_API const char*  scm_typename(VM* vm, ValueT* p);              // static type name, like lua_typename (never GC'd)
+
+// ---------- value -> string (write semantics) ----------
+// Result is a Scheme string. Like Lua's lua_tolstring, the returned pointer is
+// valid only until the next scm_tostring call (the result is kept in the registry
+// internal slot "~tostring", which the next call overwrites); callers that need
+// the text across VM/GC activity must copy it (strdup) or hold the string ValueT
+// (e.g. via scm_registry_set).
+SCM_API const char* scm_tostring(VM* vm, ValueT* p, int* len);
+
 // ---------- void return macro (contains return; just write return_void();) ----------
 #define return_void() return (*Svoidref)
 

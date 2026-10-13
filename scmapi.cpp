@@ -388,4 +388,100 @@ void scm_error(VM* vm, const char* fmt, ...)
   throw "ScmError";
 }
 
+// ---------- VM entry ----------
+
+VM* scm_create_vm(ScmAlloc a)
+{
+  static GlobalVM g(a);  /* process singleton for now; returns the main VM */
+  return g.mainstk();
+}
+
+void scm_destroy_vm(VM* vm)
+{
+  (void)vm;  /* singleton: no-op; future multi-instance mode frees the GlobalVM (like lua_close) */
+}
+
+// ---------- global registry ----------
+
+void scm_registry_set(VM* vm, const char* name, ValueT v)
+{
+  Sgcvar1(vm, key);
+  *key = scm_make_string(vm, name, (int)strlen(name));
+  hashtableref(&G(vm)->registry)->set(vm, key, &v);
+}
+
+ValueT scm_registry_get(VM* vm, const char* name)
+{
+  Sgcvar1(vm, key);
+  *key = scm_make_string(vm, name, (int)strlen(name));
+  ValueT* v = hashtableref(&G(vm)->registry)->get(key);
+  return v ? *v : *Snullref;  /* null when absent, like Lua registry (nil) */
+}
+
+void scm_registry_unset(VM* vm, const char* name)
+{
+  Sgcvar1(vm, key);
+  *key = scm_make_string(vm, name, (int)strlen(name));
+  hashtableref(&G(vm)->registry)->set(vm, key, Snullref);  /* stores null, like Lua pushing nil to clear */
+}
+
+// ---------- option args / type names ----------
+
+scm_int scm_opt_int(VM* vm, ValueT* p, scm_int def)
+{
+  if (!p || isnull(p))
+    return def;
+  if (!isnumi(p))
+  {
+    typeerr(vm, p, "integer (or nil)");
+    return def;
+  }
+  return numi(p);
+}
+
+bool scm_is_none_or_nil(VM* vm, ValueT* p)
+{
+  (void)vm;
+  return p == NULL || isnull(p);
+}
+
+const char* scm_typename(VM* vm, ValueT* p)
+{
+  (void)vm;
+  if (isnumi(p) || isnumreal(p) || isnumbig(p)) return "number";
+  if (isstr(p)) return "string";
+  if (isboolean(p)) return "boolean";
+  if (ischar(p)) return "char";
+  if (issym(p)) return "symbol";
+  if (ispair(p)) return "pair";
+  if (isnull(p)) return "null";
+  if (isarray(p)) return "vector";
+  if (ishashtable(p)) return "hash-table";
+  if (isbytevector(p)) return "bytevector";
+  if (isclosure(p)) return "closure";
+  if (isvaluesobj(p)) return "values";
+  if (isvoid(p)) return "void";
+  return "unknown";
+}
+
+// ---------- value -> string ----------
+
+const char* scm_tostring(VM* vm, ValueT* p, int* len)
+{
+  /* protect the temp port from GC while writing (API boundary; GC may run at any point) */
+  Sgcvar1(vm, outv);
+  setoport(outv, Sr1(vm, OutputPortStrObj, vm));
+  OutputPortStrObj* out = oportstrref(outv);
+  out->write(vm, p);
+
+  Sgcvar1(vm, sv);
+  *sv = scm_make_string(vm, out->strbuf.buf, out->strbuf.count);
+  /* keep the result alive across GC, like Lua's stack-top for lua_tolstring:
+     the returned pointer stays valid until the next scm_tostring call overwrites it */
+  scm_registry_set(vm, "~tostring", *sv);
+  if (len)
+    *len = strref(sv)->len;
+  return strref(sv)->str;
+}
+
 } // namespace Scheme

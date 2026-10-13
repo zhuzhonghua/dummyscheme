@@ -488,6 +488,44 @@ static ValueT scm_stub_xpcall(VM* vm, ValueT* thunk, ValueT* handler)
   return G(vm)->ac0;
 }
 
+/* (type x) -> type symbol; Lua `type` counterpart for ported code & debugging */
+static ValueT scm_stub_type(VM* vm, ValueT* p)
+{
+  static const char* METHOD = "type";
+  const char* t = NULL;
+  if (isnumi(p) || isnumreal(p) || isnumbig(p))
+    t = "number";
+  else if (isstr(p))
+    t = "string";
+  else if (isboolean(p))
+    t = "boolean";
+  else if (ischar(p))
+    t = "char";
+  else if (issym(p))
+    t = "symbol";
+  else if (ispair(p))
+    t = "pair";
+  else if (isnull(p))
+    t = "null";
+  else if (isarray(p))
+    t = "vector";
+  else if (ishashtable(p))
+    t = "hash-table";
+  else if (isbytevector(p))
+    t = "bytevector";
+  else if (isclosure(p))
+    t = "closure";
+  else if (isvaluesobj(p))
+    t = "values";
+  else if (isvoid(p))
+    t = "void";
+  else
+    t = "unknown";
+  ValueT out;
+  setsym(&out, G(vm)->ninstrintern(t, (int)strlen(t)));
+  return out;
+}
+
 void SCMBasic::init(VM* vm)
 {
   const RegCProc basics[] = {
@@ -572,6 +610,8 @@ void SCMBasic::init(VM* vm)
     RegCProc("error", scm_stub_error, true),
     RegCProc("pcall", scm_stub_pcall),
     RegCProc("xpcall", scm_stub_xpcall),
+
+    RegCProc("type", scm_stub_type),
 
     RegCProc(NULL, -1)
   };

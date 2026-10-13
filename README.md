@@ -105,6 +105,9 @@ floats `f` 4-byte float / `d` `n` 8-byte double (Lua 'f'/'d'/'n'); `s[n]` length
 `(string-packsize fmt)`             -- fixed size (s/z/c error)
 `(string-char . bytes)`             -- Lua string.char
 `(string-byte s [i [j]])`           -- Lua string.byte (multiple byte values)
+`(type x)`                          -- Lua type; returns type symbol (number/string/boolean/
+                                        char/symbol/pair/null/vector/hash-table/bytevector/
+                                        closure/values/void)
 indices/positions are 0-based (negative counts from the tail)
 ```
 
