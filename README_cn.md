@@ -1,6 +1,6 @@
 # dummyscheme
 
-[English](README.md)
+[English](README.md) · [日本語](README_ja.md)
 
 一个基于寄存器式字节码虚拟机的、可移植、可嵌入的 Scheme 实现。
 
@@ -111,32 +111,36 @@ string-pack / string-unpack / string-packsize（Lua 语法，底层 strobj、二
 ## 怎么用
 
 0. 把 *.cpp/h 拷到你的工程里，除了 main.cpp
-1. 引入头文件
+1. 引入头文件（vm.h 末尾已包含 scmapi.h 声明）
 ```
 #include "vm.h"
 using namespace Scheme;
 ```
-2. 初始化 vm
-
-用默认的 malloc/free
+2. 创建/销毁 VM — 多实例，每次调用创建独立环境
+（各自的全局环境、intern 表、GC、registry）；值不得跨 VM 共享
 ```
-VM vm;
+VM* vm = scm_create_vm();   // 默认分配器（malloc/realloc），ud = NULL
+// ... 干活 ...
+scm_destroy_vm(vm);         // 释放全部运行期对象和 VM 本身
 ```
-或者用自定义的 malloc/free
+自定义分配器 — realloc 语义 + 不透明 ud 上下文（例如用于
+按 VM 内存记账或配额限制）
 ```
-static void * myalloc(void *ptr, size_t nsize) {
+static void * myalloc(void *ud, void *ptr, size_t osize, size_t nsize) {
+  (void)ud;
   if (nsize == 0) {
     myfree(ptr);
     return NULL;
   }
-  else
-    return myrealloc(ptr, nsize);
+  return myrealloc(ptr, nsize);  // osize = 旧大小，记账用
 }
-VM vm(myalloc);
+VM* vm = scm_create_vm(myalloc, NULL);
 ```
-3. 加载文件
+3. 加载文件 / 求值
 ```
-vm.loadfile("filename.scm");
+vm->loadfile("filename.scm");
+ValueT val = vm->evalstr("(+ 1 2)");
+int iv = scm_get_int(vm, &val);   // iv = 3
 ```
 4. 写 stub
 ```
@@ -170,16 +174,26 @@ regcfunc(vm, myext);
 (my-add 2 3)
 (my-sum 1 2 3 4)
 ```
-6. 从 C/C++ 里求值 Scheme 代码
+6. 每-VM 全局注册表（跨 GC 存活，C 绑定可借此让值保持存活）
 ```
-ValueT val = vm->evalstr("(+ 1 2)")
-int iv = scm_get_int(vm, &val);
-// iv = 3
+scm_registry_set(vm, "config", scm_make_string(vm, "v1"));
+ValueT got = scm_registry_get(vm, "config");   // 缺键 -> null
+scm_registry_unset(vm, "config");
 ```
-7. 从 C/C++ 调用 lambda
+7. 值转字符串（write 语义；指针只在下一次 scm_tostring 调用前有效）
+```
+int len;
+const char* s = scm_tostring(vm, &val, &len);  // 如 "42" / "\"hi\""
+```
+8. 类型名（静态字符串，永不被 GC）
+```
+scm_typename(vm, &val);   // "number" / "string" / "pair" / "hash-table" / ...
+```
+9. 从 C/C++ 调用 lambda
 ```
 ValueT* argv[] = {xxx};
-ValueT val = vm->call("f", argv, n)
+ValueT val = vm->call("f", argv, n);       // 非受保护调用
+bool ok = vm->pcall(&fn, argv, n, &out);   // 受保护调用：失败返回 false + 错误值
 ```
 
 ## 在线体验（wasm）

@@ -1,6 +1,6 @@
 # dummyscheme
 
-[中文](README_cn.md)
+[中文](README_cn.md) · [日本語](README_ja.md)
 
 A portable, embeddable Scheme implementation based on a register-oriented bytecode vm
 
@@ -119,27 +119,31 @@ indices/positions are 0-based (negative counts from the tail)
 #include "vm.h"
 using namespace Scheme;
 ```
-2. init vm
+2. create / destroy a VM
 
-use default malloc/free
 ```
-VM vm;
+VM* vm = scm_create_vm();   // default allocator (malloc/realloc), ud = NULL
+// ... work ...
+scm_destroy_vm(vm);         // frees all runtime objects and the VM itself
 ```
-or use custom malloc/free
+custom allocator — realloc semantics plus an opaque ud context (e.g. for
+per-VM memory accounting or quota enforcement)
 ```
-static void * myalloc(void *ptr, size_t nsize) {
+static void * myalloc(void *ud, void *ptr, size_t osize, size_t nsize) {
+  (void)ud;
   if (nsize == 0) {
     myfree(ptr);
     return NULL;
   }
-  else
-    return myrealloc(ptr, nsize);
+  return myrealloc(ptr, nsize);  // osize = old size, useful for accounting
 }
-VM vm(myalloc);
+VM* vm = scm_create_vm(myalloc, NULL);
 ```
-3. load file
+3. load file / eval code
 ```
-vm.loadfile("filename.scm");
+vm->loadfile("filename.scm");
+ValueT val = vm->evalstr("(+ 1 2)");
+int iv = scm_get_int(vm, &val);   // iv = 3
 ```
 4. write stubs
 ```
@@ -173,16 +177,27 @@ regcfunc(vm, myext);
 (my-add 2 3)
 (my-sum 1 2 3 4)
 ```
-6. eval scheme from c/c++
+6. per-VM global registry (survives GC, so C bindings can keep values alive)
 ```
-ValueT val = vm->evalstr("(+ 1 2)")
-int iv = scm_get_int(vm, &val);
-// iv = 3
+scm_registry_set(vm, "config", scm_make_string(vm, "v1"));
+ValueT got = scm_registry_get(vm, "config");   // missing key -> null
+scm_registry_unset(vm, "config");
 ```
-7. call lambda from c/c++
+7. value -> string with write semantics (pointer valid only until the next
+   scm_tostring call)
+```
+int len;
+const char* s = scm_tostring(vm, &val, &len);  // e.g. "42" / "\"hi\""
+```
+8. type name (static string, never GC'd)
+```
+scm_typename(vm, &val);   // "number" / "string" / "pair" / "hash-table" / ...
+```
+9. call scheme lambdas from c/c++
 ```
 ValueT* argv[] = {xxx};
-ValueT val = vm->call("f", argv, n)
+ValueT val = vm->call("f", argv, n);       // unguarded call
+bool ok = vm->pcall(&fn, argv, n, &out);   // protected call: false + error on failure
 ```
 
 ## Compliance
