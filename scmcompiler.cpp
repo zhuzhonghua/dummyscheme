@@ -151,19 +151,11 @@ static bool annotatelistp(ValueT* expr)
   }
 }
 
-class VaListEnd {
-public:
-  VaListEnd(va_list a): ap(a) {}
-  ~VaListEnd() { va_end(ap); }
-  va_list ap;
-};
-
 static ValueT* splitannotatelist(VM* vm, ValueT* expr, const char* what, int n, ...)
 {
   ValueT* pair = expr;
   va_list ap;
   va_start(ap, n);
-  VaListEnd vaend(ap);
   for (pair = expr; n-- > 0; pair = Scdr(pair))
   {
     compileassert(vm, !isnull(pair), expr, "%s", what);
@@ -172,6 +164,7 @@ static ValueT* splitannotatelist(VM* vm, ValueT* expr, const char* what, int n, 
     ValueT* vt = va_arg(ap, ValueT*);
     *vt = Scar(pair);
   }
+  va_end(ap);
   return pair;
 }
 
