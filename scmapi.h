@@ -148,6 +148,13 @@ SCM_API scm_int      scm_opt_int(VM* vm, ValueT* p, scm_int def);  // like luaL_
 SCM_API bool         scm_is_none_or_nil(VM* vm, ValueT* p);         // like lua_isnoneornil: absent arg (NULL p) or null
 SCM_API const char*  scm_typename(VM* vm, ValueT* p);              // static type name, like lua_typename (never GC'd)
 
+// ---------- lightuserdata (tagged raw pointer; no payload, no GC, like Lua lightuserdata) ----------
+// The pointed-to object is never traced or finalized by the VM: its lifetime
+// must be managed by the embedder and stay valid while the value is reachable.
+SCM_API ValueT scm_make_lightuserdata(VM* vm, void* p);   // wrap a raw pointer as a lightuserdata value
+SCM_API bool    scm_is_lightuserdata(VM* vm, ValueT* p);  // type predicate
+SCM_API void*   scm_to_lightuserdata(VM* vm, ValueT* p);  // unwrap; raises an error on non-lightuserdata
+
 // ---------- value -> string (write semantics) ----------
 // Result is a Scheme string. Like Lua's lua_tolstring, the returned pointer is
 // valid only until the next scm_tostring call (the result is kept in the registry

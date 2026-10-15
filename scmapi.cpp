@@ -507,6 +507,32 @@ const char* scm_typename(VM* vm, ValueT* p)
   return "unknown";
 }
 
+// ---------- lightuserdata (tagged raw pointer; no payload, no GC) ----------
+
+ValueT scm_make_lightuserdata(VM* vm, void* p)
+{
+  (void)vm;
+  ValueT out;
+  setlightuserdata(&out, p);
+  return out;
+}
+
+bool scm_is_lightuserdata(VM* vm, ValueT* p)
+{
+  (void)vm;
+  return islightuserdata(p);
+}
+
+void* scm_to_lightuserdata(VM* vm, ValueT* p)
+{
+  if (!p || !islightuserdata(p))
+  {
+    typeerr(vm, p, "lightuserdata");
+    return NULL;
+  }
+  return lightuserdataptr(p);
+}
+
 // ---------- value -> string ----------
 
 const char* scm_tostring(VM* vm, ValueT* p, int* len)
