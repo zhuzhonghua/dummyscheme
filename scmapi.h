@@ -23,7 +23,7 @@
 //     RegCProc("my-sum", scm_stub_my_sum, true),  // true   → rest (pair list)
 //     RegCProc(NULL, -1)
 //   };
-//   regcfunc(vm, myext);      // identical to hashes[] in scmtable.cpp
+//   scm_register_lib(vm, myext);   // like luaL_setfuncs; arity inferred from the fn type
 //
 // ── 3. Type API ─────────────────────────────────────────
 //   if (scm_is_string(vm, p)) { ... }              // branch by type
@@ -127,6 +127,21 @@ SCM_API void scm_registry_unset(VM* vm, const char* name);   // remove a slot (s
 // ---------- VM entry ----------
 SCM_API VM* scm_create_vm(ScmAlloc a = salloc, void* ud = NULL);
 SCM_API void scm_destroy_vm(VM* vm);
+
+// ---------- host library registration & eval (embedding helpers) ----------
+// Registers a library of host functions, like luaL_setfuncs.  funcs is a
+// NULL-terminated RegCProc array (last entry RegCProc(NULL, -1)) in exactly
+// the style the builtin libraries use (see SCMMath::init): the RegCProc
+// constructor infers the arity from the function type, and the `true` rest
+// flag marks variadic functions.  Used by the nginx module to provide
+// `ngx-say`: the scheme code calls it to hand strings to nginx, which
+// writes them into its own output chain -- the host never touches the VM's
+// IO streams.
+SCM_API void scm_register_lib(VM* vm, const RegCProc* funcs);
+
+// Evaluates `s` (len bytes; need not be NUL-terminated) and returns the
+// value of the last expression.  Throws like evalstr (const char*).
+SCM_API ValueT scm_eval_string(VM* vm, const char* s, int len);
 
 // ---------- option args / type names (all take VM only; GlobalVM is never exposed) ----------
 SCM_API scm_int      scm_opt_int(VM* vm, ValueT* p, scm_int def);  // like luaL_optinteger: nil/absent -> def, non-integer -> error

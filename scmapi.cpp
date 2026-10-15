@@ -417,6 +417,33 @@ void scm_destroy_vm(VM* vm)
   a(ud, g, sizeof(GlobalVM), 0);     /* free the GlobalVM itself via its allocator */
 }
 
+// ---------- host library registration & eval ----------
+
+void scm_register_lib(VM* vm, const RegCProc* funcs)
+{
+  regcfunc(vm, funcs);
+}
+
+ValueT scm_eval_string(VM* vm, const char* s, int len)
+{
+  /* evalstr() needs a NUL-terminated source; len may come from a wire
+     buffer without a terminator, so copy locally. */
+  char* src = (char*)malloc(len + 1);
+  if (!src)
+    throw "OutOfMemory";
+  memcpy(src, s, len);
+  src[len] = '\0';
+  ValueT res;
+  try {
+    res = vm->evalstr(src);
+  } catch (...) {
+    free(src);
+    throw;
+  }
+  free(src);
+  return res;
+}
+
 // ---------- global registry ----------
 
 void scm_registry_set(VM* vm, const char* name, ValueT v)
