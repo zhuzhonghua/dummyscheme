@@ -1133,6 +1133,7 @@ bool SCM::eqp(ValueT* p1, ValueT* p2)
   if (isnumber(p1)) return SCMMath::numequalp(p1, p2);
   if (ischar(p1)) return vtchar(p1) == vtchar(p2);
   if (isboolean(p1) || isnull(p1)) return true;
+  if (islightuserdata(p1)) return lightuserdataptr(p1) == lightuserdataptr(p2);
   if (isref(p1)) return refp(p1) == refp(p2);
   return false;
 }
@@ -1147,6 +1148,7 @@ bool SCM::equalp(ValueT* p1, ValueT* p2)
   if (p1 == p2) return true;
   if (vttype(p1) != vttype(p2)) return false;
   if (isref(p1) && refp(p1) == refp(p2)) return true;
+  if (islightuserdata(p1)) return lightuserdataptr(p1) == lightuserdataptr(p2);
   if (ischar(p1)) return vtchar(p1) == vtchar(p2);
   if (isboolean(p1) || isnull(p1)) return true;
   if (isnumber(p1)) return SCMMath::numequalp(p1, p2);
@@ -4169,6 +4171,12 @@ void VM::printvalue0(OutputPortObj* oport, ValueT* val, bool stripanno)
     oport->writestr(tmp.buf, tmp.count);
     //for (int i = 0; i < tmp.count; i++)
     //  fprintf(f, "%c", tmp.buf[i]);
+    break;
+  }
+  case VT_LIGHTUSERDATA: {
+    char buf[40] = {0};
+    snprintf(buf, sizeof(buf), "#<lightuserdata %p>", lightuserdataptr(val));
+    oport->writestr(buf);
     break;
   }
   case VT_UNDEFINED:

@@ -257,6 +257,11 @@ struct CallFrame;
 #define setref(VT, e) settyperef(VT, VT_REF, e)
 #define isref(VT) ((VT)->t >= VT_REF)
 
+/* Lightuserdata */
+#define islightuserdata(VT) istype(VT, VT_LIGHTUSERDATA)
+#define setlightuserdata(VT, e) ((VT)->v.p = (RefPtr)(e), (VT)->t = VT_LIGHTUSERDATA)
+#define lightuserdataptr(VT) ((void*)(VT)->v.p)
+
 /* LambdaObj */
 #define lambdaref(VT) toref(VT, LambdaObj*)
 #define setlambda(VT, e) settyperef(VT, VT_REF_LAMBDA, e)
@@ -472,6 +477,7 @@ enum ValueTEnum {
   VT_FALSE,
   VT_TRUE,
   VT_CHAR,
+  VT_LIGHTUSERDATA, /* tagged raw pointer; no payload, not GC-managed */
   VT_REF, /* all types below must be gcref type */
   VT_REF_NUM_RATIO,
   VT_REF_NUM_COMPLEX,

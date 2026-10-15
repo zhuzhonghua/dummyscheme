@@ -35,6 +35,8 @@ uint HashTableObj::gethash(ValueT* v)
     return 4;
   case VT_UNDEFINED:
     return 5;
+  case VT_LIGHTUSERDATA:
+    return (uint)(size_t)lightuserdataptr(v);
   case VT_REF_STR:
   case VT_REF_SYM: {
     StrObj* s = strref(v);
