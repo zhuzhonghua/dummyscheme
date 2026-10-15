@@ -1974,9 +1974,6 @@ protected:
   void readListT(ValueT* v);
   void readListT0(ValueT* v);
   void readVector(ValueT* v);
-
-  void skipBlankComment();
-
 protected:
   VM* vm;
 
