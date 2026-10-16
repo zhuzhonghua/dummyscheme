@@ -468,6 +468,27 @@ void scm_registry_unset(VM* vm, const char* name)
   hashtableref(&G(vm)->registry)->set(vm, key, Snullref);  /* stores null, like Lua pushing nil to clear */
 }
 
+// ---------- global variables ----------
+
+void scm_set_global(VM* vm, const char* name, ValueT v)
+{
+  Sgcvar2(vm, symv, val);
+  *val = v;
+  SymPtr sym = Intern(vm)->internsym(name, (int)strlen(name));
+  setsym(symv, sym);                    /* keep the sym alive across any GC inside newkeyorupdate */
+  GEnv(vm)->newkeyorupdate(sym, val);   /* define-like: create if absent, update if present */
+}
+
+ValueT scm_get_global(VM* vm, const char* name)
+{
+  Sgcvar1(vm, symv);
+  SymPtr sym = Intern(vm)->internsym(name, (int)strlen(name));
+  setsym(symv, sym);
+  ValueT v;
+  GEnv(vm)->getval(sym, &v);
+  return isundefined(&v) ? *Snullref : v;  /* null when not defined, like the registry API */
+}
+
 // ---------- option args / type names ----------
 
 scm_int scm_opt_int(VM* vm, ValueT* p, scm_int def)

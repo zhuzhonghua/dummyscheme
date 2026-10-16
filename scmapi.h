@@ -124,6 +124,14 @@ SCM_API void scm_registry_set(VM* vm, const char* name, ValueT v);
 SCM_API ValueT scm_registry_get(VM* vm, const char* name);   // null when absent (like Lua registry nil)
 SCM_API void scm_registry_unset(VM* vm, const char* name);   // remove a slot (stores null, like luaL_unref)
 
+// ---------- global variables (Scheme top-level environment) ----------
+// Define or update a top-level variable, like `(define name value)` written at
+// the top level (Lua: lua_setglobal). Scheme code sees the value immediately;
+// the slot is GC-rooted by the global environment, so it survives across calls.
+SCM_API void   scm_set_global(VM* vm, const char* name, ValueT v);
+// Value of a top-level variable; null when it is not defined (Lua: lua_getglobal).
+SCM_API ValueT scm_get_global(VM* vm, const char* name);
+
 // ---------- VM entry ----------
 SCM_API VM* scm_create_vm(ScmAlloc a = salloc, void* ud = NULL);
 SCM_API void scm_destroy_vm(VM* vm);
