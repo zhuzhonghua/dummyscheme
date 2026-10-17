@@ -111,8 +111,12 @@ SCM_API ValueT scm_make_pair(VM* vm, ValueT* a, ValueT* b);
 SCM_API ValueT scm_make_table(VM* vm);
 SCM_API void   scm_vector_set(VM* vm, ValueT* vec, int i, ValueT v);
 SCM_API ValueT scm_vector_ref(VM* vm, ValueT* vec, int i);
+SCM_API int    scm_vector_len(VM* vm, ValueT* vec);
 SCM_API void   scm_table_set(VM* vm, ValueT* tbl, ValueT* key, ValueT val);
 SCM_API ValueT scm_table_ref(VM* vm, ValueT* tbl, ValueT* key);
+// Value of tbl[key], or null when the key is absent.  Unlike scm_table_ref,
+// this never throws on a missing key (like scm_registry_get).
+SCM_API ValueT scm_table_get(VM* vm, ValueT* tbl, ValueT* key);
 
 // ---------- error (throws Scheme exception after printing fmt) ----------
 SCM_API void scm_error(VM* vm, const char* fmt, ...);

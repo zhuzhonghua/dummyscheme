@@ -346,6 +346,16 @@ ValueT scm_vector_ref(VM* vm, ValueT* vec, int i)
   return *arr->get(i);
 }
 
+int scm_vector_len(VM* vm, ValueT* vec)
+{
+  if (!isarray(vec))
+  {
+    typeerr(vm, vec, "vector");
+    return 0;
+  }
+  return arrayref(vec)->arrayn();
+}
+
 void scm_table_set(VM* vm, ValueT* tbl, ValueT* key, ValueT val)
 {
   if (!ishashtable(tbl))
@@ -369,6 +379,22 @@ ValueT scm_table_ref(VM* vm, ValueT* tbl, ValueT* key)
   {
     Print("key not found\n");
     throw "ScmError";
+  }
+  return *slot;
+}
+
+ValueT scm_table_get(VM* vm, ValueT* tbl, ValueT* key)
+{
+  if (!ishashtable(tbl))
+  {
+    typeerr(vm, tbl, "hash-table");
+    return *Snullref;
+  }
+  HashTableObj* t = hashtableref(tbl);
+  ValueT* slot = t->get(key);
+  if (!slot || isundefined(slot))
+  {
+    return *Snullref;
   }
   return *slot;
 }
