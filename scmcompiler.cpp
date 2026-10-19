@@ -670,7 +670,7 @@ void SCompiler::compiledefsyntax(ValueT* expr)
   if (vars)
     vars->addsyntax(vm, syntaxo);
   else
-    GEnv(vm)->newkeyorupdate(name, syntaxvt);
+    GEnv(vm)->set(vm, name, syntaxvt);
 }
 
 void SCompiler::compileappargs(int target, ValueT* expr)
@@ -1034,7 +1034,7 @@ SyntaxPtr SCompiler::getsyntax0(SymPtr symtype)
   if (!syntax)
   {
     ValueT syntaxvt;
-    GEnv(vm)->getval(symtype, &syntaxvt);
+    GEnv(vm)->get(symtype, &syntaxvt);
     if (issyntax(&syntaxvt))
       syntax = syntaxref(&syntaxvt);
   }

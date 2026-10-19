@@ -96,6 +96,9 @@ SCM_API ValueT* scm_cddadr(VM* vm, ValueT* p);
 SCM_API ValueT* scm_cdddar(VM* vm, ValueT* p);
 SCM_API ValueT* scm_cddddr(VM* vm, ValueT* p);
 SCM_API int     scm_list_len(VM* vm, ValueT* list);
+// Length of a proper list, or -1 when the value is not one (a dotted pair or
+// a non-list).  Unlike scm_list_len, this never throws on a dotted pair.
+SCM_API int     scm_proper_list_len(VM* vm, ValueT* list);
 SCM_API ValueT* scm_list_ref(VM* vm, ValueT* list, int i);   // i-th element slot (0-based)
 
 // ---------- constructors (return ValueT) ----------

@@ -851,6 +851,13 @@ static void symputbufchar(Lbuffer* buf, char c)
 #endif
 }
 
+SymPtr Interns::internsym(const char* str, ValueT* out)
+{
+  SymPtr sym = internsym(str);
+  setsym(out, sym);
+  return sym;
+}
+
 SymPtr Interns::internsym(const char* str, int n)
 {
   buf.count = 0;
@@ -904,7 +911,7 @@ Interns::~Interns()
 #define BIND_CONST_TO_VT(kstr, kvt) {           \
  SymPtr sym = Intern(vm)->internsym(kstr);      \
  sym->markconst();                              \
- GEnv(vm)->newkey(sym, kvt);                    \
+ GEnv(vm)->set(vm, sym, kvt);                   \
 }
 
 #define initreserve2(VT, SYM) {                 \
@@ -913,148 +920,6 @@ Interns::~Interns()
  setsym(&G(vm)-> VT, sym);                     \
 }
 
-GSymTable::GSymTable(GlobalVM* v):g(v)
-{
-}
-
-void GSymTable::init()
-{
-  lsizenode = MINLTSIZE;
-  int size = twoto(lsizenode);
-  slots = new (g->alloc(size * sizeof(TSlot))) TSlot[size];
-  lastfree = &slots[size - 1];
-}
-
-void GSymTable::newkey(SymPtr sym, ValueT* v)
-{
-  VM* vm = g->mainstk();
-  ValueT symp;
-  setsym(&symp, sym);
-  Sgcvar1(vm, dummy);
-  setpair(dummy, SCM::cons(vm, &symp, v));
-  insert(sym, pairref(dummy));
-}
-
-void GSymTable::newkeyorupdate(SymPtr sym, ValueT* val)
-{
-  PairPtr pair = getslot(sym);
-  if (pair == NULL)
-    newkey(sym, val);
-  else
-  {
-    pair->cdr(val);
-    g->getgc()->checkBarrier(pair);
-  }
-}
-
-void GSymTable::insert(SymPtr sym, PairPtr tv)
-{
-  TSlot* node = getpos(sym);
-  if (node->tv != NULL)
-  {
-    TSlot* freenode = getfreepos();
-    if (!freenode)
-    {
-      rehash();
-      insert(sym, tv);
-      return;
-    }
-    PairPtr othertv = node->tv;
-    SymPtr othersym = symref(othertv->car());
-    TSlot* othernode = getpos(othersym);
-    if (node == othernode)
-    {
-      DebugMem(Print("gsymtable insert collide same node {%s[hash %d]} VS {%s[hash %d]}\n",
-                     sym->str, sym->hash, othersym->str, othersym->hash));
-      freenode->settv(tv);
-      while (node->next) node = node->next;
-      node->next = freenode;
-    }
-    else
-    {
-      DebugMem(Print("gsymtable insert collide not same node {%s[hash %d]} VS {%s[hash %d]}\n",
-                     sym->str, sym->hash, othersym->str, othersym->hash));
-      node->settv(tv);
-      freenode->tv = othertv;
-      while (othernode->next) othernode = othernode->next;
-      othernode->next = freenode;
-    }
-  }
-  else
-  {
-    node->settv(tv);
-    DebugMem(Print("gsymtable insert no colliding {%s[hash %d]}\n", sym->str, sym->hash));
-  }
-}
-
-void GSymTable::rehash()
-{
-  VM* vm = g->mainstk();
-  int oldsize = twoto(lsizenode);
-  lsizenode += 1;
-  int size = twoto(lsizenode);
-  TSlot* oldslots = slots;
-  slots = new (vm->alloc(size * sizeof(TSlot))) TSlot[size];
-  lastfree = &slots[size - 1];
-  for (int i = 0; i < oldsize; i++)
-  {
-    TSlot* slot = &oldslots[i];
-    insert(symref(slot->tv->car()), slot->tv);
-  }
-  vm->free(oldslots, oldsize * sizeof(TSlot));
-  DebugMem(Print("gsymtable rehash oldsize %d newsize %d\n", oldsize, size));
-}
-
-TSlot* GSymTable::getfreepos()
-{
-  if (lastfree)
-  {
-    if (lastfree->tv == NULL) return lastfree;
-    while (lastfree > slots)
-    {
-      lastfree--;
-      if (lastfree->tv == NULL) return lastfree;
-    }
-  }
-  return NULL;
-}
-
-TSlot* GSymTable::getpos(SymPtr sym)
-{
-  return &slots[sym->hash & (twoto(lsizenode) - 1)];
-}
-
-void GSymTable::getval(SymPtr sym, ValueT* v)
-{
-  PairPtr pair = getslot(sym);
-  if (pair == NULL)
-    setundefined(v);
-  else
-    *v = pair->cdr();
-}
-
-void GSymTable::setslot(SymPtr sym, ValueT* val)
-{
-  VM* vm = g->mainstk();
-  PairPtr pair = getslot(sym);
-  Assert(vm, pair, "undefined global variable %s", Ssstr(sym));
-  pair->cdr(val);
-  GC(vm)->checkBarrier(pair);
-}
-
-PairPtr GSymTable::getslot(SymPtr sym)
-{
-  VM* vm = g->mainstk();
-  TSlot* node = getpos(sym);
-  for (;;)
-  {
-    if (node->tv == NULL) return NULL;
-    if (sym == symref(node->tv->car())) return node->tv;
-    if (node->next == NULL) return NULL;
-    node = node->next;
-  }
-  Error(vm, "table internal error: won't reach here %s", Ssstr(sym));
-}
 
 void SCM::tokwform(VM* vm, ValueT* kw, ValueT* v, int line, bool anno)
 {
@@ -3366,8 +3231,7 @@ void VM::execute0(CallFrame* frm)
     ValueT* k = lambda->getk(from);
     SymPtr name = symref(k);
     ValueT val;
-    GEnv(vm)->getval(name, &val);
-    Assert(vm, !isundefined(&val), "undefined global var %s", Ssstr(name));
+    Assert(vm, GEnv(vm)->get(name, &val), "undefined global var %s", Ssstr(name));
     *stkvt(target) = val;
     break;
   }
@@ -3402,7 +3266,7 @@ void VM::execute0(CallFrame* frm)
     SymPtr name = symref(k);
     ValueT* val = singlevalue(this, stkvt(from), "define");
     Assert(this, !isundefined(val), "undefined value to define global variable %s", Ssstr(name));
-    GEnv(this)->newkeyorupdate(name, val);
+    GEnv(this)->set(this, name, val);
     *val = Svoidref;
     break;
   }
@@ -3443,7 +3307,9 @@ void VM::execute0(CallFrame* frm)
     SymPtr name = symref(k);
     ValueT* val = singlevalue(this, stkvt(from), "set!");
     Assert(this, !isundefined(val), "undefined value to set! global variable %s", Ssstr(name));
-    GEnv(this)->setslot(name, val);
+    ValueT dummy;
+    Assert(this, GEnv(this)->get(name, &dummy), "undefined global variable %s", Ssstr(name));
+    GEnv(this)->set(this, name, val);
     *val = Svoidref;
     break;
   }
@@ -3583,12 +3449,13 @@ void GlobalVM::makeseed()
 void GlobalVM::regNative(const char* name, CProc f, int argn, bool rest)
 {
   VM* vm = mainstk();
-  SymPtr sym = getintern()->internsym(name);
-  PairPtr pair = getgenv()->getslot(sym);
-  Assert(this, !pair, "key already exists %s", name);
+  ValueT symvt;
+  SymPtr sym = getintern()->internsym(name, &symvt);
+  ValueT* existing = getgenv()->get(&symvt);
+  Assert(this, !existing, "key already exists %s", name);
   Sgcvar1(this, cf);
   setnativeproc(cf, Sr4(vm, NativeProcObj, sym, f, argn, rest));
-  getgenv()->newkey(sym, cf);
+  getgenv()->set(vm, &symvt, cf);
   DebugReg(Print("register global native proc %s[hash %d]\n", name, sym->hash));
 }
 
@@ -3596,12 +3463,13 @@ void GlobalVM::regComplex(const char* name, int id)
 {
   VM* vm = mainstk();
   Assert(this, id >= 0 && id < NATIVE_COMPLEX_MAX, "wrong id of complex proc %d", id);
-  SymPtr sym = getintern()->internsym(name);
-  PairPtr pair = getgenv()->getslot(sym);
-  Assert(this, !pair, "key already exists %s", name);
+  ValueT symvt;
+  SymPtr sym = getintern()->internsym(name, &symvt);
+  ValueT* existing = getgenv()->get(&symvt);
+  Assert(this, !existing, "key already exists %s", name);
   Sgcvar1(this, cf);
   setnativeproc(cf, Sr2(this, NativeProcObj, sym, id));
-  getgenv()->newkey(sym, cf);
+  getgenv()->set(vm, &symvt, cf);
   DebugReg(Print("register global complex native proc %s[hash %d]\n", name, Sshash(sym)));
 }
 
@@ -3655,7 +3523,7 @@ void GlobalVM::init()
   ofile->file = stderr;
   sethashtable(&registry, Sr1(vm, HashTableObj, vm));  /* GC-root value registry (like LUA_REGISTRYINDEX); traced in GlobalVM::fullmark */
   getintern()->init();
-  getgenv()->init();
+  sethashtable(&genv, Sr1(vm, HashTableObj, vm));    /* global environment table */
   constvalinit(vm);
   SCMBasic::init(vm);
   SCMMath::init(vm);
@@ -3698,7 +3566,7 @@ void GlobalVM::getuniquesym(SymPtr sym, ValueT* out)
 GlobalVM::GlobalVM(ScmAlloc a, void* ud):
   frealloc(a), allocud(ud), gc(this), main(this), objGroup(this),
   intern(this), cacheGroup(this),
-  genv(this),uniquen(0), g(this)
+  uniquen(0), g(this)
 {
   makeseed();
   randstate = (scm_uint)seed;
@@ -3809,6 +3677,13 @@ PairPtr GlobalVM::getonepairnor()
     pair = new (alloc(sizeof(PairObj))) PairObj();
   pair->gcnxt = NULL;
   return pair;
+}
+
+StrObj* GlobalVM::strintern(const char* str, ValueT* out)
+{
+  StrObj* sym = strintern(str);
+  setsym(out, sym);
+  return sym;
 }
 
 StrObj* GlobalVM::strintern(const char* str)
@@ -3948,10 +3823,10 @@ ValueT GlobalVM::call(const char* name, ValueT** argv, int argc)
 {
   VM* vm = mainstk();
   ReserveStack _reservestk_(vm);
-  SymPtr sym = strintern(name);
-  Sgcvar1(vm, proc);
-  this->getgenv()->getval(sym, proc);
-  Assert(vm, !isundefined(proc), "undefined global var %s", name);
+  ValueT symvt;
+  SymPtr sym = strintern(name, &symvt);
+  ValueT* proc = getgenv()->get(&symvt);
+  Assert(vm, proc, "undefined global var %s", name);
   Assert(vm, !iscontinuation(proc), "call: continuation %s not supported", name);
   return SCM::invokecall(vm, proc, argv, argc);
 }

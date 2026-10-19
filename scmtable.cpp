@@ -232,6 +232,30 @@ void HashTableObj::insertkey(ValueT* key, ValueT* val)
   fixfirstfree();
 }
 
+void HashTableObj::set(VM* vm, SymPtr name, ValueT* val)
+{
+  ValueT symvt;
+  setsym(&symvt, name);
+  set(vm, &symvt, val);
+}
+
+bool HashTableObj::get(SymPtr key, ValueT* out)
+{
+  ValueT* slot = get(key);
+  if (slot)
+    *out = *slot;
+  else
+    setundefined(out);
+  return slot != NULL;
+}
+
+ValueT* HashTableObj::get(SymPtr key)
+{
+  ValueT keyvt;
+  setsym(&keyvt, key);
+  return get(&keyvt);
+}
+
 void HashTableObj::set(VM* vm, ValueT* key, ValueT* val)
 {
   if (isnumi(key))

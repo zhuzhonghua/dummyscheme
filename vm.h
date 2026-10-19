@@ -1191,6 +1191,7 @@ public:
 
   SymPtr internsym(const char* str, int n);
   SymPtr internsym(const char* str) { return internsym(str, strlen(str)); }
+  SymPtr internsym(const char* str, ValueT* out);
 
   void checkResize();
 
@@ -1223,39 +1224,6 @@ protected:
 };
 
 #define twoto(x)	(1<<(x))
-
-struct TSlot {
-  TSlot() { tv = NULL; next = NULL; }
-  void settv(PairPtr p) { tv = p; }
-
-  PairPtr tv;
-  TSlot* next;
-};
-
-class GSymTable {
-public:
-  static const int MINLTSIZE = 4;
-  void setslot(SymPtr sym, ValueT* val);
-  PairPtr getslot(SymPtr sym);
-  void getval(SymPtr sym, ValueT* v);
-  void newkey(SymPtr sym, ValueT* val);
-  void newkeyorupdate(SymPtr sym, ValueT* val);
-protected:
-  GSymTable(GlobalVM* v);
-
-  void init();
-  TSlot* getpos(SymPtr sym);
-  TSlot* getfreepos();
-  void rehash();
-  void insert(SymPtr sym, PairPtr tv);
-protected:
-  friend class GlobalVM;
-  GlobalVM* g;
-
-  byte lsizenode;
-  TSlot* slots;
-  TSlot* lastfree;
-};
 
 #define G(vm) ((vm)->g)
 #define GC(vm) G(vm)->getgc()
@@ -1435,6 +1403,7 @@ public:
   StrObj* ninstrintern(const char* str, int len);
   StrObj* strintern(const char* str, int len);
   StrObj* strintern(const char* str);
+  StrObj* strintern(const char* str, ValueT* out);
   StrObj* strintern(int len);
   StrObj* strintern(int len, char c);
 
@@ -1452,7 +1421,7 @@ public:
   SGC* getgc() { return &gc; }
   RefObjGroup* getobjgroup() { return &objGroup; }
   Interns* getintern() { return &intern; }
-  GSymTable* getgenv() { return &genv; }
+  HashTableObj* getgenv() { return hashtableref(&genv); }
   VM* mainstk() { return &main; }
   ScmAlloc getfrealloc() { return frealloc; }
   void* getallocud() { return allocud; }
@@ -1468,7 +1437,7 @@ protected:
   CacheGroup cacheGroup;
   SGC gc;
   Interns intern;
-  GSymTable genv;
+  ValueT genv;   /* VT_REF_HASH: the global environment table */
 };
 
 struct LocalVar {
@@ -1525,7 +1494,10 @@ public:
   GetSize(HashTableObj)
 
   ValueT* get(ValueT* key);
+  ValueT* get(SymPtr key);
+  bool get(SymPtr key, ValueT* out);
   void set(VM* vm, ValueT* key, ValueT* val);
+  void set(VM* vm, SymPtr sym, ValueT* val);
   /* given previous result kv (#f = start), return next (key . val) or #f */
   ValueT next(VM* vm, ValueT* kv);
 

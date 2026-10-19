@@ -224,6 +224,26 @@ int scm_list_len(VM* vm, ValueT* list)
   return n;
 }
 
+int scm_proper_list_len(VM* vm, ValueT* list)
+{
+  (void)vm;
+  int n = 0;
+  ValueT* p = list;
+  for (;;)
+  {
+    if (isnull(p))
+    {
+      return n;
+    }
+    if (!ispair(p))
+    {
+      return -1;
+    }
+    p = Scdr(p);
+    n++;
+  }
+}
+
 ValueT* scm_list_ref(VM* vm, ValueT* list, int i)
 {
   (void)vm;
@@ -501,8 +521,8 @@ void scm_set_global(VM* vm, const char* name, ValueT v)
   Sgcvar2(vm, symv, val);
   *val = v;
   SymPtr sym = Intern(vm)->internsym(name, (int)strlen(name));
-  setsym(symv, sym);                    /* keep the sym alive across any GC inside newkeyorupdate */
-  GEnv(vm)->newkeyorupdate(sym, val);   /* define-like: create if absent, update if present */
+  setsym(symv, sym);                    /* keep the sym alive across any GC inside set */
+  GEnv(vm)->set(vm, symv, val);
 }
 
 ValueT scm_get_global(VM* vm, const char* name)
@@ -510,8 +530,9 @@ ValueT scm_get_global(VM* vm, const char* name)
   Sgcvar1(vm, symv);
   SymPtr sym = Intern(vm)->internsym(name, (int)strlen(name));
   setsym(symv, sym);
+  ValueT* slot = GEnv(vm)->get(symv);
   ValueT v;
-  GEnv(vm)->getval(sym, &v);
+  if (slot) v = *slot; else setundefined(&v);
   return isundefined(&v) ? *Snullref : v;  /* null when not defined, like the registry API */
 }
 
