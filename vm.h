@@ -1551,7 +1551,7 @@ public:
   BoxVar* refbvar(int n) { return bvar.getptr(n); }
 
   bool isvalidloc(int n) { return n >= 0 && n < local.n; }
-  bool isvalidboxvar(int n) { return n >= 0 && n < bvar.n; }
+  bool isvalidboxvar(int n) { return n >= 1 && n <= bvar.n; }
 
   int addlocal(VM* vm, SymPtr sym);
   int looklocal(SymPtr sym);

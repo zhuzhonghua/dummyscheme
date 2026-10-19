@@ -3246,8 +3246,8 @@ void VM::execute0(CallFrame* frm)
   }
   case OP_REFBVAR: {
     int target, from;getcode_refbvar(i, target, from);
-    BoxVar* bv = lambda->vars->refbvar(from);
-    BoxObj* box = boxref(&call->outers[from + 1]);
+    BoxVar* bv = lambda->vars->refbvar(from - 1);
+    BoxObj* box = boxref(&call->outers[from]);
     ValueT* val = &box->val;
     Assert(this, !isundefined(val), "undefined ref var %s", Ssstr(bv->name));
     *stkvt(target) = val;
@@ -3297,10 +3297,10 @@ void VM::execute0(CallFrame* frm)
   }
   case OP_SETBVAR: {
     int A, B;getcode_setbvar(i, A, B);
-    BoxVar* bv = lambda->vars->refbvar(A);
+    BoxVar* bv = lambda->vars->refbvar(A - 1);
     ValueT* val = singlevalue(this, stkvt(B), "set!");
     Assert(this, !isundefined(val), "undefined val for var %s", Ssstr(bv->name));
-    boxref(&call->outers[A + 1])->val = *val;
+    boxref(&call->outers[A])->val = *val;
     break;
   }
   case OP_SETGLOBAL: {
@@ -3334,7 +3334,6 @@ void VM::execute0(CallFrame* frm)
     ClosurePtr clo = NULL;
     setclosure(tval, clo = G(vm)->newclosure(on + 1));
     clo->lambda = newlambda;
-    clo->outers[0] = call->outers[0];  // inherit env from parent closure
     clo->initouters(this, frm->seg, base, call->outers);
     break;
   }
@@ -4402,14 +4401,14 @@ int LambdaVarsObj::addbvar(VM* vm, SymPtr sym, int idx, bool islocal)
   bv->name = sym;
   bv->idx = idx;
   bv->islocal = islocal;
-  return bvar.n - 1;
+  return bvar.n;  // 1-based, index 0 reserved for env table
 }
 
 int LambdaVarsObj::lookbvar(SymPtr sym)
 {
   VEC_FOR(i, &bvar)
     if (bvar.get(i).name == sym)
-      return i;
+      return i + 1;  // 1-based
   return -1;
 }
 
@@ -4494,14 +4493,15 @@ void ClosureObj::visit(VM* vm)
 
 void ClosureObj::initouters(VM* vm, StackSegment* seg, ValueT* base, ValueT* encbox)
 {
+  outers[0] = encbox[0];  // inherit env table from parent closure
   LambdaVarsObj* vars = lambda->vars;
-  for (int i = 0; i < n - 1; i++)
+  for (int i = 0; i < vars->bvar.n; i++)
   {
     BoxVar* bv = vars->refbvar(i);
     if (bv->islocal)
       setbox(&outers[i+1], boxref(base + 1 + bv->idx));
     else
-      outers[i+1] = encbox[bv->idx + 1];
+      outers[i+1] = encbox[bv->idx];
   }
 }
 
