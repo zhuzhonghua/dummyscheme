@@ -92,7 +92,7 @@ TableNode* HashTableObj::getfreepos()
   return NULL;
 }
 
-ValueT* HashTableObj::get(ValueT* key)
+ValueT* HashTableObj::rawget(ValueT* key)
 {
   if (isnumi(key))
   {
@@ -113,6 +113,47 @@ ValueT* HashTableObj::get(ValueT* key)
       return NULL;
     n = n->next;
   }
+}
+
+ValueT* HashTableObj::indexfallback(VM* vm, ValueT* key)
+{
+  if (isundefined(&metatable)) return NULL;
+  if (!ishashtable(&metatable)) return NULL;
+  HashTableObj* mt = hashtableref(&metatable);
+  ValueT keyvt;
+  setstr(&keyvt, vm->g->indexmeta);
+  ValueT* idx = mt->rawget(&keyvt);
+  if (!idx || isundefined(idx)) return NULL;
+  if (ishashtable(idx))
+  {
+    HashTableObj* target = hashtableref(idx);
+    return target->get(key);
+  }
+  return NULL;
+}
+
+bool HashTableObj::newindexfallback(VM* vm, ValueT* key, ValueT* val)
+{
+  if (!ishashtable(&metatable)) return false;
+  HashTableObj* mt = hashtableref(&metatable);
+  ValueT keyvt;
+  setstr(&keyvt, vm->g->newindexmeta);
+  ValueT* ni = mt->rawget(&keyvt);
+  if (!ni || isundefined(ni)) return false;
+  if (ishashtable(ni))
+  {
+    HashTableObj* target = hashtableref(ni);
+    target->set(vm, key, val);
+    return true;
+  }
+  return false;
+}
+
+ValueT* HashTableObj::get(ValueT* key)
+{
+  ValueT* slot = rawget(key);
+  if (slot && !isundefined(slot)) return slot;
+  return indexfallback(vm, key);
 }
 
 bool HashTableObj::keyeq(ValueT* a, ValueT* b)
@@ -268,13 +309,17 @@ void HashTableObj::set(VM* vm, ValueT* key, ValueT* val)
     }
   }
 
-  ValueT* slot = get(key);
-  if (slot)
+  /* use rawget, not get(): writing must not follow __index into parent tables. */
+  ValueT* slot = rawget(key);
+  if (slot && !isundefined(slot))
   {
     *slot = *val;
     GC(vm)->checkBarrier(this);
     return;
   }
+
+  if (newindexfallback(vm, key, val))
+    return;
 
   if (!node || (!isundefined(&mainposition(key)->key) && getfreepos() == NULL))
   {
@@ -482,6 +527,7 @@ void HashTableObj::visit(VM* vm)
       }
     }
   }
+  Check(metatable);
 }
 
 void HashTableObj::finz(VM* vm)

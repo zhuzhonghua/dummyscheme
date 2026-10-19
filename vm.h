@@ -1334,6 +1334,9 @@ public:
   ValueT ellipsisvt;
   ValueT delayvt;
 
+  StrObj* indexmeta;      /* "__index" */
+  StrObj* newindexmeta;   /* "__newindex" */
+
   ValueT ac0;
   InputPortObj* iport;
   OutputPortObj* oport;
@@ -1501,6 +1504,10 @@ public:
   /* given previous result kv (#f = start), return next (key . val) or #f */
   ValueT next(VM* vm, ValueT* kv);
 
+  /* metatable: __index / __newindex lookup */
+  void setmetatable(ValueT* mt) { metatable = *mt; }
+  ValueT* getmetatable() { return &metatable; }
+
 protected:
   uint gethash(ValueT* v); /* instance: lazily backfills string hashes */
   static int arrayindex(ValueT* key); /* array candidate index (>=1), or -1 */
@@ -1518,6 +1525,13 @@ protected:
   void resize(VM* vm, int nasize, int nhsize);
   static int log2i(int x);
 
+  /* raw lookup: this table only, no metatable recursion */
+  ValueT* rawget(ValueT* key);
+  /* follow metatable.__index */
+  ValueT* indexfallback(VM* vm, ValueT* key);
+  /* follow metatable.__newindex (table form); returns true if forwarded */
+  bool newindexfallback(VM* vm, ValueT* key, ValueT* val);
+
 protected:
   VM* vm;
   ValueT* array;    /* array part: keys 1..sizearray map to array[0..sizearray-1] */
@@ -1525,6 +1539,7 @@ protected:
   byte lsizenode;
   TableNode* node;  /* hash part: 2^lsizenode nodes */
   TableNode* firstfree;
+  ValueT metatable;  /* metatable (a HashTableObj* in VT_REF_HASH), or null */
 };
 
 class LambdaVarsObj : public RefObject {

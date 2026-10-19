@@ -3524,6 +3524,10 @@ void GlobalVM::init()
   sethashtable(&registry, Sr1(vm, HashTableObj, vm));  /* GC-root value registry (like LUA_REGISTRYINDEX); traced in GlobalVM::fullmark */
   getintern()->init();
   sethashtable(&genv, Sr1(vm, HashTableObj, vm));    /* global environment table */
+  const char* indexc = "__index";
+  indexmeta = strintern(indexc, (int)strlen(indexc));
+  const char* newindexc = "__newindex";
+  newindexmeta = strintern(newindexc, (int)strlen(newindexc));
   constvalinit(vm);
   SCMBasic::init(vm);
   SCMMath::init(vm);
