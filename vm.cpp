@@ -39,7 +39,7 @@ ValueT SCM::invokecall(VM* vm, ValueT* proc, ValueT** argv, int argc)
 {
   CallFrame* frm = vm->newfrm(NULL, NULL, 0, 2 + argc);
   ValueT* base = frm->base;
-  ClosurePtr closure = G(vm)->newclosure(0);
+  ClosurePtr closure = G(vm)->newclosure(1);
   setclosure(base, closure);
   *(base + 1) = *proc;
   for (int i = 0; i < argc; i++)
@@ -3231,7 +3231,8 @@ void VM::execute0(CallFrame* frm)
     ValueT* k = lambda->getk(from);
     SymPtr name = symref(k);
     ValueT val;
-    Assert(vm, GEnv(vm)->get(name, &val), "undefined global var %s", Ssstr(name));
+    HashTableObj* env = hashtableref(&call->outers[0]);
+    Assert(vm, env->get(name, &val), "undefined global var %s", Ssstr(name));
     *stkvt(target) = val;
     break;
   }
@@ -3246,7 +3247,7 @@ void VM::execute0(CallFrame* frm)
   case OP_REFBVAR: {
     int target, from;getcode_refbvar(i, target, from);
     BoxVar* bv = lambda->vars->refbvar(from);
-    BoxObj* box = boxref(&call->outers[from]);
+    BoxObj* box = boxref(&call->outers[from + 1]);
     ValueT* val = &box->val;
     Assert(this, !isundefined(val), "undefined ref var %s", Ssstr(bv->name));
     *stkvt(target) = val;
@@ -3266,7 +3267,8 @@ void VM::execute0(CallFrame* frm)
     SymPtr name = symref(k);
     ValueT* val = singlevalue(this, stkvt(from), "define");
     Assert(this, !isundefined(val), "undefined value to define global variable %s", Ssstr(name));
-    GEnv(this)->set(this, name, val);
+    HashTableObj* env = hashtableref(&call->outers[0]);
+    env->set(this, name, val);
     *val = Svoidref;
     break;
   }
@@ -3298,7 +3300,7 @@ void VM::execute0(CallFrame* frm)
     BoxVar* bv = lambda->vars->refbvar(A);
     ValueT* val = singlevalue(this, stkvt(B), "set!");
     Assert(this, !isundefined(val), "undefined val for var %s", Ssstr(bv->name));
-    boxref(&call->outers[A])->val = *val;
+    boxref(&call->outers[A + 1])->val = *val;
     break;
   }
   case OP_SETGLOBAL: {
@@ -3307,9 +3309,10 @@ void VM::execute0(CallFrame* frm)
     SymPtr name = symref(k);
     ValueT* val = singlevalue(this, stkvt(from), "set!");
     Assert(this, !isundefined(val), "undefined value to set! global variable %s", Ssstr(name));
+    HashTableObj* env = hashtableref(&call->outers[0]);
     ValueT dummy;
-    Assert(this, GEnv(this)->get(name, &dummy), "undefined global variable %s", Ssstr(name));
-    GEnv(this)->set(this, name, val);
+    Assert(this, env->get(name, &dummy), "undefined global variable %s", Ssstr(name));
+    env->set(this, name, val);
     *val = Svoidref;
     break;
   }
@@ -3329,8 +3332,9 @@ void VM::execute0(CallFrame* frm)
     int on = newlambda->vars->bvar.n;
     ValueT* tval = stkvt(target);
     ClosurePtr clo = NULL;
-    setclosure(tval, clo = G(vm)->newclosure(on));
+    setclosure(tval, clo = G(vm)->newclosure(on + 1));
     clo->lambda = newlambda;
+    clo->outers[0] = call->outers[0];  // inherit env from parent closure
     clo->initouters(this, frm->seg, base, call->outers);
     break;
   }
@@ -3772,9 +3776,10 @@ bool GlobalVM::dolex(Lexer* lex, StrPtr source)
     ac0 = Sundefined;
     CallFrame* frm = vm->curfrm;
     frm = vm->newfrm(frm, frm != NULL ? frm->top : NULL, 0, lambda->top);
-    ClosurePtr closure = newclosure(0);
+    ClosurePtr closure = newclosure(1);  // 1 = env table only, 0 upvalues
     setclosure(frm->base, closure);
     closure->lambda = lambda;
+    closure->outers[0] = genv;  // top-level closure inherits global env
     vm->setvoid(frm->base+1, frm->top-1);
     frm->setpc(lambda->getcodestart());
     vm->execute(frm);
@@ -4490,13 +4495,13 @@ void ClosureObj::visit(VM* vm)
 void ClosureObj::initouters(VM* vm, StackSegment* seg, ValueT* base, ValueT* encbox)
 {
   LambdaVarsObj* vars = lambda->vars;
-  for (int i = 0; i < n; i++)
+  for (int i = 0; i < n - 1; i++)
   {
     BoxVar* bv = vars->refbvar(i);
     if (bv->islocal)
-      setbox(&outers[i], boxref(base + 1 + bv->idx));
+      setbox(&outers[i+1], boxref(base + 1 + bv->idx));
     else
-      outers[i] = encbox[bv->idx];
+      outers[i+1] = encbox[bv->idx + 1];
   }
 }
 

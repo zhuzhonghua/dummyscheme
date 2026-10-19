@@ -1766,7 +1766,6 @@ struct ClosureObj : public RefObject {
   }
 
   static int totalsize(int n) {
-    n = (n <= 0 ? 1 : n);
     return (sizeof(ClosureObj) + sizeof(ValueT) * (n-1));
   }
   virtual int getsize() { return totalsize(n); }
