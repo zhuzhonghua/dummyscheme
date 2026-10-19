@@ -490,6 +490,11 @@ ValueT scm_eval_string(VM* vm, const char* s, int len)
   return res;
 }
 
+bool scm_apply(VM* vm, ValueT* fn, ValueT** argv, int argc, ValueT* out)
+{
+  return G(vm)->pcall(fn, argv, argc, out);
+}
+
 // ---------- global registry ----------
 
 void scm_registry_set(VM* vm, const char* name, ValueT v)

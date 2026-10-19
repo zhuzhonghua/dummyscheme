@@ -158,6 +158,11 @@ SCM_API void scm_register_lib(VM* vm, const RegCProc* funcs);
 // value of the last expression.  Throws like evalstr (const char*).
 SCM_API ValueT scm_eval_string(VM* vm, const char* s, int len);
 
+// Applies a closure / native proc to `argv`.  Reuses GlobalVM::pcall:
+// returns true on success and stores the result in *out; on error returns
+// false and stores the error string in *out.
+SCM_API bool scm_apply(VM* vm, ValueT* fn, ValueT** argv, int argc, ValueT* out);
+
 // ---------- option args / type names (all take VM only; GlobalVM is never exposed) ----------
 SCM_API scm_int      scm_opt_int(VM* vm, ValueT* p, scm_int def);  // like luaL_optinteger: nil/absent -> def, non-integer -> error
 SCM_API bool         scm_is_none_or_nil(VM* vm, ValueT* p);         // like lua_isnoneornil: absent arg (NULL p) or null
