@@ -526,9 +526,9 @@ static ValueT scm_stub_format(VM* vm, ValueT* p, ValueT* args)
         else
           AssertArg(vm, false, METHOD, v, " ~f/~e/~g: not a number");
         const char* fmtp = d == 'f' ? "%f" : (d == 'e' ? "%e" : "%g");
+        char pf[16] = {0};
         if (prec >= 0)
         {
-          char pf[16] = {0};
           snprintf(pf, sizeof(pf), "%%.%df", prec);
           fmtp = pf;
         }

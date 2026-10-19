@@ -1761,20 +1761,21 @@ struct AnnotationObj : public RefObject {
 
 struct ClosureObj : public RefObject {
   ClosureObj(int no): n(no), lambda(NULL) {
-    for (int i = 0; i < n ; i++)
-      outers[i] = NULL;
+    for (int i = 1; i < n ; i++)
+      new (&outers[i]) ValueT();
   }
 
   static int totalsize(int n) {
-    return (offsetof(ClosureObj, outers) + sizeof(BoxObj*) * n);
+    n = (n <= 0 ? 1 : n);
+    return (sizeof(ClosureObj) + sizeof(ValueT) * (n-1));
   }
   virtual int getsize() { return totalsize(n); }
   virtual void visit(VM* vm);
-  void initouters(VM*, StackSegment* seg, ValueT* base, BoxObj** encbox);
+  void initouters(VM*, StackSegment* seg, ValueT* base, ValueT* encbox);
 
   LambdaPtr lambda;
   short n;
-  BoxObj* outers[1];
+  ValueT outers[1];
 };
 
 enum PromiseState { PROMISE_NONE, PROMISE_LAZY, PROMISE_EAGER };

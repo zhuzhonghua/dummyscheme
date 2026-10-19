@@ -2528,7 +2528,8 @@ static void boxcapturedlocals(VM* vm, CallFrame* frm, LambdaPtr lambda)
   LambdaVarsObj* vars = lambda->vars;
   for (int i = 0; i < vars->local.n; i++)
   {
-    if (vars->local.get(i).capture || vars->local.get(i).assigned)
+    LocalVar* lv = vars->local.getptr(i);
+    if (lv->capture || lv->assigned)
     {
       ValueT* slot = frm->base + 1 + i;
       BoxObj* box = Sr1(vm, BoxObj, *slot);
@@ -2539,7 +2540,6 @@ static void boxcapturedlocals(VM* vm, CallFrame* frm, LambdaPtr lambda)
 
 static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* base, int len, CallAppState* callstate)
 {
-
   ClosurePtr newcall = closureref(base);
   if (!callstate->fromapply)
   {
@@ -3246,7 +3246,7 @@ void VM::execute0(CallFrame* frm)
   case OP_REFBVAR: {
     int target, from;getcode_refbvar(i, target, from);
     BoxVar* bv = lambda->vars->refbvar(from);
-    BoxObj* box = call->outers[from];
+    BoxObj* box = boxref(&call->outers[from]);
     ValueT* val = &box->val;
     Assert(this, !isundefined(val), "undefined ref var %s", Ssstr(bv->name));
     *stkvt(target) = val;
@@ -3298,7 +3298,7 @@ void VM::execute0(CallFrame* frm)
     BoxVar* bv = lambda->vars->refbvar(A);
     ValueT* val = singlevalue(this, stkvt(B), "set!");
     Assert(this, !isundefined(val), "undefined val for var %s", Ssstr(bv->name));
-    call->outers[A]->val = *val;
+    boxref(&call->outers[A])->val = *val;
     break;
   }
   case OP_SETGLOBAL: {
@@ -4482,19 +4482,19 @@ int OutputPortStrObj::write(VM* vm, ValueT* vt)
 void ClosureObj::visit(VM* vm)
 {
   Check(lambda);
-  for (int i = 0; i < n ; i++)
-    if (outers[i])
-      Check(outers[i]);
+  for (int i = 0; i < n ; i++) {
+    Check(outers[i]);
+  }
 }
 
-void ClosureObj::initouters(VM* vm, StackSegment* seg, ValueT* base, BoxObj** encbox)
+void ClosureObj::initouters(VM* vm, StackSegment* seg, ValueT* base, ValueT* encbox)
 {
   LambdaVarsObj* vars = lambda->vars;
   for (int i = 0; i < n; i++)
   {
     BoxVar* bv = vars->refbvar(i);
     if (bv->islocal)
-      outers[i] = boxref(base + 1 + bv->idx);
+      setbox(&outers[i], boxref(base + 1 + bv->idx));
     else
       outers[i] = encbox[bv->idx];
   }
