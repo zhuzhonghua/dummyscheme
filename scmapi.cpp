@@ -491,15 +491,32 @@ ValueT scm_eval_string(VM* vm, const char* s, int len)
   return res;
 }
 
-ValueT scm_compile(VM* vm, const char* s, int len)
+static std::string wrapbody(const char* s, int len)
 {
   /* one (begin ...) form; the newline before ")" keeps a trailing
      "; comment" from eating the closing paren */
-  std::string src(s, len);
   std::string wrapped = "(begin ";
-  wrapped += src;
+  wrapped.append(s, len);
   wrapped += "\n)";
-  return vm->compile(wrapped.c_str(), src.c_str());
+  return wrapped;
+}
+
+ValueT scm_compile(VM* vm, const char* s, int len)
+{
+  std::string wrapped = wrapbody(s, len);
+  return vm->compile(wrapped.c_str(), s);
+}
+
+ValueT scm_compile(VM* vm, ValueT* env, const char* s, int len)
+{
+  Assert(vm, env != NULL && ishashtable(env), "compile: env is not a hash-table");
+  Assert(vm, hashtableref(env) != G(vm)->getgenv(), "compile: env cannot be the global env");
+  Sgcvar1(vm, mt);
+  sethashtable(mt, Sr1(vm, HashTableObj, vm));
+  hashtableref(mt)->set(vm, &G(vm)->indexmeta, G(vm)->getgenvref());
+  hashtableref(env)->setmetatable(mt);
+  std::string wrapped = wrapbody(s, len);
+  return vm->compile(wrapped.c_str(), s, env);
 }
 
 bool scm_apply(VM* vm, ValueT* fn, ValueT** argv, int argc, ValueT* out)

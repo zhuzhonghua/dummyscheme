@@ -455,10 +455,11 @@ ValueT VM::evalstr(const char* str)
   return g->evalstr(str);
 }
 
-ValueT VM::compile(const char* str, const char* sourcename)
+ValueT VM::compile(const char* str, const char* sourcename, ValueT* env)
 {
   VM* vm = this;
   ReserveStack _reservestk_(vm);
+  Assert(vm, env == NULL || ishashtable(env), "compile: env is not a hash-table");
   const char* label = sourcename ? sourcename : str;
   Sgcvar1(vm, source);
   setstr(source, strintern(label, (int)strlen(label)));
@@ -482,7 +483,8 @@ ValueT VM::compile(const char* str, const char* sourcename)
   ClosurePtr closure = g->newclosure(1);
   setclosure(closurevt, closure);
   closure->lambda = lambda;
-  closure->outers[0] = g->getgenvref();
+  closure->outers[0] = env ? env : g->getgenvref();
+
   return *closurevt;
 }
 
@@ -3561,9 +3563,9 @@ void GlobalVM::init()
   getintern()->init();
   sethashtable(&genv, Sr1(vm, HashTableObj, vm));    /* global environment table */
   const char* indexc = "__index";
-  indexmeta = strintern(indexc, (int)strlen(indexc));
+  setstr(&indexmeta, strintern(indexc, (int)strlen(indexc)));
   const char* newindexc = "__newindex";
-  newindexmeta = strintern(newindexc, (int)strlen(newindexc));
+  setstr(&newindexmeta, strintern(newindexc, (int)strlen(newindexc)));
   constvalinit(vm);
   SCMBasic::init(vm);
   SCMMath::init(vm);

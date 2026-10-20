@@ -984,7 +984,9 @@ public:
   StrObj* strintern(int len, char c);
   ValueT evalstr(const char* str);
   void loadfile(const char* fname);
-  ValueT compile(const char* str, const char* sourcename = NULL);
+  ValueT compile(const char* str) { return compile(str, NULL); }
+  ValueT compile(const char* str, const char* sourcename) { return compile(str, sourcename, NULL); }
+  ValueT compile(const char* str, const char* sourcename, ValueT* env);
   NumBigObj* newnumbig(int, char);
   bool dolex(Lexer* lex, StrPtr source);
   template<class T>
@@ -1335,8 +1337,8 @@ public:
   ValueT ellipsisvt;
   ValueT delayvt;
 
-  StrObj* indexmeta;      /* "__index" */
-  StrObj* newindexmeta;   /* "__newindex" */
+  ValueT indexmeta;      /* "__index" */
+  ValueT newindexmeta;   /* "__newindex" */
 
   ValueT ac0;
   InputPortObj* iport;

@@ -43,6 +43,10 @@
 
 namespace Scheme {
 
+// All host-provided `const char*` arguments must be NUL-terminated.  For
+// functions that also take an explicit input length `len`, it is the byte
+// length excluding the terminator.
+
 // ---------- type predicates (dispatch branches by arg type) ----------
 SCM_API bool scm_is_int(VM* vm, ValueT* p);      // plain integer only (big not exposed yet)
 SCM_API bool scm_is_float(VM* vm, ValueT* p);
@@ -107,7 +111,7 @@ SCM_API ValueT scm_make_float(VM* vm, scm_float x);
 SCM_API ValueT scm_make_bool(VM* vm, bool b);
 SCM_API ValueT scm_make_char(VM* vm, scm_char c);
 SCM_API ValueT scm_make_string(VM* vm, const char* s);             // len = strlen(s)
-SCM_API ValueT scm_make_string(VM* vm, const char* s, int len);    // explicit len
+SCM_API ValueT scm_make_string(VM* vm, const char* s, int len);    // s NUL-terminated; len excludes it
 SCM_API ValueT scm_make_vector(VM* vm, int n);
 SCM_API ValueT scm_make_list(VM* vm, ValueT* items, int n);
 SCM_API ValueT scm_make_pair(VM* vm, ValueT* a, ValueT* b);
@@ -154,14 +158,23 @@ SCM_API void scm_destroy_vm(VM* vm);
 // IO streams.
 SCM_API void scm_register_lib(VM* vm, const RegCProc* funcs);
 
-// Evaluates `s` (len bytes; need not be NUL-terminated) and returns the
-// value of the last expression.  Throws like evalstr (const char*).
+// Evaluates `s` (NUL-terminated; `len` excludes the terminator) and returns
+// the value of the last expression.  Throws like evalstr (const char*).
 SCM_API ValueT scm_eval_string(VM* vm, const char* s, int len);
 
-// Compiles `s` (len bytes; need not be NUL-terminated) without executing it.
-// The source is wrapped in one (begin ...) form and compiled by VM::compile
-// into a reusable, no-vars top-level closure (top-level define writes genv).
+// Compiles `s` (NUL-terminated; `len` excludes the terminator) without
+// executing it.  The source is wrapped in one (begin ...) form and compiled by
+// VM::compile into a reusable, no-vars top-level closure (top-level define
+// writes genv).
 SCM_API ValueT scm_compile(VM* vm, const char* s, int len);
+
+// Compiles `s` in the hash-table `env` instead of genv. `s` must be
+// NUL-terminated; `len` excludes the terminator. Installs { __index = genv }
+// on `env`, then VM::compile uses `env` as the closure's outers[0], so
+// define/set! write into `env` while missing reads fall back to genv.
+// The caller keeps `env` alive for the closure's lifetime; genv itself is not
+// accepted.
+SCM_API ValueT scm_compile(VM* vm, ValueT* env, const char* s, int len);
 
 // Applies a closure / native proc to `argv`.  Reuses GlobalVM::pcall:
 // returns true on success and stores the result in *out; on error returns

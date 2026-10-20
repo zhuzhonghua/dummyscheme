@@ -120,9 +120,7 @@ ValueT* HashTableObj::indexfallback(VM* vm, ValueT* key)
   if (isundefined(&metatable)) return NULL;
   if (!ishashtable(&metatable)) return NULL;
   HashTableObj* mt = hashtableref(&metatable);
-  ValueT keyvt;
-  setstr(&keyvt, vm->g->indexmeta);
-  ValueT* idx = mt->rawget(&keyvt);
+  ValueT* idx = mt->rawget(&G(vm)->indexmeta);
   if (!idx || isundefined(idx)) return NULL;
   if (ishashtable(idx))
   {
@@ -136,9 +134,7 @@ bool HashTableObj::newindexfallback(VM* vm, ValueT* key, ValueT* val)
 {
   if (!ishashtable(&metatable)) return false;
   HashTableObj* mt = hashtableref(&metatable);
-  ValueT keyvt;
-  setstr(&keyvt, vm->g->newindexmeta);
-  ValueT* ni = mt->rawget(&keyvt);
+  ValueT* ni = mt->rawget(&G(vm)->newindexmeta);
   if (!ni || isundefined(ni)) return false;
   if (ishashtable(ni))
   {
