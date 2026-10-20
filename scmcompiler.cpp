@@ -271,14 +271,14 @@ void SCompiler::compilesym(int target, ValueT* expr, ValueT* link)
     {
       checkhygienesym(sym, sym);
       int k = lambda->addk(vm, sym);
-      putcode(code_refglobal(target, k), line);
+      putcode(code_refout0(target, k), line);
     }
   }
   else
   {
     checkhygienesym(sym, sym);
     int k = lambda->addk(vm, sym);
-    putcode(code_refglobal(target, k), line);
+    putcode(code_refout0(target, k), line);
   }
 }
 
@@ -326,7 +326,7 @@ int SCompiler::compiledefsym0(int target, ValueT* symvt)
   {
     int line = annotateline(symvt);
     int k = lambda->addk(vm, symvt0);
-    putcode(code_defglobal(k, target), line);
+    putcode(code_defout0(k, target), line);
   }
   return target;
 }
@@ -455,7 +455,7 @@ void SCompiler::compileset(int target, ValueT* expr, ValueT* link)
       target += 1;
       line = annotateline(&symvt);
       int k = lambda->addk(vm, sym);
-      putcode(code_setglobal(k, target), line);
+      putcode(code_setout0(k, target), line);
     }
   }
   else
@@ -464,7 +464,7 @@ void SCompiler::compileset(int target, ValueT* expr, ValueT* link)
     target += 1;
     int k = lambda->addk(vm, sym);
     line = annotateline(&symvt);
-    putcode(code_setglobal(k, target), line);
+    putcode(code_setout0(k, target), line);
   }
   compile(target, &symval, Snext, false);
 }

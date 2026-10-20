@@ -1730,11 +1730,11 @@ void VM::printccode0(FILE *f, LambdaPtr lambda, int pc)
       PrintOffset(target);
       break;
     }
-    case OP_REFGLOBAL: {
-      int target, from;getcode_refglobal(i, target, from);
+    case OP_REFOUT0: {
+      int target, from;getcode_refout0(i, target, from);
       ValueT* k = lambda->getk(from);
       SymPtr sym = symref(k);
-      PrintCode(REFGLOBAL);
+      PrintCode(REFOUT0);
       PrintOffset2(target, from);
       fprintf(f, "\t; set %d as %s", target, Ssstr(sym));
       break;
@@ -1755,11 +1755,11 @@ void VM::printccode0(FILE *f, LambdaPtr lambda, int pc)
       fprintf(f, "\t; set %d as %s", target, Ssstr(bv->name));
       break;
     }
-    case OP_DEFGLOBAL: {
-      int target, from;getcode_defglobal(i, target, from);
+    case OP_DEFOUT0: {
+      int target, from;getcode_defout0(i, target, from);
       ValueT* k = lambda->getk(target);
       SymPtr sym = symref(k);
-      PrintCode(DEFGLOBAL);
+      PrintCode(DEFOUT0);
       PrintOffset2(target, from);
       fprintf(f, "\t; %s", Ssstr(sym));
       break;
@@ -1804,11 +1804,11 @@ void VM::printccode0(FILE *f, LambdaPtr lambda, int pc)
       fprintf(f, "\t; set %s from %d", Ssstr(bv->name), from);
       break;
     }
-    case OP_SETGLOBAL: {
-      int target, from;getcode_setglobal(i, target, from);
+    case OP_SETOUT0: {
+      int target, from;getcode_setout0(i, target, from);
       ValueT* k = lambda->getk(target);
       SymPtr sym = symref(k);
-      PrintCode(SETGLOBAL);
+      PrintCode(SETOUT0);
       PrintOffset2(target, from);
       fprintf(f, "\t; set %s from %d", Ssstr(sym), from);
       break;
@@ -3259,8 +3259,8 @@ void VM::execute0(CallFrame* frm)
   case OP_JUMPLABEL:
     getcode_jmplabel(i, pc);
     goto loop;
-  case OP_REFGLOBAL: {
-    int target, from;getcode_refglobal(i, target, from);
+  case OP_REFOUT0: {
+    int target, from;getcode_refout0(i, target, from);
     ValueT* k = lambda->getk(from);
     SymPtr name = symref(k);
     ValueT val;
@@ -3294,8 +3294,8 @@ void VM::execute0(CallFrame* frm)
     *stkvt(target) = val;
     break;
   }
-  case OP_DEFGLOBAL: {
-    int target, from;getcode_defglobal(i, target, from);
+  case OP_DEFOUT0: {
+    int target, from;getcode_defout0(i, target, from);
     ValueT* k = lambda->getk(target);
     SymPtr name = symref(k);
     ValueT* val = singlevalue(this, stkvt(from), "define");
@@ -3336,8 +3336,8 @@ void VM::execute0(CallFrame* frm)
     boxref(&call->outers[A])->val = *val;
     break;
   }
-  case OP_SETGLOBAL: {
-    int target, from;getcode_setglobal(i, target, from);
+  case OP_SETOUT0: {
+    int target, from;getcode_setout0(i, target, from);
     ValueT* k = lambda->getk(target);
     SymPtr name = symref(k);
     ValueT* val = singlevalue(this, stkvt(from), "set!");
