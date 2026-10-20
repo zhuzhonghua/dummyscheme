@@ -4,6 +4,7 @@
 // =====================================================================
 
 #include "vm.h"
+#include <string>
 
 namespace Scheme {
 
@@ -488,6 +489,17 @@ ValueT scm_eval_string(VM* vm, const char* s, int len)
   }
   free(src);
   return res;
+}
+
+ValueT scm_compile(VM* vm, const char* s, int len)
+{
+  /* one (begin ...) form; the newline before ")" keeps a trailing
+     "; comment" from eating the closing paren */
+  std::string src(s, len);
+  std::string wrapped = "(begin ";
+  wrapped += src;
+  wrapped += "\n)";
+  return vm->compile(wrapped.c_str(), src.c_str());
 }
 
 bool scm_apply(VM* vm, ValueT* fn, ValueT** argv, int argc, ValueT* out)

@@ -984,6 +984,7 @@ public:
   StrObj* strintern(int len, char c);
   ValueT evalstr(const char* str);
   void loadfile(const char* fname);
+  ValueT compile(const char* str, const char* sourcename = NULL);
   NumBigObj* newnumbig(int, char);
   bool dolex(Lexer* lex, StrPtr source);
   template<class T>
@@ -1425,6 +1426,7 @@ public:
   RefObjGroup* getobjgroup() { return &objGroup; }
   Interns* getintern() { return &intern; }
   HashTableObj* getgenv() { return hashtableref(&genv); }
+  ValueT* getgenvref() { return &genv; }
   VM* mainstk() { return &main; }
   ScmAlloc getfrealloc() { return frealloc; }
   void* getallocud() { return allocud; }

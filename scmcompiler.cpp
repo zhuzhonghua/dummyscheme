@@ -284,6 +284,8 @@ void SCompiler::compilesym(int target, ValueT* expr, ValueT* link)
 
 void SCompiler::compiledefpre(ValueT* expr)
 {
+  if (lambda->vars == NULL)
+    return;
   ValueT _dummy_, vt1;
   splitannotatelist(vm, expr, whatdefine, 2, &_dummy_, &vt1);
   ValueT* defcar = annotatevt(&vt1);
@@ -513,8 +515,8 @@ void SCompiler::compileseqpre(ValueT* expr)
     ValueT* tail = Scdr(expr0);
     if (isnull(body))
       *expr = *tail;
-  else
-  {
+    else
+    {
       ValueT* body0 = annotatevt(body);
       compileassert(vm, ispair(body0), expr, "%s", what);
       *expr = *body;
@@ -523,7 +525,7 @@ void SCompiler::compileseqpre(ValueT* expr)
         body = Scdr(body0);
         body0 = annotatevt(body);
         compileassert(vm, ispair(body0), body, "%s", what);
-    }
+      }
       *Scdr(body0) = *tail;
     }
     if (!isnull(expr))

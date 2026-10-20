@@ -455,6 +455,37 @@ ValueT VM::evalstr(const char* str)
   return g->evalstr(str);
 }
 
+ValueT VM::compile(const char* str, const char* sourcename)
+{
+  VM* vm = this;
+  ReserveStack _reservestk_(vm);
+  const char* label = sourcename ? sourcename : str;
+  Sgcvar1(vm, source);
+  setstr(source, strintern(label, (int)strlen(label)));
+
+  ReaderS reader(str);
+  Lexer lex(vm, &reader);
+  lex.setsource(label);
+  Sgcvar1(vm, expr);
+  setundefined(expr);
+  lex.readOne(expr);
+  Assert(vm, !isundefined(expr), "compile: illegal source");
+
+  Sgcvar2(vm, lambdavt, closurevt);
+  LambdaPtr lambda = NULL;
+  setlambda(lambdavt, lambda = Sr0(vm, LambdaObj));
+  lambda->source = strref(source);
+  SCompiler compiler(vm, lambda, NULL);
+  compiler.compileseqpre(expr);
+  compiler.compile(1, expr, Sreturn, true);
+
+  ClosurePtr closure = g->newclosure(1);
+  setclosure(closurevt, closure);
+  closure->lambda = lambda;
+  closure->outers[0] = g->getgenvref();
+  return *closurevt;
+}
+
 NumBigObj* VM::newnumbig(int n, char c)
 {
   return g->newnumbig(n, c);
@@ -2526,6 +2557,8 @@ static void callvalues(VM* vm, ValueT* base, int len, CallAppState* state)
 static void boxcapturedlocals(VM* vm, CallFrame* frm, LambdaPtr lambda)
 {
   LambdaVarsObj* vars = lambda->vars;
+  if (vars == NULL)
+    return;
   for (int i = 0; i < vars->local.n; i++)
   {
     LocalVar* lv = vars->local.getptr(i);

@@ -158,6 +158,11 @@ SCM_API void scm_register_lib(VM* vm, const RegCProc* funcs);
 // value of the last expression.  Throws like evalstr (const char*).
 SCM_API ValueT scm_eval_string(VM* vm, const char* s, int len);
 
+// Compiles `s` (len bytes; need not be NUL-terminated) without executing it.
+// The source is wrapped in one (begin ...) form and compiled by VM::compile
+// into a reusable, no-vars top-level closure (top-level define writes genv).
+SCM_API ValueT scm_compile(VM* vm, const char* s, int len);
+
 // Applies a closure / native proc to `argv`.  Reuses GlobalVM::pcall:
 // returns true on success and stores the result in *out; on error returns
 // false and stores the error string in *out.
