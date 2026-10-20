@@ -181,6 +181,11 @@ SCM_API ValueT scm_compile(VM* vm, ValueT* env, const char* s, int len);
 // false and stores the error string in *out.
 SCM_API bool scm_apply(VM* vm, ValueT* fn, ValueT** argv, int argc, ValueT* out);
 
+// Set the RNG seed for random-integer / random-real.  Call once before
+// running a script to make its random sequence deterministic and reproducible
+// across replicas.
+SCM_API void scm_set_rng_seed(VM* vm, scm_uint seed);
+
 // ---------- option args / type names (all take VM only; GlobalVM is never exposed) ----------
 SCM_API scm_int      scm_opt_int(VM* vm, ValueT* p, scm_int def);  // like luaL_optinteger: nil/absent -> def, non-integer -> error
 SCM_API bool         scm_is_none_or_nil(VM* vm, ValueT* p);         // like lua_isnoneornil: absent arg (NULL p) or null

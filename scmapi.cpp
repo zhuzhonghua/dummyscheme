@@ -524,6 +524,11 @@ bool scm_apply(VM* vm, ValueT* fn, ValueT** argv, int argc, ValueT* out)
   return G(vm)->pcall(fn, argv, argc, out);
 }
 
+void scm_set_rng_seed(VM* vm, scm_uint seed)
+{
+  G(vm)->randstate = seed;
+}
+
 // ---------- global registry ----------
 
 void scm_registry_set(VM* vm, const char* name, ValueT v)
