@@ -937,7 +937,8 @@ struct DynamicEnv {
 
 struct CallFrame : public RefObject {
   CallFrame():unwind(NULL), force(NULL), dynwind(NULL),
-    pc(-1),prev(NULL),seg(NULL),start(NULL),base(NULL),top(NULL) {}
+    pc(-1), tailcall(false),
+    prev(NULL),seg(NULL),start(NULL),base(NULL),top(NULL) {}
 
   void setpc(int p) { pc = p; }
   int getpc() { return pc; }
@@ -947,6 +948,7 @@ struct CallFrame : public RefObject {
   CallFrame* copy(VM* vm);
 
   int pc;
+  bool tailcall;  /* frame was entered by a tail call */
   StackSegment* seg;
   CallFrame* prev;
   ValueT* start;
@@ -1008,7 +1010,6 @@ public:
   void printvalue0(OutputPortObj* o, ValueT* val) { printvalue0(o, val, false); }
   void printvalue0(ValueT* val);
   void printvalue0(ValueT* val, bool strip);
-  void printframe();
   void printccode0(FILE *f, LambdaPtr lambda, int pc);
   void printccode(FILE *f, LambdaPtr lambda);
   void printccode(LambdaObj* lambda) { printccode(stderr, lambda); }
@@ -1025,6 +1026,7 @@ public:
   StkVar* sv;
   DynamicWindObj* dywind;
   CallFrame* curfrm;
+  int oldpc;      /* last pc traced in this VM/coroutine */
   int state;
   VM* callerstk;
   ValueT* resslot;
@@ -1045,6 +1047,7 @@ protected:
   VM* vm;
   CallFrame* curfrm;
   DynamicWindObj* dywind;
+  int oldpc;
   StkVar oldfrm;   // keep the saved chain alive while detached
   StkVar olddw;
 };
@@ -1364,7 +1367,6 @@ public:
 
   void printvalue0(ValueT* val, bool strip) { main.printvalue0(val, strip); }
   void printvalue0(ValueT* val) { main.printvalue0(val); }
-  void printframe() { main.printframe(); }
 public:
   LambdaPtr gettoplambda();
   const char* gettopsource();
@@ -1586,8 +1588,8 @@ struct AbsLine {
 #define MLINEDIFF	0x80
 
 struct LambdaObj : public RefObject {
-  LambdaObj():lines(NULL),sizelines(0),source(NULL),vars(NULL),argnum(0),
-              argrest(false), top(0), defline(0) {}
+  LambdaObj():top(0), source(NULL), defline(0),
+              lines(NULL), sizelines(0), argnum(0), argrest(false), vars(NULL) {}
 
   int getcodestart() { return code.n-1; }
   void saveline(VM* vm, int pc, int line, int preline);

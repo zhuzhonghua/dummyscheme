@@ -44,6 +44,7 @@ em++ \
   scmport.cpp \
   scmvector.cpp \
   scmtable.cpp \
-  scminit.cpp
+  scminit.cpp \
+  scmdebug.cpp
 
 echo "built $OUT/repl.html"

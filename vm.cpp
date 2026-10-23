@@ -8,6 +8,7 @@
 #include "scmvector.h"
 #include "scmtable.h"
 #include "scmcode.h"
+#include "scmdebug.h"
 #include <cctype>
 #include <cstddef>
 #include <cstdio>
@@ -69,7 +70,7 @@ static const char* scm_errv(VM* vm, const char* fmt, va_list ap)
   }
   else
   fprintf(stderr, "%s\n", buf);
-  vm->printframe();
+  Debug::printframe(vm);
 
   GlobalVM* g = G(vm);
   StrObj* s = g->ninstrintern(buf, (int)strlen(buf));
@@ -385,6 +386,7 @@ CallFrame* CallFrame::copy(VM* vm)
 {
   CallFrame* newfrm = Sr0(vm, CallFrame);
   newfrm->pc = pc;
+  newfrm->tailcall = tailcall;
   newfrm->seg = seg;
   newfrm->prev = prev;
   newfrm->start = start;
@@ -423,6 +425,7 @@ void VM::fullmark()
 VM::VM(GlobalVM* v):g(v),sv(NULL),dywind(NULL)
 {
   curfrm = NULL;
+  oldpc = -1;
   state = CO_OK;
   callerstk = NULL;
   retreg = NULL;
@@ -581,6 +584,8 @@ ReserveStack::ReserveStack(VM* v)
 {
   curfrm = vm->curfrm;
   dywind = vm->dywind;
+  oldpc = vm->oldpc;
+  vm->oldpc = -1;
   if (curfrm)
   {
     setref(&oldfrm.val, curfrm);
@@ -595,6 +600,7 @@ ReserveStack::ReserveStack(VM* v)
 
 ReserveStack::~ReserveStack()
 {
+  vm->oldpc = oldpc;
   vm->curfrm = curfrm;
   vm->dywind = dywind;
 }
@@ -1845,27 +1851,6 @@ void VM::printccode0(FILE *f, LambdaPtr lambda, int pc)
 #define pcnext() --pc
 #define stkvt(offset) (base+(offset))
 
-void VM::printframe()
-{
-  VM* vm = this;
-  int n = 0;
-  CallFrame* frm  = vm->curfrm;
-  while (frm != NULL)
-  {
-    ValueT* base = frm->base;
-    ValueT* basevt = stkvt(0);
-    ClosurePtr call = closureref(basevt);
-    LambdaPtr lambda = call->lambda;
-    fprintf(stderr, "\n");
-    fprintf(stderr, "Frame %d %s:%d\n", n,
-            lambda->source != NULL ? lambda->source->str : "<unknown source>",
-            lambda->getline(frm->pc));
-    printccode0(stderr, lambda, frm->pc);
-    fprintf(stderr, "Frame %d End\n\n", n++);
-    frm = frm->prev;
-  }
-}
-
 enum CallAct {
   CALLACT_NONE,
   CALLACT_DONE,
@@ -2600,6 +2585,7 @@ static CallFrame* ctorclosurefrm(VM* vm, bool istail, CallFrame* frm, ValueT* ba
   else
   {
   tail:
+    frm->tailcall = true;
     if (callstate->force)
     {
       ValueT* prom = base + 1;
@@ -3115,7 +3101,7 @@ static RtnFrmAct callrtnfrm(VM* vm, CallFrame** frm, ValueT* base, LambdaPtr lam
 
 static void runthunk(VM* vm, ValueT* proc)
 {
-
+  ReserveStack _reservestk_(vm);
   if (isnativeproc(proc))
   {
     NativeProcObj* nproc = nativeprocref(proc);
@@ -3810,7 +3796,7 @@ bool GlobalVM::dolex(Lexer* lex, StrPtr source)
     ac0 = Sundefined;
     CallFrame* frm = vm->curfrm;
     frm = vm->newfrm(frm, frm != NULL ? frm->top : NULL, 0, lambda->top);
-    ClosurePtr closure = newclosure(1);  // 1 = env table only, 0 upvalues
+    ClosurePtr closure = newclosure(1);  // 1 = env table only, 0 outers
     setclosure(frm->base, closure);
     closure->lambda = lambda;
     closure->outers[0] = genv;  // top-level closure inherits global env
