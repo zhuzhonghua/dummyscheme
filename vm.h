@@ -1037,6 +1037,7 @@ public:
   CallFrame* c0;
 
   DebugState debug;  /* hook engine state (see scmdebug.h) */
+  ValueT hookfn;     /* Scheme-side hook closure (debug-sethook); null when absent */
 };
 
 #define isstack(VT) istype(VT, VT_REF_STACK)

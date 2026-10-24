@@ -70,7 +70,7 @@ static const char* scm_errv(VM* vm, const char* fmt, va_list ap)
   }
   else
   fprintf(stderr, "%s\n", buf);
-  Debug::printframe(vm);
+  SCMDebug::printframe(vm);
 
   GlobalVM* g = G(vm);
   StrObj* s = g->ninstrintern(buf, (int)strlen(buf));
@@ -421,6 +421,7 @@ void VM::fullmark()
   }
   Check(curfrm);
   Check(dywind);
+  Check(&hookfn);
 }
 
 VM::VM(GlobalVM* v):g(v),sv(NULL),dywind(NULL)
@@ -3189,7 +3190,7 @@ void VM::execute0(CallFrame* frm)
     return;
   frm->setpc(pc);
   if (vm->debug.mask & (SCM_MASKLINE | SCM_MASKCOUNT))
-    Debug::traceexec(vm, frm, pc);
+    SCMDebug::traceexec(vm, frm, pc);
   i = lambda->fetchi(pc);
   //checkgc();
   icode = GET_OP(i);
@@ -3395,7 +3396,7 @@ void VM::execute0(CallFrame* frm)
       lambda = call->lambda;
       pc = lambda->getcodestart();
       if (vm->debug.mask & SCM_MASKCALL)
-        Debug::dochook(vm, icode == OP_TAILCALLAPP ?
+        SCMDebug::dochook(vm, icode == OP_TAILCALLAPP ?
                        SCM_HOOKTAILCALL : SCM_HOOKCALL, -1, frm);
       goto loop;
     case CALLACT_TAILRET:
@@ -3423,7 +3424,7 @@ void VM::execute0(CallFrame* frm)
 
 retlab: {
     if (vm->debug.mask & SCM_MASKRET)
-      Debug::dochook(vm, SCM_HOOKRET, -1, frm);
+      SCMDebug::dochook(vm, SCM_HOOKRET, -1, frm);
     RtnFrmAct act = callrtnfrm(this, &frm, base, lambda);
     switch(act) {
     case RTN_DONE:
@@ -3563,6 +3564,7 @@ void GlobalVM::init()
   SCMStr::init(vm);
   SCMVector::init(vm);
   SCMTable::init(vm);
+  SCMDebug::init(vm);
   regComplex("apply", NATIVE_COMPLEX_APPLY);
   regComplex("call-with-current-continuation", NATIVE_COMPLEX_CALLCC);
   regComplex("call/cc", NATIVE_COMPLEX_CALLCC);

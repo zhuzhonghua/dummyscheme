@@ -8,8 +8,11 @@ class VM;
 struct CallFrame;
 struct ValueT;
 
-/* Hook engine: fires call/ret/line/count events from the interpreter
-   loop; C hook (Debug::sethook), mask 0 turns the engine off. */
+/* Hook engine: fires call/ret/line/count/tail-call events from the
+   interpreter loop.  The active hook is either a C function
+   (SCMDebug::sethook) or a Scheme closure (debug-sethook, kept in
+   VM::hookfn); the one installed last wins.  Mask 0 turns the engine
+   off. */
 
 enum ScmHookEvent {
   SCM_HOOKCALL = 0,
@@ -17,6 +20,7 @@ enum ScmHookEvent {
   SCM_HOOKLINE,
   SCM_HOOKCOUNT,
   SCM_HOOKTAILCALL,
+  SCM_HOOKEVENTCOUNT  /* number of hook events reported to hooks */
 };
 
 enum ScmHookMask {
@@ -29,16 +33,18 @@ enum ScmHookMask {
 /* C-side hook.  It may run Scheme code; the engine guards reentrancy. */
 typedef void (*ScmHookFn)(VM* vm, int event, int line, CallFrame* frm);
 
-/* Per-VM hook state; members of VM, never GC traced (plain values). */
+/* Per-VM hook state; plain values, never GC traced.  The Scheme-side
+   hook closure lives in VM::hookfn and is traced there. */
 struct DebugState {
-  DebugState():mask(0), count(0), basecount(0), allowhook(true) {}
+  DebugState():mask(0), count(0), basecount(0), allowhook(true), hook(NULL) {}
 
   int mask;       /* enabled events; 0 = engine off */
   int count;      /* instructions left before the next count event */
   int basecount;  /* count event reload value */
   bool allowhook; /* false while a hook is running */
 
-  /* Event handler; may run Scheme code (guarded against reentrancy). */
+  /* Event handler; the hook installed last is the only active one:
+     exactly one of the two fields is set. */
   ScmHookFn hook;
 };
 
@@ -50,7 +56,7 @@ struct FrameInfo {
   int currentline;
 };
 
-class Debug {
+class SCMDebug {
 public:
   /* Line information of a live frame; 'frm' is guaranteed non-NULL with
      base set by the caller.  Returns false if the frame is not a Scheme
@@ -63,11 +69,29 @@ public:
   /* Print one frame of the chain as a single traceback line. */
   static void printframe0(VM* vm, CallFrame* frm);
 
-  /* ── hook engine (C hook only) ── */
+  /* ── hook engine ── */
+
+  /* Register the Scheme-side debug primitives (debug-sethook/gethook). */
+  static void init(VM* vm);
 
   /* Install a C hook.  count seeds the count event and is only meaningful
-     with SCM_MASKCOUNT. */
+     with SCM_MASKCOUNT.  Drops any Scheme hook: the hook installed last
+     is the only active one. */
   static void sethook(VM* vm, ScmHookFn hook, int mask, int count);
+
+  /* Activate the Scheme hook already stored in VM::hookfn (set by the
+     debug-sethook primitive).  Drops any C hook. */
+  static void setschemehook(VM* vm, int mask, int count);
+
+  /* Turn a hook spec -- a symbol or a list of the symbols 'call / 'ret /
+     'line / 'count -- into a ScmHookMask bit set; raises on anything
+     else.  'tail-call is reported to hooks under SCM_MASKCALL but is not
+     a spec symbol. */
+  static int schemehookspec(VM* vm, ValueT* spec);
+
+  /* Current hook state: *proc is the Scheme hook closure or #f (a C hook
+     has no Scheme representation); *mask / *basecount the engine state. */
+  static void gethook(VM* vm, ValueT* proc, int* mask, int* basecount);
 
   /* Turn the engine off and drop the hook. */
   static void clearhook(VM* vm);
