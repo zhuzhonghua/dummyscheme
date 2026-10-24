@@ -386,6 +386,7 @@ CallFrame* CallFrame::copy(VM* vm)
 {
   CallFrame* newfrm = Sr0(vm, CallFrame);
   newfrm->pc = pc;
+  newfrm->oldpc = oldpc;
   newfrm->tailcall = tailcall;
   newfrm->seg = seg;
   newfrm->prev = prev;
@@ -425,7 +426,6 @@ void VM::fullmark()
 VM::VM(GlobalVM* v):g(v),sv(NULL),dywind(NULL)
 {
   curfrm = NULL;
-  oldpc = -1;
   state = CO_OK;
   callerstk = NULL;
   retreg = NULL;
@@ -584,8 +584,6 @@ ReserveStack::ReserveStack(VM* v)
 {
   curfrm = vm->curfrm;
   dywind = vm->dywind;
-  oldpc = vm->oldpc;
-  vm->oldpc = -1;
   if (curfrm)
   {
     setref(&oldfrm.val, curfrm);
@@ -600,7 +598,6 @@ ReserveStack::ReserveStack(VM* v)
 
 ReserveStack::~ReserveStack()
 {
-  vm->oldpc = oldpc;
   vm->curfrm = curfrm;
   vm->dywind = dywind;
 }
@@ -3191,6 +3188,8 @@ void VM::execute0(CallFrame* frm)
   if (pc < 0)
     return;
   frm->setpc(pc);
+  if (vm->debug.mask & (SCM_MASKLINE | SCM_MASKCOUNT))
+    Debug::traceexec(vm, frm, pc);
   i = lambda->fetchi(pc);
   //checkgc();
   icode = GET_OP(i);
@@ -3395,6 +3394,9 @@ void VM::execute0(CallFrame* frm)
       call = closureref(base);
       lambda = call->lambda;
       pc = lambda->getcodestart();
+      if (vm->debug.mask & SCM_MASKCALL)
+        Debug::dochook(vm, icode == OP_TAILCALLAPP ?
+                       SCM_HOOKTAILCALL : SCM_HOOKCALL, -1, frm);
       goto loop;
     case CALLACT_TAILRET:
       goto retlab;
@@ -3420,6 +3422,8 @@ void VM::execute0(CallFrame* frm)
   goto loop;
 
 retlab: {
+    if (vm->debug.mask & SCM_MASKRET)
+      Debug::dochook(vm, SCM_HOOKRET, -1, frm);
     RtnFrmAct act = callrtnfrm(this, &frm, base, lambda);
     switch(act) {
     case RTN_DONE:

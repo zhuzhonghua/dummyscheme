@@ -36,6 +36,8 @@
 #include <poll.h>
 #endif
 
+#include "scmdebug.h"
+
 namespace Scheme {
 
 //#define SCHEME_STD_R4RS
@@ -937,7 +939,7 @@ struct DynamicEnv {
 
 struct CallFrame : public RefObject {
   CallFrame():unwind(NULL), force(NULL), dynwind(NULL),
-    pc(-1), tailcall(false),
+    pc(-1), oldpc(-1), tailcall(false),
     prev(NULL),seg(NULL),start(NULL),base(NULL),top(NULL) {}
 
   void setpc(int p) { pc = p; }
@@ -948,6 +950,7 @@ struct CallFrame : public RefObject {
   CallFrame* copy(VM* vm);
 
   int pc;
+  int oldpc;      /* last pc traced by the hook engine in this frame */
   bool tailcall;  /* frame was entered by a tail call */
   StackSegment* seg;
   CallFrame* prev;
@@ -1026,13 +1029,14 @@ public:
   StkVar* sv;
   DynamicWindObj* dywind;
   CallFrame* curfrm;
-  int oldpc;      /* last pc traced in this VM/coroutine */
   int state;
   VM* callerstk;
   ValueT* resslot;
   ValueT* retreg;
   bool tail;
   CallFrame* c0;
+
+  DebugState debug;  /* hook engine state (see scmdebug.h) */
 };
 
 #define isstack(VT) istype(VT, VT_REF_STACK)
@@ -1047,7 +1051,6 @@ protected:
   VM* vm;
   CallFrame* curfrm;
   DynamicWindObj* dywind;
-  int oldpc;
   StkVar oldfrm;   // keep the saved chain alive while detached
   StkVar olddw;
 };
