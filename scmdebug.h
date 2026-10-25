@@ -36,7 +36,8 @@ typedef void (*ScmHookFn)(VM* vm, int event, int line, CallFrame* frm);
 /* Per-VM hook state; plain values, never GC traced.  The Scheme-side
    hook closure lives in VM::hookfn and is traced there. */
 struct DebugState {
-  DebugState():mask(0), count(0), basecount(0), allowhook(true), hook(NULL) {}
+  DebugState():mask(0), count(0), basecount(0), allowhook(true), hook(NULL),
+               pausedfrm(NULL) {}
 
   int mask;       /* enabled events; 0 = engine off */
   int count;      /* instructions left before the next count event */
@@ -46,7 +47,37 @@ struct DebugState {
   /* Event handler; the hook installed last is the only active one:
      exactly one of the two fields is set. */
   ScmHookFn hook;
+
+  /* Frame chain under inspection while a hook runs (the interrupted
+     computation); NULL outside hooks.  Not GC traced: the chain stays
+     alive through ReserveStack (Scheme hook) or the live curfrm chain
+     (C hook) for as long as this points into it. */
+  CallFrame* pausedfrm;
 };
+
+/* Max length of short_src: the chunk name copied and truncated to this
+   size. */
+#define SCM_IDSIZE 60
+
+/* Frame information, the 'S' / 'l' / 't' / 'u' part of the frame API.
+   Function names are not tracked: name / namewhat stay NULL. */
+typedef struct scm_Debug {
+  int event;             /* hook event while inside a hook, else -1 */
+  const char* name;      /* NULL */
+  const char* namewhat;  /* NULL */
+  const char* what;      /* "scheme" / "native" / "main" */
+  const char* source;    /* chunk name; evalstr uses the source text */
+  int srclen;
+  int currentline;       /* -1 when unknown */
+  int linedefined;
+  int lastlinedefined;   /* not tracked: always -1 */
+  int nups;              /* outer variable count, environment excluded */
+  int nparams;           /* named parameters, rest parameter excluded */
+  int isvararg;
+  int istailcall;
+  char short_src[SCM_IDSIZE];
+  void* i_frm;           /* opaque CallFrame* */
+} scm_Debug;
 
 /* Frame line information used by the debugger. */
 struct FrameInfo {
@@ -68,6 +99,17 @@ public:
 
   /* Print one frame of the chain as a single traceback line. */
   static void printframe0(VM* vm, CallFrame* frm);
+
+  /* ── inspected stack ── */
+
+  /* Fill 'ar' (zeroed first) from the frame running 'level' calls deep,
+     0 = innermost.  Walks the hook-paused chain when a hook is running,
+     the live chain otherwise.  Returns false when the level is out of
+     range, in which case 'ar' is untouched. */
+  static bool getstack(VM* vm, int level, scm_Debug* ar);
+
+  /* Number of frames on the inspected chain. */
+  static int stackdepth(VM* vm);
 
   /* ── hook engine ── */
 

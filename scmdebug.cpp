@@ -48,21 +48,27 @@ void SCMDebug::printframe0(VM* vm, CallFrame* frm)
 */
 
 /*
-** Scope guard: keep a rooted snapshot of the interrupted computation's
-** ac0 and re-enable hooks even when the hook raises; the error keeps
-** propagating to the enclosing pcall like any other VM error.
+** Scope guard for one hook event: keeps a rooted snapshot of the
+** interrupted computation's ac0, points pausedfrm at the event's frame
+** chain for the inspection APIs, and re-enables hooks even when the hook
+** raises; the error keeps propagating to the enclosing pcall like any
+** other VM error.
 */
 struct HookGuard {
   VM* vm;
   StkVar savedac;
+  CallFrame* savedfrm;
 
-  HookGuard(VM* v):vm(v), savedac(v)
+  HookGuard(VM* v, CallFrame* frm):vm(v), savedac(v)
   {
     vm->debug.allowhook = false;
     savedac.val = G(v)->ac0;
+    savedfrm = vm->debug.pausedfrm;
+    vm->debug.pausedfrm = frm;
   }
   ~HookGuard()
   {
+    vm->debug.pausedfrm = savedfrm;
     vm->debug.allowhook = true;
     G(vm)->ac0 = savedac.val;
   }
@@ -204,9 +210,10 @@ void SCMDebug::gethook(VM* vm, ValueT* proc, int* mask, int* basecount)
 
 /*
 ** Fire one hook event.  Quiet if the event is not enabled or if we are
-** already inside a hook (reentrancy guard).  A hook that raises
-** propagates the error like any other VM error; the enclosing pcall
-** catches it and the engine stays installed.
+** already inside a hook (reentrancy guard).  While the hook runs,
+** pausedfrm points at the event's frame chain for the inspection APIs.
+** A hook that raises propagates the error like any other VM error; the
+** enclosing pcall catches it and the engine stays installed.
 */
 void SCMDebug::dochook(VM* vm, int event, int line, CallFrame* frm)
 {
@@ -219,12 +226,12 @@ void SCMDebug::dochook(VM* vm, int event, int line, CallFrame* frm)
     return;
   if (dbg->hook)
   {
-    HookGuard g(vm);
+    HookGuard g(vm, frm);
     dbg->hook(vm, event, line, frm);
   }
   else if (!isnull(&vm->hookfn))
   {
-    HookGuard g(vm);
+    HookGuard g(vm, frm);
     schemehook(vm, event, line);
   }
 }
@@ -264,8 +271,168 @@ void SCMDebug::traceexec(VM* vm, CallFrame* frm, int pc)
 }
 
 /*
+** ── inspected stack ──
+*/
+
+/* Chain the inspection APIs look at: the interrupted computation while a
+   hook runs, the live chain otherwise. */
+static CallFrame* inspectedchain(VM* vm)
+{
+  return vm->debug.pausedfrm != NULL ? vm->debug.pausedfrm : vm->curfrm;
+}
+
+/*
+** Fill 'ar' (zeroed) from one frame.  Top-level lambdas carry no variable
+** table and are the chunk bodies, so they report as "main".
+*/
+static void fillinfo(VM* vm, CallFrame* frm, scm_Debug* ar)
+{
+  (void)vm;
+  ClosurePtr clo = closureref(frm->base);
+  LambdaPtr lambda = clo->lambda;
+
+  ar->event = -1;
+  ar->name = NULL;
+  ar->namewhat = NULL;
+  ar->what = lambda->vars == NULL ? "main" : "scheme";
+  ar->source = lambda->source != NULL ? lambda->source->str : "=?";
+  ar->srclen = (int)strlen(ar->source);
+  ar->currentline = lambda->getline(frm->getpc());
+  ar->linedefined = lambda->defline;
+  ar->lastlinedefined = -1;
+  ar->nups = clo->n - 1;  /* outers[0] is the environment */
+  ar->nparams = lambda->vars != NULL
+                ? lambda->vars->local.n - (lambda->argrest ? 1 : 0) : 0;
+  ar->isvararg = lambda->argrest ? 1 : 0;
+  ar->istailcall = frm->tailcall ? 1 : 0;
+  ar->i_frm = frm;
+  /* short_src: the chunk name, copied and truncated to SCM_IDSIZE */
+  snprintf(ar->short_src, sizeof(ar->short_src), "%s", ar->source);
+}
+
+int SCMDebug::stackdepth(VM* vm)
+{
+  int depth = 0;
+  for (CallFrame* frm = inspectedchain(vm); frm != NULL; frm = frm->prev)
+    depth++;
+  return depth;
+}
+
+bool SCMDebug::getstack(VM* vm, int level, scm_Debug* ar)
+{
+  if (level < 0)
+    return false;
+  CallFrame* frm = inspectedchain(vm);
+  for (; level > 0 && frm != NULL; frm = frm->prev)
+    level--;
+  if (level > 0 || frm == NULL)
+    return false;
+  memset(ar, 0, sizeof(*ar));
+  fillinfo(vm, frm, ar);
+  return true;
+}
+
+/*
 ** ── Scheme-side primitives ──
 */
+
+/*
+** Put (key . val) onto the front of an alist.  'key' is a pre-interned
+** markconst symbol (framekeys).  The pointed-to value must stay reachable
+** on its own while the conses allocate: immediates, interned symbols,
+** booleans and strings owned by live lambdas qualify.
+*/
+static void alistput(VM* vm, ValueT* alist, ValueT* key, ValueT* val)
+{
+  Sgcvar1(vm, kv);
+  setpair(kv, SCM::cons(vm, key, val));
+  setpair(alist, SCM::cons(vm, kv, alist));
+}
+
+/*
+** Interned names used by the frame description alist -- the alist keys
+** plus the two what-values -- filled and markconst'ed by SCMDebug::init
+** (same treatment as the event symbols: the static table needs no GC
+** tracing and alistput does no interning).
+*/
+enum FrameName {
+  FN_DEPTH, FN_SOURCE, FN_WHAT, FN_LINE, FN_DEFLINE, FN_TAIL, FN_PARAMS,
+  FN_OUTERS, FN_MAIN, FN_SCHEME,
+  FRAMENAMECOUNT
+};
+
+static const char* const framenamestrs[FRAMENAMECOUNT] = {
+  "depth", "source", "what", "line", "defline", "tail", "params", "outers",
+  "main", "scheme",
+};
+
+static ValueT framename[FRAMENAMECOUNT];
+
+/*
+** Build the description alist of the frame running 'level' calls deep:
+** (depth source what line defline tail params outers); #f when the level
+** is out of range.  source shares the lambda's own string object.
+*/
+static void framealist(VM* vm, int level, ValueT* out)
+{
+  scm_Debug ar;
+  if (!SCMDebug::getstack(vm, level, &ar))
+  {
+    *out = *Sfalseref;
+    return;
+  }
+  Sgcvar1(vm, val);
+  setnumi(val, level);
+  alistput(vm, out, &framename[FN_DEPTH], val);
+  CallFrame* frm = (CallFrame*)ar.i_frm;
+  LambdaPtr lambda = closureref(frm->base)->lambda;
+  if (lambda->source != NULL)
+    setstr(val, lambda->source);
+  else
+    setstr(val, vm->strintern("=?", 2));
+  alistput(vm, out, &framename[FN_SOURCE], val);
+  *val = framename[lambda->vars == NULL ? FN_MAIN : FN_SCHEME];
+  alistput(vm, out, &framename[FN_WHAT], val);
+  setnumi(val, ar.currentline);
+  alistput(vm, out, &framename[FN_LINE], val);
+  setnumi(val, ar.linedefined);
+  alistput(vm, out, &framename[FN_DEFLINE], val);
+  *val = *(ar.istailcall ? Strueref : Sfalseref);
+  alistput(vm, out, &framename[FN_TAIL], val);
+  setnumi(val, ar.nparams);
+  alistput(vm, out, &framename[FN_PARAMS], val);
+  setnumi(val, ar.nups);
+  alistput(vm, out, &framename[FN_OUTERS], val);
+}
+
+/*
+** (debug-where)
+** Description alist of the innermost inspected frame -- the interrupted
+** computation inside a hook, the running code otherwise; #f when there
+** is no frame.
+*/
+static ValueT scm_stub_debug_where(VM* vm)
+{
+  Sgcvar1(vm, out);
+  framealist(vm, 0, out);
+  return *out;
+}
+
+/*
+** (debug-frames)
+** Description alists of the inspected chain, innermost first.
+*/
+static ValueT scm_stub_debug_frames(VM* vm)
+{
+  Sgcvar2(vm, list, item);
+  int depth = SCMDebug::stackdepth(vm);
+  for (int level = depth - 1; level >= 0; level--)
+  {
+    framealist(vm, level, item);
+    setpair(list, SCM::cons(vm, item, list));
+  }
+  return *list;
+}
 
 /* The hook is called as (hook event line): accept exactly two named
    parameters, or a rest parameter covering them. */
@@ -336,7 +503,6 @@ static ValueT scm_stub_debug_gethook(VM* vm)
   /* Build the spec as a list (consing in reverse keeps table order), then
      unwrap the single-event case to the bare symbol -- the two forms
      debug-sethook accepts; '() when the engine is off. */
-  setnull(spec);
   for (int i = hookspeccount - 1; i >= 0; i--)
     if (mask & hookspecs[i].bit)
       setpair(spec, SCM::cons(vm, &hookeventsymbols[i], spec));
@@ -363,9 +529,19 @@ void SCMDebug::init(VM* vm)
     setsym(&hookeventsymbols[i], sym);
   }
 
+  /* The frame alist keys and what-values likewise. */
+  for (int i = 0; i < FRAMENAMECOUNT; i++)
+  {
+    SymPtr sym = Intern(vm)->internsym(framenamestrs[i]);
+    sym->markconst();
+    setsym(&framename[i], sym);
+  }
+
   const RegCProc procs[] = {
     RegCProc("debug-sethook", scm_stub_debug_sethook),
     RegCProc("debug-gethook", scm_stub_debug_gethook),
+    RegCProc("debug-where", scm_stub_debug_where),
+    RegCProc("debug-frames", scm_stub_debug_frames),
     RegCProc(NULL, -1)
   };
   regcfunc(vm, procs);
