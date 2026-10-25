@@ -59,12 +59,11 @@ struct HookGuard {
   StkVar savedac;
   CallFrame* savedfrm;
 
-  HookGuard(VM* v, CallFrame* frm):vm(v), savedac(v)
+  HookGuard(VM* v, CallFrame* frm):vm(v), savedac(v), savedfrm(v->debug.pausedfrm)
   {
     vm->debug.allowhook = false;
     savedac.val = G(v)->ac0;
-    savedfrm = vm->debug.pausedfrm;
-    vm->debug.pausedfrm = frm;
+    v->debug.pausedfrm = frm;
   }
   ~HookGuard()
   {
@@ -333,6 +332,60 @@ bool SCMDebug::getstack(VM* vm, int level, scm_Debug* ar)
 }
 
 /*
+** ── locals and outers ──
+**
+** The name/read/write helpers take a valid index (0 <= n < count from
+** localcount/outercount); resolving levels and names is the caller's
+** job, so these stay a plain slot access each.
+*/
+
+int SCMDebug::localcount(CallFrame* frm)
+{
+  LambdaVarsObj* vars = closureref(frm->base)->lambda->vars;
+  return vars != NULL ? vars->local.n : 0;
+}
+
+int SCMDebug::outercount(CallFrame* frm)
+{
+  return closureref(frm->base)->n - 1;  /* outers[0] is the environment */
+}
+
+void SCMDebug::localname(CallFrame* frm, int n, ValueT* out)
+{
+  setsym(out, closureref(frm->base)->lambda->vars->reflocal(n));
+}
+
+void SCMDebug::outername(CallFrame* frm, int n, ValueT* out)
+{
+  setsym(out, closureref(frm->base)->lambda->vars->refbvar(n)->name);
+}
+
+void SCMDebug::getlocal(CallFrame* frm, int n, ValueT* out)
+{
+  ValueT* slot = frm->base + 1 + n;
+  *out = isbox(slot) ? boxref(slot)->val : *slot;
+}
+
+void SCMDebug::setlocal(CallFrame* frm, int n, ValueT* val)
+{
+  ValueT* slot = frm->base + 1 + n;
+  if (isbox(slot))
+    boxref(slot)->val = *val;
+  else
+    *slot = *val;
+}
+
+void SCMDebug::getouter(CallFrame* frm, int n, ValueT* out)
+{
+  *out = boxref(&closureref(frm->base)->outers[n + 1])->val;
+}
+
+void SCMDebug::setouter(CallFrame* frm, int n, ValueT* val)
+{
+  boxref(&closureref(frm->base)->outers[n + 1])->val = *val;
+}
+
+/*
 ** ── Scheme-side primitives ──
 */
 
@@ -384,8 +437,7 @@ static void framealist(VM* vm, int level, ValueT* out)
   Sgcvar1(vm, val);
   setnumi(val, level);
   alistput(vm, out, &framename[FN_DEPTH], val);
-  CallFrame* frm = (CallFrame*)ar.i_frm;
-  LambdaPtr lambda = closureref(frm->base)->lambda;
+  LambdaPtr lambda = closureref(ar.i_frm->base)->lambda;
   if (lambda->source != NULL)
     setstr(val, lambda->source);
   else
@@ -432,6 +484,208 @@ static ValueT scm_stub_debug_frames(VM* vm)
     setpair(list, SCM::cons(vm, item, list));
   }
   return *list;
+}
+
+/* Resolve the inspected frame at 'level'; false when out of range. */
+static bool levelframe(VM* vm, int level, CallFrame** frm)
+{
+  scm_Debug ar;
+  if (!SCMDebug::getstack(vm, level, &ar))
+    return false;
+  *frm = ar.i_frm;
+  return true;
+}
+
+/* Index of the local named 'name' in the frame; -1 when absent. */
+static int findlocal(CallFrame* frm, ValueT* name)
+{
+  int count = SCMDebug::localcount(frm);
+  for (int i = 0; i < count; i++)
+  {
+    ValueT nm;
+    SCMDebug::localname(frm, i, &nm);
+    if (symref(&nm) == symref(name))
+      return i;
+  }
+  return -1;
+}
+
+/* Index of the outer named 'name' in the frame; -1 when absent. */
+static int findouter(CallFrame* frm, ValueT* name)
+{
+  int count = SCMDebug::outercount(frm);
+  for (int i = 0; i < count; i++)
+  {
+    ValueT nm;
+    SCMDebug::outername(frm, i, &nm);
+    if (symref(&nm) == symref(name))
+      return i;
+  }
+  return -1;
+}
+
+/* Build the (name . value) alist of the frame's locals.  Uninitialized
+   slots hold the void value and are listed as such: void is also a
+   legitimate value a local can be defined with, so it is not filtered. */
+static void localvals(VM* vm, CallFrame* frm, ValueT* out)
+{
+  Sgcvar3(vm, namev, val, entry);
+  int count = SCMDebug::localcount(frm);
+  for (int i = count - 1; i >= 0; i--)
+  {
+    SCMDebug::localname(frm, i, namev);
+    SCMDebug::getlocal(frm, i, val);
+    setpair(entry, SCM::cons(vm, namev, val));
+    setpair(out, SCM::cons(vm, entry, out));
+  }
+}
+
+/* Same for the frame closure's outers. */
+static void outervals(VM* vm, CallFrame* frm, ValueT* out)
+{
+  Sgcvar3(vm, namev, val, entry);
+  int count = SCMDebug::outercount(frm);
+  for (int i = count - 1; i >= 0; i--)
+  {
+    SCMDebug::outername(frm, i, namev);
+    SCMDebug::getouter(frm, i, val);
+    setpair(entry, SCM::cons(vm, namev, val));
+    setpair(out, SCM::cons(vm, entry, out));
+  }
+}
+
+/*
+** (debug-locals [level])
+** (name . value) alist of the frame's locals, the innermost frame when
+** the level is omitted.  Uninitialized locals hold the void value and
+** are listed as such.  #f when the level is out of range.
+*/
+static ValueT scm_stub_debug_locals(VM* vm, ValueT* rest)
+{
+  static const char* METHOD = "debug-locals";
+  int level = 0;
+  if (!isnull(rest))
+  {
+    ValueT* p = Scar(rest);
+    rest = Scdr(rest);
+    AssertArg(vm, isnumi(p), METHOD, p, "not a number");
+    Assert(vm, isnull(rest), "%s: too much arguments", METHOD);
+    level = numi(p);
+  }
+  Sgcvar1(vm, out);
+  CallFrame* frm = NULL;
+  if (!levelframe(vm, level, &frm))
+    return *Sfalseref;
+  localvals(vm, frm, out);
+  return *out;
+}
+
+/*
+** (debug-local level name)
+** Value of the named local in the frame at 'level' (an uninitialized
+** local yields the void value); #f when the frame or the name is out of
+** range.
+*/
+static ValueT scm_stub_debug_local(VM* vm, ValueT* level, ValueT* name)
+{
+  static const char* METHOD = "debug-local";
+  AssertArg(vm, isnumi(level), METHOD, level, "not a number");
+  AssertArg(vm, issym(name), METHOD, name, "not a symbol");
+  CallFrame* frm = NULL;
+  if (!levelframe(vm, numi(level), &frm))
+    return *Sfalseref;
+  int n = findlocal(frm, name);
+  ValueT out;
+  if (n < 0)
+    return *Sfalseref;
+  SCMDebug::getlocal(frm, n, &out);
+  return out;
+}
+
+/*
+** (debug-setlocal! level name value)
+** Write through to the named local; #t on success, #f when the frame or
+** the name is out of range.
+*/
+static ValueT scm_stub_debug_setlocal(VM* vm, ValueT* level, ValueT* name, ValueT* val)
+{
+  static const char* METHOD = "debug-setlocal!";
+  AssertArg(vm, isnumi(level), METHOD, level, "not a number");
+  AssertArg(vm, issym(name), METHOD, name, "not a symbol");
+  CallFrame* frm = NULL;
+  if (!levelframe(vm, numi(level), &frm))
+    return *Sfalseref;
+  int n = findlocal(frm, name);
+  if (n < 0)
+    return *Sfalseref;
+  SCMDebug::setlocal(frm, n, val);
+  return *Strueref;
+}
+
+/*
+** (debug-outers [level])
+** (name . value) alist of the frame closure's outers, environment
+** excluded; #f when the level is out of range.
+*/
+static ValueT scm_stub_debug_outers(VM* vm, ValueT* rest)
+{
+  static const char* METHOD = "debug-outers";
+  int level = 0;
+  if (!isnull(rest))
+  {
+    ValueT* p = Scar(rest);
+    rest = Scdr(rest);
+    AssertArg(vm, isnumi(p), METHOD, p, "not a number");
+    Assert(vm, isnull(rest), "%s: too much arguments", METHOD);
+    level = numi(p);
+  }
+  Sgcvar1(vm, out);
+  CallFrame* frm = NULL;
+  if (!levelframe(vm, level, &frm))
+    return *Sfalseref;
+  outervals(vm, frm, out);
+  return *out;
+}
+
+/*
+** (debug-outer level name)
+** Value of the named outer in the frame at 'level'; #f when the frame or
+** the name is out of range.
+*/
+static ValueT scm_stub_debug_outer(VM* vm, ValueT* level, ValueT* name)
+{
+  static const char* METHOD = "debug-outer";
+  AssertArg(vm, isnumi(level), METHOD, level, "not a number");
+  AssertArg(vm, issym(name), METHOD, name, "not a symbol");
+  CallFrame* frm = NULL;
+  if (!levelframe(vm, numi(level), &frm))
+    return *Sfalseref;
+  int n = findouter(frm, name);
+  ValueT out;
+  if (n < 0)
+    return *Sfalseref;
+  SCMDebug::getouter(frm, n, &out);
+  return out;
+}
+
+/*
+** (debug-setouter! level name value)
+** Write through to the named outer; #t on success, #f when the frame or
+** the name is out of range.
+*/
+static ValueT scm_stub_debug_setouter(VM* vm, ValueT* level, ValueT* name, ValueT* val)
+{
+  static const char* METHOD = "debug-setouter!";
+  AssertArg(vm, isnumi(level), METHOD, level, "not a number");
+  AssertArg(vm, issym(name), METHOD, name, "not a symbol");
+  CallFrame* frm = NULL;
+  if (!levelframe(vm, numi(level), &frm))
+    return *Sfalseref;
+  int n = findouter(frm, name);
+  if (n < 0)
+    return *Sfalseref;
+  SCMDebug::setouter(frm, n, val);
+  return *Strueref;
 }
 
 /* The hook is called as (hook event line): accept exactly two named
@@ -542,6 +796,12 @@ void SCMDebug::init(VM* vm)
     RegCProc("debug-gethook", scm_stub_debug_gethook),
     RegCProc("debug-where", scm_stub_debug_where),
     RegCProc("debug-frames", scm_stub_debug_frames),
+    RegCProc("debug-locals", scm_stub_debug_locals, true),
+    RegCProc("debug-local", scm_stub_debug_local),
+    RegCProc("debug-setlocal!", scm_stub_debug_setlocal),
+    RegCProc("debug-outers", scm_stub_debug_outers, true),
+    RegCProc("debug-outer", scm_stub_debug_outer),
+    RegCProc("debug-setouter!", scm_stub_debug_setouter),
     RegCProc(NULL, -1)
   };
   regcfunc(vm, procs);

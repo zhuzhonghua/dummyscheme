@@ -76,7 +76,7 @@ typedef struct scm_Debug {
   int isvararg;
   int istailcall;
   char short_src[SCM_IDSIZE];
-  void* i_frm;           /* opaque CallFrame* */
+  CallFrame* i_frm;      /* the frame the info was filled from */
 } scm_Debug;
 
 /* Frame line information used by the debugger. */
@@ -110,6 +110,30 @@ public:
 
   /* Number of frames on the inspected chain. */
   static int stackdepth(VM* vm);
+
+  /* ── locals and outers ── */
+
+  /* Locals of the frame: base[1 + i], parameters first (the rest
+     parameter, when present, is the last one). */
+  static int localcount(CallFrame* frm);
+
+  /* Outers of the frame's closure, environment excluded: index 0 is the
+     first outer.  Outer values always live in boxes. */
+  static int outercount(CallFrame* frm);
+
+  /* Name of local/outer 'n' as a symbol value. */
+  static void localname(CallFrame* frm, int n, ValueT* out);
+  static void outername(CallFrame* frm, int n, ValueT* out);
+
+  /* Read/write local 'n'.  Slots holding a box (captured or assigned
+     variables) deref through it; *out is the void value while the slot
+     is not yet initialized. */
+  static void getlocal(CallFrame* frm, int n, ValueT* out);
+  static void setlocal(CallFrame* frm, int n, ValueT* val);
+
+  /* Read/write outer 'n'. */
+  static void getouter(CallFrame* frm, int n, ValueT* out);
+  static void setouter(CallFrame* frm, int n, ValueT* val);
 
   /* ── hook engine ── */
 
