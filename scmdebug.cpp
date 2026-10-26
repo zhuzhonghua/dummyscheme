@@ -783,6 +783,18 @@ static ValueT scm_stub_debug_outervaluejoin(VM* vm, ValueT* p1, ValueT* i1,
 }
 
 /*
+** (debug-getregistry)
+** The registry table: a per-VM hashtable holding GC-rooted values for
+** the host side (the C API reads it through scm_registry_get/set, e.g.
+** the "~tostring" handler).  Ordinary code can only reach it through
+** this primitive.
+*/
+static ValueT scm_stub_debug_getregistry(VM* vm)
+{
+  return G(vm)->registry;
+}
+
+/*
 ** (debug-traceback [msg])
 ** Traceback text of the inspected chain as a Scheme string; the optional
 ** msg is the first line.
@@ -911,6 +923,7 @@ void SCMDebug::init(VM* vm)
     RegCProc("debug-setoutervalue", scm_stub_debug_setoutervalue),
     RegCProc("debug-outervalueid", scm_stub_debug_outervalueid),
     RegCProc("debug-outervaluejoin", scm_stub_debug_outervaluejoin),
+    RegCProc("debug-getregistry", scm_stub_debug_getregistry),
     RegCProc("debug-traceback", scm_stub_debug_traceback, true),
     RegCProc(NULL, -1)
   };
