@@ -71,13 +71,14 @@ typedef struct scm_Debug {
   int srclen;
   int currentline;       /* -1 when unknown */
   int linedefined;
-  int lastlinedefined;   /* not tracked: always -1 */
+  int lastlinedefined;   /* last instruction line; 0 for a chunk body */
   int nups;              /* outer variable count, environment excluded */
   int nparams;           /* named parameters, rest parameter excluded */
   int isvararg;
   int istailcall;
   char short_src[SCM_IDSIZE];
-  CallFrame* i_frm;      /* the frame the info was filled from */
+  CallFrame* i_frm;      /* the frame the info was filled from; NULL for
+                            a function that is not active */
 } scm_Debug;
 
 /* Frame line information used by the debugger. */

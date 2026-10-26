@@ -299,13 +299,52 @@ static CallFrame* inspectedchain(VM* vm)
 }
 
 /*
-** Fill 'ar' (zeroed) from one frame.  Top-level lambdas carry no variable
-** table and are the chunk bodies, so they report as "main".
+** Decode one line-table entry: 'line' is the running delta-decoded line
+** and 'absi' the cursor into the anchor table, both advanced one
+** instruction.  Returns the line of the instruction at index 'i'.
 */
-static void fillinfo(VM* vm, CallFrame* frm, scm_Debug* ar)
+static int nextline(LambdaPtr lambda, int i, int line, int* absi)
+{
+  byte d = lambda->lines[i];
+  if ((signed char)d != ABSLINE)
+    return line + (signed char)d;
+  while (*absi < lambda->abslines.n && lambda->abslines.get(*absi).pc < i)
+    (*absi)++;
+  if (*absi < lambda->abslines.n && lambda->abslines.get(*absi).pc == i)
+    return lambda->abslines.get(*absi).line;
+  return line;
+}
+
+/*
+** Last instruction line of a lambda; a chunk body reports 0, matching its
+** "main" role.  The line table is decoded once, pc by pc.
+*/
+static int lastinstrline(LambdaPtr lambda)
+{
+  if (lambda->vars == NULL)
+    return 0;
+  if (lambda->lines == NULL)
+    return lambda->defline;
+  int line = lambda->defline;
+  int max = line;
+  int absi = 0;
+  for (int i = 0; i < lambda->sizelines; i++)
+  {
+    line = nextline(lambda, i, line, &absi);
+    if (line > max)
+      max = line;
+  }
+  return max;
+}
+
+/*
+** Fill 'ar' (zeroed) from one closure.  Top-level lambdas carry no
+** variable table and are the chunk bodies, so they report as "main".
+** 'currentline' comes from the frame when active, -1 otherwise.
+*/
+static void getclosureinfo(VM* vm, ClosurePtr clo, CallFrame* frm, scm_Debug* ar)
 {
   (void)vm;
-  ClosurePtr clo = closureref(frm->base);
   LambdaPtr lambda = clo->lambda;
 
   ar->event = -1;
@@ -314,14 +353,13 @@ static void fillinfo(VM* vm, CallFrame* frm, scm_Debug* ar)
   ar->what = lambda->vars == NULL ? "main" : "scheme";
   ar->source = lambda->source != NULL ? lambda->source->str : "=?";
   ar->srclen = (int)strlen(ar->source);
-  ar->currentline = lambda->getline(frm->getpc());
+  ar->currentline = frm != NULL ? lambda->getline(frm->getpc()) : -1;
   ar->linedefined = lambda->defline;
-  ar->lastlinedefined = -1;
+  ar->lastlinedefined = lastinstrline(lambda);
   ar->nups = clo->n - 1;  /* outers[0] is the environment */
-  ar->nparams = lambda->vars != NULL
-                ? lambda->vars->local.n - (lambda->argrest ? 1 : 0) : 0;
+  ar->nparams = lambda->argnum - (lambda->argrest ? 1 : 0);
   ar->isvararg = lambda->argrest ? 1 : 0;
-  ar->istailcall = frm->tailcall ? 1 : 0;
+  ar->istailcall = frm != NULL && frm->tailcall ? 1 : 0;
   ar->i_frm = frm;
   /* short_src: the chunk name, copied and truncated to SCM_IDSIZE */
   snprintf(ar->short_src, sizeof(ar->short_src), "%s", ar->source);
@@ -344,8 +382,39 @@ bool SCMDebug::getstack(VM* vm, int level, scm_Debug* ar)
     level--;
   if (level > 0 || frm == NULL)
     return false;
+  if (!isclosure(frm->base))
+    return false;
   memset(ar, 0, sizeof(*ar));
-  fillinfo(vm, frm, ar);
+  getclosureinfo(vm, closureref(frm->base), frm, ar);
+  return true;
+}
+
+/*
+** Fill 'ar' (zeroed) from a native procedure: what is "native", source
+** "=[native]", both lines -1, nups 0.  Returns false on a value that is
+** not a native procedure.
+*/
+static bool getnativeinfo(VM* vm, ValueT* fn, scm_Debug* ar)
+{
+  if (!isnativeproc(fn))
+    return false;
+  memset(ar, 0, sizeof(*ar));
+  NativeProcObj* np = nativeprocref(fn);
+  ar->event = -1;
+  ar->name = NULL;
+  ar->namewhat = NULL;
+  ar->what = "native";
+  ar->source = "=[native]";
+  ar->srclen = (int)strlen(ar->source);
+  ar->currentline = -1;
+  ar->linedefined = -1;
+  ar->lastlinedefined = -1;
+  ar->nups = 0;
+  ar->nparams = np->argnum - (np->argrest ? 1 : 0);
+  ar->isvararg = np->argrest ? 1 : 0;
+  ar->istailcall = 0;
+  ar->i_frm = NULL;
+  snprintf(ar->short_src, sizeof(ar->short_src), "%s", ar->source);
   return true;
 }
 
@@ -501,19 +570,6 @@ static void framealist(VM* vm, int level, ValueT* out)
 }
 
 /*
-** (debug-where)
-** Description alist of the innermost inspected frame -- the interrupted
-** computation inside a hook, the running code otherwise; #f when there
-** is no frame.
-*/
-static ValueT scm_stub_debug_where(VM* vm)
-{
-  Sgcvar1(vm, out);
-  framealist(vm, 0, out);
-  return *out;
-}
-
-/*
 ** (debug-frames)
 ** Description alists of the inspected chain, innermost first.
 */
@@ -537,6 +593,98 @@ static bool levelframe(VM* vm, int level, CallFrame** frm)
     return false;
   *frm = ar.i_frm;
   return true;
+}
+
+/* Push ((interned key) . val) onto the alist under construction. */
+static void infoput(VM* vm, ValueT* out, const char* key, ValueT* val)
+{
+  Sgcvar2(vm, k, kv);
+  setsym(k, Intern(vm)->internsym(key));
+  setpair(kv, SCM::cons(vm, k, val));
+  setpair(out, SCM::cons(vm, kv, out));
+}
+
+/* Table of the lines carrying instructions; #f for a native procedure. */
+static void activelines(VM* vm, LambdaPtr lambda, ValueT* out)
+{
+  if (lambda == NULL || lambda->lines == NULL)
+  {
+    *out = *Sfalseref;
+    return;
+  }
+  Sgcvar2(vm, tbl, key);
+  sethashtable(tbl, Sr1(vm, HashTableObj, vm));
+  HashTableObj* lines = hashtableref(tbl);
+  int line = lambda->defline;
+  int absi = 0;
+  ValueT tv = *Strueref;
+  for (int i = 0; i < lambda->sizelines; i++)
+  {
+    line = nextline(lambda, i, line, &absi);
+    setnumi(key, line);
+    lines->set(vm, key, &tv);
+  }
+  *out = *tbl;
+}
+
+/*
+** (debug-getinfo level-or-proc)
+** Full description alist of the frame at 'level' or of a function value:
+** source short_src linedefined lastlinedefined what currentline nups
+** nparams isvararg name namewhat istailcall func activelines.  #f when a
+** level is out of range.
+*/
+static ValueT scm_stub_debug_getinfo(VM* vm, ValueT* target)
+{
+  static const char* METHOD = "debug-getinfo";
+  AssertArg(vm, isnumi(target) || isclosure(target) || isnativeproc(target),
+            METHOD, target, "not a level or function");
+
+  bool levelform = isnumi(target);
+  scm_Debug ar;
+  if (levelform)
+  {
+    if (!SCMDebug::getstack(vm, numi(target), &ar))
+      return *Sfalseref;
+  }
+  else if (isclosure(target))
+    getclosureinfo(vm, closureref(target), NULL, &ar);
+  else
+    getnativeinfo(vm, target, &ar);
+
+  Sgcvar4(vm, out, val, func, lines);
+  *func = levelform ? *ar.i_frm->base : *target;
+  setstr(val, G(vm)->ninstrintern(ar.source, ar.srclen));
+  infoput(vm, out, "source", val);
+  setstr(val, G(vm)->ninstrintern(ar.short_src, (int)strlen(ar.short_src)));
+  infoput(vm, out, "short_src", val);
+  setnumi(val, ar.linedefined);
+  infoput(vm, out, "linedefined", val);
+  setnumi(val, ar.lastlinedefined);
+  infoput(vm, out, "lastlinedefined", val);
+  setsym(val, Intern(vm)->internsym(ar.what));
+  infoput(vm, out, "what", val);
+  setnumi(val, ar.currentline);
+  infoput(vm, out, "currentline", val);
+  setnumi(val, ar.nups);
+  infoput(vm, out, "nups", val);
+  setnumi(val, ar.nparams);
+  infoput(vm, out, "nparams", val);
+  *val = *(ar.isvararg ? Strueref : Sfalseref);
+  infoput(vm, out, "isvararg", val);
+  *val = *Sfalseref;      /* names are not tracked */
+  infoput(vm, out, "name", val);
+  setstr(val, vm->strintern("", 0));
+  infoput(vm, out, "namewhat", val);
+  *val = *(ar.istailcall ? Strueref : Sfalseref);
+  infoput(vm, out, "istailcall", val);
+  infoput(vm, out, "func", func);
+  if (isclosure(target) || levelform)
+    activelines(vm, closureref(func)->lambda, lines);
+  else
+    *lines = *Sfalseref;
+  infoput(vm, out, "activelines", lines);
+  return *out;
 }
 
 /* Index of the local named 'name' in the frame; -1 when absent. */
@@ -1475,7 +1623,7 @@ void SCMDebug::init(VM* vm)
   const RegCProc procs[] = {
     RegCProc("debug-sethook", scm_stub_debug_sethook),
     RegCProc("debug-gethook", scm_stub_debug_gethook),
-    RegCProc("debug-where", scm_stub_debug_where),
+    RegCProc("debug-getinfo", scm_stub_debug_getinfo),
     RegCProc("debug-frames", scm_stub_debug_frames),
     RegCProc("debug-locals", scm_stub_debug_locals, true),
     RegCProc("debug-local", scm_stub_debug_local),
