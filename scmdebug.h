@@ -116,6 +116,14 @@ public:
      per frame (source:line), same layout as printframe. */
   static void traceback(VM* vm, Lbuffer* buf);
 
+  /* ── interactive console ── */
+
+  /* Run the inspection console on the current inspected chain until the
+     user continues (or exits).  Called by the (debug) primitive; while a
+     hook is paused level 0 is the interrupted frame, otherwise it is the
+     primitive's caller. */
+  static void console(VM* vm);
+
   /* ── locals and outers ── */
 
   /* Locals of the frame: base[1 + i], parameters first (the rest

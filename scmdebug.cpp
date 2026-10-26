@@ -1,6 +1,8 @@
 #include "scmdebug.h"
 #include "vm.h"
 
+#include <cctype>
+
 namespace Scheme {
 
 /*
@@ -70,6 +72,22 @@ struct HookGuard {
     vm->debug.pausedfrm = savedfrm;
     vm->debug.allowhook = true;
     G(vm)->ac0 = savedac.val;
+  }
+};
+
+/* Debugger evaluation runs with the hook engine muted: a breakpoint or
+   line hook must not fire for the debugger's own expressions. */
+struct NoHookGuard {
+  VM* vm;
+  bool saved;
+
+  NoHookGuard(VM* v):vm(v), saved(v->debug.allowhook)
+  {
+    vm->debug.allowhook = false;
+  }
+  ~NoHookGuard()
+  {
+    vm->debug.allowhook = saved;
   }
 };
 
@@ -346,7 +364,7 @@ void SCMDebug::traceback(VM* vm, Lbuffer* buf)
     buf->put(info.source);
     if (info.currentline > 0)
     {
-      char ln[16];
+      char ln[16] = {0};
       snprintf(ln, sizeof(ln), ":%d", info.currentline);
       buf->put(ln);
     }
@@ -713,6 +731,13 @@ static ValueT scm_stub_debug_setouter(VM* vm, ValueT* level, ValueT* name, Value
   return *Strueref;
 }
 
+static const char* skipspace(const char* p)
+{
+  while (*p != '\0' && isspace((unsigned char)*p))
+    p++;
+  return p;
+}
+
 /*
 ** Evaluate 'expr' with the frame's variables snapshotted into a
 ** temporary environment; the result lands in *out, errors propagate.
@@ -723,6 +748,7 @@ static ValueT scm_stub_debug_setouter(VM* vm, ValueT* level, ValueT* name, Value
 static void evalinframe(VM* vm, CallFrame* frm, const char* expr, ValueT* out)
 {
   ReserveStack _reservestk_(vm);
+  NoHookGuard _nohook_(vm);
   StkVar savedac(vm);
   savedac.val = G(vm)->ac0;
   Sgcvar2(vm, env, clo);
@@ -788,8 +814,10 @@ static ValueT scm_stub_debug_eval(VM* vm, ValueT* expr, ValueT* rest)
   CallFrame* frm = NULL;
   if (!levelframe(vm, level, &frm))
     return *Sfalseref;
+  const char* body = skipspace(Ssstr(strref(expr)));
+  Assert(vm, *body != '\0', "%s: empty expression", METHOD);
   Sgcvar1(vm, out);
-  evalinframe(vm, frm, Ssstr(strref(expr)), out);
+  evalinframe(vm, frm, body, out);
   return *out;
 }
 
@@ -899,6 +927,531 @@ static ValueT scm_stub_debug_gethook(VM* vm)
   return SCM::packvalues(vm, res);
 }
 
+/*
+** ── interactive console ──
+*/
+
+/* Source file for one 'list' command.  The stream is closed on every
+   return path; lines are printed as they are read, so the command needs
+   no process-wide cache and no manually freed source buffer. */
+struct SourceFile {
+  SourceFile(const char* path):file(fopen(path, "r")) {}
+  ~SourceFile() { if (file != NULL) fclose(file); }
+
+  bool opened() const { return file != NULL; }
+  char* readline(char* buf, int size) { return fgets(buf, size, file); }
+
+private:
+  SourceFile(const SourceFile&);
+  SourceFile& operator=(const SourceFile&);
+  FILE* file;
+};
+
+/* Prompts only on a terminal; piped command scripts stay free of noise.
+   Standard platform split: POSIX isatty(0), Windows
+   _isatty(_fileno(stdin)), otherwise assume a tty. */
+static bool stdin_is_tty()
+{
+#if defined(SCM_PLATFORM_WINDOWS)
+  return _isatty(_fileno(stdin)) != 0;
+#elif defined(SCM_PLATFORM_APPLE) || defined(SCM_PLATFORM_LINUX)
+  return isatty(0) != 0;
+#else
+  return true;
+#endif
+}
+
+struct ConsoleState {
+  ConsoleState(VM* v):vm(v), level(0), tty(false) {}
+
+  VM* vm;
+  int level;   /* inspected frame; 0 = innermost */
+  bool tty;
+};
+
+/* Whole-token integer parse; false for empty or trailing junk. */
+static bool parsenum(const char* s, int* out)
+{
+  if (*s == '\0')
+    return false;
+  char* end = NULL;
+  long v = strtol(s, &end, 10);
+  if (end == s || *end != '\0')
+    return false;
+  *out = (int)v;
+  return true;
+}
+
+/* write-semantics rendering of one value into stdout */
+static void printvalue_stdout(VM* vm, ValueT* val)
+{
+  int len = 0;
+  const char* s = scm_tostring(vm, val, &len);
+  fwrite(s, 1, (size_t)len, stdout);
+}
+
+static bool currentframe(ConsoleState* c, scm_Debug* ar)
+{
+  return SCMDebug::getstack(c->vm, c->level, ar);
+}
+
+static void consoleerror(const char* fmt, ...)
+{
+  va_list ap;
+  va_start(ap, fmt);
+  vprintf(fmt, ap);
+  va_end(ap);
+  printf("\n");
+}
+
+static void consolebt(ConsoleState* c, int limit)
+{
+  int depth = SCMDebug::stackdepth(c->vm);
+  if (limit < 0 || limit > depth)
+    limit = depth;
+  for (int i = 0; i < limit; i++)
+  {
+    scm_Debug ar;
+    if (!SCMDebug::getstack(c->vm, i, &ar))
+      break;
+    printf("%c #%d %s:%d", i == c->level ? '*' : ' ', i,
+           ar.short_src, ar.currentline);
+    if (ar.istailcall)
+      printf(" (tail)");
+    printf("\n");
+  }
+}
+
+static void consolewhere(ConsoleState* c)
+{
+  scm_Debug ar;
+  if (!currentframe(c, &ar))
+  {
+    consoleerror("no frame %d", c->level);
+    return;
+  }
+  printf("#%d %s:%d defline %d", c->level, ar.short_src,
+         ar.currentline, ar.linedefined);
+  if (ar.istailcall)
+    printf(" tail-call");
+  printf("\n");
+}
+
+static void consolelocals(ConsoleState* c)
+{
+  scm_Debug ar;
+  if (!currentframe(c, &ar))
+  {
+    consoleerror("no frame %d", c->level);
+    return;
+  }
+
+  int count = SCMDebug::localcount(ar.i_frm);
+  if (count == 0)
+  {
+    printf("(no locals)\n");
+    return;
+  }
+  for (int i = 0; i < count; i++)
+  {
+    ValueT nm;
+    ValueT val;
+    SCMDebug::localname(ar.i_frm, i, &nm);
+    SCMDebug::getlocal(ar.i_frm, i, &val);
+    printf("  %s = ", Ssstr(symref(&nm)));
+    printvalue_stdout(c->vm, &val);
+    printf("\n");
+  }
+}
+
+static void consoleouters(ConsoleState* c)
+{
+  scm_Debug ar;
+  if (!currentframe(c, &ar))
+  {
+    consoleerror("no frame %d", c->level);
+    return;
+  }
+
+  int count = SCMDebug::outercount(ar.i_frm);
+  if (count == 0)
+  {
+    printf("(no outers)\n");
+    return;
+  }
+  for (int i = 0; i < count; i++)
+  {
+    ValueT nm;
+    ValueT val;
+    SCMDebug::outername(ar.i_frm, i, &nm);
+    SCMDebug::getouter(ar.i_frm, i, &val);
+    printf("  %s = ", Ssstr(symref(&nm)));
+    printvalue_stdout(c->vm, &val);
+    printf("\n");
+  }
+}
+
+static void consoleprint(ConsoleState* c, const char* expr)
+{
+  expr = skipspace(expr);
+  if (*expr == '\0')
+  {
+    printf("usage: p expr\n");
+    return;
+  }
+  scm_Debug ar;
+  if (!currentframe(c, &ar))
+  {
+    consoleerror("no frame %d", c->level);
+    return;
+  }
+  Sgcvar1(c->vm, out);
+  evalinframe(c->vm, ar.i_frm, expr, out);
+  printvalue_stdout(c->vm, out);
+  printf("\n");
+}
+
+static void consoleset(ConsoleState* c, char* arg)
+{
+  char* name = arg;
+  char* q = name;
+  while (*q != '\0' && *q != '=' && !isspace((unsigned char)*q))
+    q++;
+  if (*q == '\0')
+  {
+    printf("usage: set name = expr\n");
+    return;
+  }
+
+  char* expr;
+  if (*q == '=')
+  {
+    *q = '\0';
+    expr = q + 1;
+  }
+  else
+  {
+    *q = '\0';
+    expr = (char*)skipspace(q + 1);
+    if (*expr != '=')
+    {
+      printf("usage: set name = expr\n");
+      return;
+    }
+    expr++;
+  }
+  expr = (char*)skipspace(expr);
+  if (*expr == '\0')
+  {
+    printf("usage: set name = expr\n");
+    return;
+  }
+
+  scm_Debug ar;
+  if (!currentframe(c, &ar))
+  {
+    consoleerror("no frame %d", c->level);
+    return;
+  }
+
+  int idx = -1;
+  int count = SCMDebug::localcount(ar.i_frm);
+  for (int i = 0; i < count; i++)
+  {
+    ValueT nm;
+    SCMDebug::localname(ar.i_frm, i, &nm);
+    if (strcmp(Ssstr(symref(&nm)), name) == 0)
+    {
+      idx = i;
+      break;
+    }
+  }
+  if (idx < 0)
+  {
+    consoleerror("no local named %s", name);
+    return;
+  }
+
+  Sgcvar1(c->vm, val);
+  evalinframe(c->vm, ar.i_frm, expr, val);
+  SCMDebug::setlocal(ar.i_frm, idx, val);
+  printf("%s = ", name);
+  printvalue_stdout(c->vm, val);
+  printf("\n");
+}
+
+static void consolelist(ConsoleState* c, char* arg)
+{
+  scm_Debug ar;
+  if (!currentframe(c, &ar))
+  {
+    consoleerror("no frame %d", c->level);
+    return;
+  }
+
+  int start = -1;
+  int end = -1;
+  if (*arg != '\0')
+  {
+    char* comma = strchr(arg, ',');
+    if (comma != NULL)
+    {
+      *comma = '\0';
+      if (!parsenum(comma + 1, &end))
+      {
+        printf("usage: list [start[,end]]\n");
+        return;
+      }
+    }
+    if (!parsenum(arg, &start))
+    {
+      printf("usage: list [start[,end]]\n");
+      return;
+    }
+  }
+  if (start <= 0)
+  {
+    start = ar.currentline > 5 ? ar.currentline - 5 : 1;
+    if (start < 1)
+      start = 1;
+  }
+  if (end <= 0)
+    end = start + 9;
+
+  SourceFile sf(ar.source);
+  if (!sf.opened())
+  {
+    consoleerror("source not available: %s", ar.short_src);
+    return;
+  }
+
+  char buf[1024] = {0};
+  int lineno = 0;
+  while (sf.readline(buf, sizeof(buf)) != NULL)
+  {
+    int n = (int)strlen(buf);
+    while (n > 0 && (buf[n-1] == '\n' || buf[n-1] == '\r'))
+      buf[--n] = '\0';
+    lineno++;
+    if (lineno >= start && lineno <= end)
+      printf("%s%4d  %s\n", lineno == ar.currentline ? "=>" : "  ",
+             lineno, buf);
+  }
+  if (lineno == 0)
+    consoleerror("empty source: %s", ar.short_src);
+}
+
+static void consoledisasm(ConsoleState* c)
+{
+  scm_Debug ar;
+  if (!currentframe(c, &ar))
+  {
+    consoleerror("no frame %d", c->level);
+    return;
+  }
+  if (!isclosure(ar.i_frm->base))
+  {
+    consoleerror("not a Scheme frame");
+    return;
+  }
+  LambdaPtr lambda = closureref(ar.i_frm->base)->lambda;
+  c->vm->printccode0(stdout, lambda, ar.i_frm->getpc());
+  fflush(stdout);
+}
+
+static void consolehelp()
+{
+  printf(
+    "commands:\n"
+    "  bt [n]              backtrace, innermost first\n"
+    "  frame N             select the inspected frame\n"
+    "  up                  select the caller frame\n"
+    "  down                select the callee frame\n"
+    "  locals | lv         locals of the selected frame\n"
+    "  outers | ov         outers of the selected frame's closure\n"
+    "  p expr | print expr evaluate in the selected frame\n"
+    "  set name = expr     write a local of the selected frame\n"
+    "  where               selected frame position\n"
+    "  list [start[,end]]  source lines around the current line\n"
+    "  disasm              disassemble the selected frame\n"
+    "  c | continue        resume the program\n"
+    "  q | quit            exit the program\n"
+    "  h | ? | help        this help\n");
+}
+
+/* Returns false when the console should return to the program. */
+static bool consolecommand(ConsoleState* c, const char* cmd, char* arg)
+{
+  if (strcmp(cmd, "c") == 0 || strcmp(cmd, "continue") == 0)
+    return false;
+  if (strcmp(cmd, "q") == 0 || strcmp(cmd, "quit") == 0)
+  {
+    fflush(stdout);
+    exit(0);
+    return false;
+  }
+  if (strcmp(cmd, "h") == 0 || strcmp(cmd, "?") == 0 || strcmp(cmd, "help") == 0)
+    consolehelp();
+  else if (strcmp(cmd, "bt") == 0)
+  {
+    int limit = -1;
+    if (*arg != '\0' && !parsenum(arg, &limit))
+      printf("usage: bt [n]\n");
+    else
+      consolebt(c, limit);
+  }
+  else if (strcmp(cmd, "frame") == 0)
+  {
+    int level = 0;
+    if (!parsenum(arg, &level))
+    {
+      printf("usage: frame N\n");
+    }
+    else
+    {
+      int depth = SCMDebug::stackdepth(c->vm);
+      if (level < 0 || level >= depth)
+        consoleerror("no frame %d", level);
+      else
+        c->level = level;
+    }
+  }
+  else if (strcmp(cmd, "up") == 0)
+  {
+    if (c->level + 1 >= SCMDebug::stackdepth(c->vm))
+      consoleerror("no caller frame");
+    else
+      c->level++;
+  }
+  else if (strcmp(cmd, "down") == 0)
+  {
+    if (c->level <= 0)
+      consoleerror("no callee frame");
+    else
+      c->level--;
+  }
+  else if (strcmp(cmd, "locals") == 0 || strcmp(cmd, "lv") == 0)
+    consolelocals(c);
+  else if (strcmp(cmd, "outers") == 0 || strcmp(cmd, "ov") == 0)
+    consoleouters(c);
+  else if (strcmp(cmd, "p") == 0 || strcmp(cmd, "print") == 0)
+    consoleprint(c, arg);
+  else if (strcmp(cmd, "set") == 0)
+    consoleset(c, arg);
+  else if (strcmp(cmd, "where") == 0)
+    consolewhere(c);
+  else if (strcmp(cmd, "list") == 0)
+    consolelist(c, arg);
+  else if (strcmp(cmd, "disasm") == 0)
+    consoledisasm(c);
+  else
+    consoleerror("unknown command: %s (h for help)", cmd);
+  return true;
+}
+
+/* One command with the evaluator's errors caught here: a bad expression
+   must not unwind the console, and the interrupted program's frames are
+   kept alive by the hook guard or by the console's live curfrm chain. */
+static bool consolexec(ConsoleState* c, const char* cmd, char* arg)
+{
+  bool keep = true;
+  TRY
+  {
+    keep = consolecommand(c, cmd, arg);
+  }
+  CATCH(err)
+  {
+    printf("error: %s\n", err);
+  }
+  return keep;
+}
+
+static bool getconsoleline(Lbuffer* line)
+{
+  line->reset();
+  line->buf[0] = '\0';
+  int ch;
+  while ((ch = getchar()) != EOF && ch != '\n')
+    line->put((char)ch);
+  if (ch == EOF && line->count == 0)
+    return false;
+  return true;
+}
+
+static bool getcmdarg(Lbuffer* line, char** cmd, char** arg)
+{
+  *cmd = NULL;
+  *arg = NULL;
+
+  while (line->count > 0 && isspace((unsigned char)line->buf[line->count-1]))
+    line->buf[--line->count] = '\0';
+
+  char* p1 = (char*)skipspace(line->buf);
+  if (*p1 == '\0')
+    return false;
+
+  *cmd = p1;
+  char* p2 = p1;
+  while (*p2 != '\0' && !isspace((unsigned char)*p2))
+    p2++;
+  if (*p2 != '\0')
+  {
+    *p2 = '\0';
+    p2++;
+  }
+  *arg = (char*)skipspace(p2);
+  return true;
+}
+
+/* Run the inspection console: read one command per line into a growable
+   Lbuffer and execute it until `continue`, `quit` or end of input. */
+void SCMDebug::console(VM* vm)
+{
+  int depth = SCMDebug::stackdepth(vm);
+  if (depth == 0)
+  {
+    consoleerror("debug: no stack frames");
+    return;
+  }
+
+  ConsoleState c(vm);
+  c.tty = stdin_is_tty();
+  printf("debug console (%d frame%s)\n", depth, depth == 1 ? "" : "s");
+  consolewhere(&c);
+
+  Lbuffer line(vm);
+  for (;;)
+  {
+    if (c.tty)
+    {
+      printf("(debug) ");
+      fflush(stdout);
+    }
+
+    if (!getconsoleline(&line))
+      break;
+    char* cmd = NULL;
+    char* arg = NULL;
+    if (!getcmdarg(&line, &cmd, &arg))
+      continue;
+    if (!consolexec(&c, cmd, arg))
+      break;
+  }
+  fflush(stdout);
+}
+
+/*
+** (debug)
+** Enter the inspection console at the current position.  The primitive
+** itself does not create a frame, so level 0 is its caller (or the
+** interrupted frame while a hook is paused).
+*/
+static ValueT scm_stub_debug(VM* vm)
+{
+  SCMDebug::console(vm);
+  return_void();
+}
+
 void SCMDebug::init(VM* vm)
 {
   /* Intern the event symbols once and mark them const: they are kept in
@@ -932,6 +1485,7 @@ void SCMDebug::init(VM* vm)
     RegCProc("debug-setouter!", scm_stub_debug_setouter),
     RegCProc("debug-eval", scm_stub_debug_eval, true),
     RegCProc("debug-traceback", scm_stub_debug_traceback, true),
+    RegCProc("debug", scm_stub_debug),
     RegCProc(NULL, -1)
   };
   regcfunc(vm, procs);
