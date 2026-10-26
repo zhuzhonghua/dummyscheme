@@ -783,6 +783,35 @@ static ValueT scm_stub_debug_outervaluejoin(VM* vm, ValueT* p1, ValueT* i1,
 }
 
 /*
+** (debug)
+** Read-eval loop on stdin: each line is compiled as one chunk and run
+** in the global environment (no access to the caller's frame); results
+** are discarded and errors print themselves at raise time.  The line
+** "cont" or EOF returns to the program.
+*/
+static ValueT scm_stub_debug(VM* vm)
+{
+  for (;;)
+  {
+    char line[250] = "";
+    fputs("scm_debug> ", stderr);
+    if (fgets(line, sizeof(line), stdin) == NULL || strcmp(line, "cont\n") == 0)
+      return_void();
+    TRY
+    {
+      ReserveStack _reservestk_(vm);
+      Sgcvar1(vm, clo);
+      *clo = scm_compile(vm, line, (int)strlen(line));
+      SCM::invokecall(vm, clo, NULL, 0);
+    }
+    CATCH(err)
+    {
+      (void)err;
+    }
+  }
+}
+
+/*
 ** (debug-getregistry)
 ** The registry table: a per-VM hashtable holding GC-rooted values for
 ** the host side (the C API reads it through scm_registry_get/set, e.g.
@@ -925,6 +954,7 @@ void SCMDebug::init(VM* vm)
     RegCProc("debug-outervaluejoin", scm_stub_debug_outervaluejoin),
     RegCProc("debug-getregistry", scm_stub_debug_getregistry),
     RegCProc("debug-traceback", scm_stub_debug_traceback, true),
+    RegCProc("debug", scm_stub_debug),
     RegCProc(NULL, -1)
   };
   regcfunc(vm, procs);
