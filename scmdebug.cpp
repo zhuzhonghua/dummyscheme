@@ -687,34 +687,6 @@ static ValueT scm_stub_debug_getinfo(VM* vm, ValueT* target)
   return *out;
 }
 
-/* Index of the outer named 'name' in the frame; -1 when absent. */
-static int findouter(CallFrame* frm, ValueT* name)
-{
-  int count = SCMDebug::outercount(frm);
-  for (int i = 0; i < count; i++)
-  {
-    ValueT nm;
-    SCMDebug::outername(frm, i, &nm);
-    if (symref(&nm) == symref(name))
-      return i;
-  }
-  return -1;
-}
-
-/* Build the (name . value) alist of the frame closure's outers. */
-static void outervals(VM* vm, CallFrame* frm, ValueT* out)
-{
-  Sgcvar3(vm, namev, val, entry);
-  int count = SCMDebug::outercount(frm);
-  for (int i = count - 1; i >= 0; i--)
-  {
-    SCMDebug::outername(frm, i, namev);
-    SCMDebug::getouter(frm, i, val);
-    setpair(entry, SCM::cons(vm, namev, val));
-    setpair(out, SCM::cons(vm, entry, out));
-  }
-}
-
 /*
 ** Name of parameter 'n' (0-based, rest parameter included) of an inactive
 ** function; false for a native procedure and for an out-of-range index.
@@ -783,69 +755,133 @@ static ValueT scm_stub_debug_setlocal(VM* vm, ValueT* level, ValueT* index, Valu
 }
 
 /*
-** (debug-outers [level])
-** (name . value) alist of the frame closure's outers, environment
-** excluded; #f when the level is out of range.
+** ── outer values ──
+**
+** Outer variables of a closure, environment excluded: outers[0] is the
+** environment table and not counted, so outer variable 'n' is 1-based,
+** lives in outers[n] and is named by bvar[n - 1].  Values always live
+** in shared boxes.
 */
-static ValueT scm_stub_debug_outers(VM* vm, ValueT* rest)
+
+/*
+** Closure carrying outer variable 'n'; false when 'fn' is not a closure
+** or has no such outer variable.
+*/
+static bool outervalref(ValueT* fn, int n, ClosurePtr* out)
 {
-  static const char* METHOD = "debug-outers";
-  int level = 0;
-  if (!isnull(rest))
-  {
-    ValueT* p = Scar(rest);
-    rest = Scdr(rest);
-    AssertArg(vm, isnumi(p), METHOD, p, "not a number");
-    Assert(vm, isnull(rest), "%s: too much arguments", METHOD);
-    level = numi(p);
-  }
-  Sgcvar1(vm, out);
-  CallFrame* frm = NULL;
-  if (!levelframe(vm, level, &frm))
-    return *Sfalseref;
-  outervals(vm, frm, out);
-  return *out;
+  if (!isclosure(fn))
+    return false;
+  ClosurePtr clo = closureref(fn);
+  if (n < 1 || n >= clo->n)
+    return false;
+  *out = clo;
+  return true;
+}
+
+/* Name and current value of outer variable 'n' of 'fn'. */
+static bool getoutervalue(ValueT* fn, int n, ValueT* name, ValueT* val)
+{
+  ClosurePtr clo;
+  if (!outervalref(fn, n, &clo))
+    return false;
+  setsym(name, clo->lambda->vars->refbvar(n - 1)->name);
+  *val = boxref(&clo->outers[n])->val;
+  return true;
+}
+
+/* Write outer variable 'n' of 'fn' through its box. */
+static bool setoutervalue(ValueT* fn, int n, ValueT* name, ValueT* val)
+{
+  ClosurePtr clo;
+  if (!outervalref(fn, n, &clo))
+    return false;
+  boxref(&clo->outers[n])->val = *val;
+  setsym(name, clo->lambda->vars->refbvar(n - 1)->name);
+  return true;
+}
+
+/* Identity of outer variable 'n': the shared box, NULL when absent. */
+static void* outervalueid(ValueT* fn, int n)
+{
+  ClosurePtr clo;
+  if (!outervalref(fn, n, &clo))
+    return NULL;
+  return boxref(&clo->outers[n]);
+}
+
+/* Make outer variable 'n1' of 'fn1' share the box of 'n2' of 'fn2'. */
+static bool outervaluejoin(ValueT* fn1, int n1, ValueT* fn2, int n2)
+{
+  ClosurePtr clo1, clo2;
+  if (!outervalref(fn1, n1, &clo1) || !outervalref(fn2, n2, &clo2))
+    return false;
+  clo1->outers[n1] = clo2->outers[n2];
+  return true;
 }
 
 /*
-** (debug-outer level name)
-** Value of the named outer in the frame at 'level'; #f when the frame or
-** the name is out of range.
+** (debug-getoutervalue proc index)
+** Two values, the name and value of outer variable 'index' (1-based) of
+** closure 'proc'; #f when 'proc' has no such outer variable.
 */
-static ValueT scm_stub_debug_outer(VM* vm, ValueT* level, ValueT* name)
+static ValueT scm_stub_debug_getoutervalue(VM* vm, ValueT* proc, ValueT* index)
 {
-  static const char* METHOD = "debug-outer";
-  AssertArg(vm, isnumi(level), METHOD, level, "not a number");
-  AssertArg(vm, issym(name), METHOD, name, "not a symbol");
-  CallFrame* frm = NULL;
-  if (!levelframe(vm, numi(level), &frm))
+  static const char* METHOD = "debug-getoutervalue";
+  AssertArg(vm, isnumi(index), METHOD, index, "not an integer");
+  Sgcvar2(vm, name, val);
+  if (!getoutervalue(proc, numi(index), name, val))
     return *Sfalseref;
-  int n = findouter(frm, name);
+  setpair(val, SCM::cons(vm, val, Snullref));
+  setpair(val, SCM::cons(vm, name, val));
+  return SCM::packvalues(vm, val);
+}
+
+/*
+** (debug-setoutervalue proc index value)
+** Write outer variable 'index' (1-based) of closure 'proc' through its
+** box; returns the name.  #f when there is no such outer variable.
+*/
+static ValueT scm_stub_debug_setoutervalue(VM* vm, ValueT* proc, ValueT* index, ValueT* val)
+{
+  static const char* METHOD = "debug-setoutervalue";
+  AssertArg(vm, isnumi(index), METHOD, index, "not an integer");
+  Sgcvar1(vm, name);
+  if (!setoutervalue(proc, numi(index), name, val))
+    return *Sfalseref;
+  return *name;
+}
+
+/*
+** (debug-outervalueid proc index)
+** Lightuserdata identity of outer variable 'index' (1-based): two
+** closures share an id exactly when writes through one are visible
+** through the other.  An error when there is no such outer variable.
+*/
+static ValueT scm_stub_debug_outervalueid(VM* vm, ValueT* proc, ValueT* index)
+{
+  static const char* METHOD = "debug-outervalueid";
+  AssertArg(vm, isnumi(index), METHOD, index, "not an integer");
+  void* id = outervalueid(proc, numi(index));
+  Assert(vm, id != NULL, "%s: outer variable index out of range", METHOD);
   ValueT out;
-  if (n < 0)
-    return *Sfalseref;
-  SCMDebug::getouter(frm, n, &out);
+  setlightuserdata(&out, id);
   return out;
 }
 
 /*
-** (debug-setouter! level name value)
-** Write through to the named outer; #t on success, #f when the frame or
-** the name is out of range.
+** (debug-outervaluejoin proc1 index1 proc2 index2)
+** Make outer variable 'index1' of 'proc1' share the box of outer variable
+** 'index2' of 'proc2'.  An error when either index is out of range.
 */
-static ValueT scm_stub_debug_setouter(VM* vm, ValueT* level, ValueT* name, ValueT* val)
+static ValueT scm_stub_debug_outervaluejoin(VM* vm, ValueT* p1, ValueT* i1,
+                                            ValueT* p2, ValueT* i2)
 {
-  static const char* METHOD = "debug-setouter!";
-  AssertArg(vm, isnumi(level), METHOD, level, "not a number");
-  AssertArg(vm, issym(name), METHOD, name, "not a symbol");
-  CallFrame* frm = NULL;
-  if (!levelframe(vm, numi(level), &frm))
-    return *Sfalseref;
-  int n = findouter(frm, name);
-  if (n < 0)
-    return *Sfalseref;
-  SCMDebug::setouter(frm, n, val);
-  return *Strueref;
+  static const char* METHOD = "debug-outervaluejoin";
+  AssertArg(vm, isnumi(i1), METHOD, i1, "not an integer");
+  AssertArg(vm, isnumi(i2), METHOD, i2, "not an integer");
+  Assert(vm, outervaluejoin(p1, numi(i1), p2, numi(i2)),
+         "%s: outer variable index out of range", METHOD);
+  return_void();
 }
 
 static const char* skipspace(const char* p)
@@ -1595,10 +1631,11 @@ void SCMDebug::init(VM* vm)
     RegCProc("debug-getinfo", scm_stub_debug_getinfo),
     RegCProc("debug-getlocal", scm_stub_debug_getlocal),
     RegCProc("debug-setlocal", scm_stub_debug_setlocal),
+    RegCProc("debug-getoutervalue", scm_stub_debug_getoutervalue),
+    RegCProc("debug-setoutervalue", scm_stub_debug_setoutervalue),
+    RegCProc("debug-outervalueid", scm_stub_debug_outervalueid),
+    RegCProc("debug-outervaluejoin", scm_stub_debug_outervaluejoin),
     RegCProc("debug-frames", scm_stub_debug_frames),
-    RegCProc("debug-outers", scm_stub_debug_outers, true),
-    RegCProc("debug-outer", scm_stub_debug_outer),
-    RegCProc("debug-setouter!", scm_stub_debug_setouter),
     RegCProc("debug-eval", scm_stub_debug_eval, true),
     RegCProc("debug-traceback", scm_stub_debug_traceback, true),
     RegCProc("debug", scm_stub_debug),
