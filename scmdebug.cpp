@@ -331,6 +331,31 @@ bool SCMDebug::getstack(VM* vm, int level, scm_Debug* ar)
   return true;
 }
 
+void SCMDebug::traceback(VM* vm, Lbuffer* buf)
+{
+  buf->put("stack traceback:\n");
+  for (CallFrame* frm = inspectedchain(vm); frm != NULL; frm = frm->prev)
+  {
+    FrameInfo info;
+    if (!frameinfo(vm, frm, &info))
+    {
+      buf->put("\t<native>\n");
+      continue;
+    }
+    buf->put("\t");
+    buf->put(info.source);
+    if (info.currentline > 0)
+    {
+      char ln[16];
+      snprintf(ln, sizeof(ln), ":%d", info.currentline);
+      buf->put(ln);
+    }
+    buf->put("\n");
+    if (frm->tailcall)
+      buf->put("\t(...tail calls...)\n");
+  }
+}
+
 /*
 ** ── locals and outers ──
 **
@@ -688,6 +713,109 @@ static ValueT scm_stub_debug_setouter(VM* vm, ValueT* level, ValueT* name, Value
   return *Strueref;
 }
 
+/*
+** Evaluate 'expr' with the frame's variables snapshotted into a
+** temporary environment; the result lands in *out, errors propagate.
+** defines and set!s inside the expression write the temporary table
+** only.  Runs on its own root frame chain (ReserveStack, like
+** schemehook) and restores the interrupted computation's ac0.
+*/
+static void evalinframe(VM* vm, CallFrame* frm, const char* expr, ValueT* out)
+{
+  ReserveStack _reservestk_(vm);
+  StkVar savedac(vm);
+  savedac.val = G(vm)->ac0;
+  Sgcvar2(vm, env, clo);
+
+  ClosurePtr closure = closureref(frm->base);
+  sethashtable(env, Sr1(vm, HashTableObj, vm));
+  HashTableObj* envt = hashtableref(env);
+
+  /* snapshot the frame's locals and the closure's outers into the
+     temporary environment (void-valued ones too: they shadow
+     same-named globals like the real scope does) */
+  int count = SCMDebug::localcount(frm);
+  for (int i = 0; i < count; i++)
+  {
+    ValueT nm;
+    ValueT val;
+    SCMDebug::localname(frm, i, &nm);
+    SCMDebug::getlocal(frm, i, &val);
+    envt->set(vm, &nm, &val);
+  }
+  count = SCMDebug::outercount(frm);
+  for (int i = 0; i < count; i++)
+  {
+    ValueT nm;
+    ValueT val;
+    SCMDebug::outername(frm, i, &nm);
+    SCMDebug::getouter(frm, i, &val);
+    envt->set(vm, &nm, &val);
+  }
+
+  /* scm_compile wraps the expression in one (begin ...) form and
+     installs a metatable __index = genv; retarget __index to the frame
+     closure's own environment (a sandboxed frame carries a custom env
+     there) */
+  *clo = scm_compile(vm, env, expr, (int)strlen(expr));
+  hashtableref(envt->getmetatable())->set(vm, &G(vm)->indexmeta,
+                                          &closure->outers[0]);
+
+  SCM::invokecall(vm, clo, NULL, 0);
+  *out = G(vm)->ac0;
+}
+
+/*
+** (debug-eval expr [level])
+** Evaluate 'expr' (a string) with the frame at 'level'.  defines and
+** set!s write the temporary table only; set! on locals does not write
+** back to the frame (use debug-setlocal!).  Errors propagate like any
+** VM error.
+*/
+static ValueT scm_stub_debug_eval(VM* vm, ValueT* expr, ValueT* rest)
+{
+  static const char* METHOD = "debug-eval";
+  AssertArg(vm, isstr(expr), METHOD, expr, "not a string");
+  int level = 0;
+  if (!isnull(rest))
+  {
+    ValueT* p = Scar(rest);
+    rest = Scdr(rest);
+    AssertArg(vm, isnumi(p), METHOD, p, "not a number");
+    Assert(vm, isnull(rest), "%s: too much arguments", METHOD);
+    level = numi(p);
+  }
+  CallFrame* frm = NULL;
+  if (!levelframe(vm, level, &frm))
+    return *Sfalseref;
+  Sgcvar1(vm, out);
+  evalinframe(vm, frm, Ssstr(strref(expr)), out);
+  return *out;
+}
+
+/*
+** (debug-traceback [msg])
+** Traceback text of the inspected chain as a Scheme string; the optional
+** msg is the first line.
+*/
+static ValueT scm_stub_debug_traceback(VM* vm, ValueT* rest)
+{
+  static const char* METHOD = "debug-traceback";
+  Lbuffer buf(vm);
+  if (!isnull(rest))
+  {
+    Assert(vm, isnull(Scdr(rest)), "%s: too much arguments", METHOD);
+    ValueT* p = Scar(rest);
+    AssertArg(vm, isstr(p), METHOD, p, "not a string");
+    buf.put(vtstr(p), vtstrlen(p));
+    buf.put('\n');
+  }
+  SCMDebug::traceback(vm, &buf);
+  ValueT out;
+  setstr(&out, G(vm)->ninstrintern(buf.buf, buf.count));
+  return out;
+}
+
 /* The hook is called as (hook event line): accept exactly two named
    parameters, or a rest parameter covering them. */
 static void checkhookarity(VM* vm, ValueT* proc, const char* method)
@@ -802,6 +930,8 @@ void SCMDebug::init(VM* vm)
     RegCProc("debug-outers", scm_stub_debug_outers, true),
     RegCProc("debug-outer", scm_stub_debug_outer),
     RegCProc("debug-setouter!", scm_stub_debug_setouter),
+    RegCProc("debug-eval", scm_stub_debug_eval, true),
+    RegCProc("debug-traceback", scm_stub_debug_traceback, true),
     RegCProc(NULL, -1)
   };
   regcfunc(vm, procs);

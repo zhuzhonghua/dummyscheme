@@ -660,4 +660,79 @@ const char* scm_tostring(VM* vm, ValueT* p, int* len)
   return strref(sv)->str;
 }
 
+// ---------- debugger (Phase 2) ----------
+
+bool scm_getstack(VM* vm, int level, scm_Debug* ar)
+{
+  return SCMDebug::getstack(vm, level, ar);
+}
+
+int scm_localcount(VM* vm, const scm_Debug* ar)
+{
+  (void)vm;
+  return SCMDebug::localcount(ar->i_frm);
+}
+
+bool scm_getlocal(VM* vm, const scm_Debug* ar, int n, const char** name, ValueT* out)
+{
+  (void)vm;
+  if (n < 0 || n >= SCMDebug::localcount(ar->i_frm))
+    return false;
+  ValueT nm;
+  SCMDebug::localname(ar->i_frm, n, &nm);
+  *name = Ssstr(symref(&nm));
+  SCMDebug::getlocal(ar->i_frm, n, out);
+  return true;
+}
+
+bool scm_setlocal(VM* vm, const scm_Debug* ar, int n, ValueT* value)
+{
+  (void)vm;
+  if (n < 0 || n >= SCMDebug::localcount(ar->i_frm))
+    return false;
+  SCMDebug::setlocal(ar->i_frm, n, value);
+  return true;
+}
+
+int scm_outercount(VM* vm, const scm_Debug* ar)
+{
+  (void)vm;
+  return SCMDebug::outercount(ar->i_frm);
+}
+
+bool scm_getouter(VM* vm, const scm_Debug* ar, int n, const char** name, ValueT* out)
+{
+  (void)vm;
+  if (n < 0 || n >= SCMDebug::outercount(ar->i_frm))
+    return false;
+  ValueT nm;
+  SCMDebug::outername(ar->i_frm, n, &nm);
+  *name = Ssstr(symref(&nm));
+  SCMDebug::getouter(ar->i_frm, n, out);
+  return true;
+}
+
+bool scm_setouter(VM* vm, const scm_Debug* ar, int n, ValueT* value)
+{
+  (void)vm;
+  if (n < 0 || n >= SCMDebug::outercount(ar->i_frm))
+    return false;
+  SCMDebug::setouter(ar->i_frm, n, value);
+  return true;
+}
+
+ValueT scm_traceback(VM* vm, const char* msg)
+{
+  Lbuffer buf(vm);
+  if (msg != NULL)
+  {
+    buf.put(msg);
+    buf.put('\n');
+  }
+  SCMDebug::traceback(vm, &buf);
+  ValueT out;
+  setstr(&out, G(vm)->ninstrintern(buf.buf, buf.count));
+  return out;
+}
+
 } // namespace Scheme

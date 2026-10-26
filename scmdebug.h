@@ -7,6 +7,7 @@ namespace Scheme {
 class VM;
 struct CallFrame;
 struct ValueT;
+struct Lbuffer;
 
 /* Hook engine: fires call/ret/line/count/tail-call events from the
    interpreter loop.  The active hook is either a C function
@@ -110,6 +111,10 @@ public:
 
   /* Number of frames on the inspected chain. */
   static int stackdepth(VM* vm);
+
+  /* Format the inspected chain into 'buf': a header line and one line
+     per frame (source:line), same layout as printframe. */
+  static void traceback(VM* vm, Lbuffer* buf);
 
   /* ── locals and outers ── */
 

@@ -41,6 +41,10 @@
 #define SCM_API extern
 #endif
 
+// scm_Debug (frame info struct) comes from scmdebug.h, which is
+// self-contained and safe to include here.
+#include "scmdebug.h"
+
 namespace Scheme {
 
 // All host-provided `const char*` arguments must be NUL-terminated.  For
@@ -205,6 +209,30 @@ SCM_API void*   scm_to_lightuserdata(VM* vm, ValueT* p);  // unwrap; raises an e
 // the text across VM/GC activity must copy it (strdup) or hold the string ValueT
 // (e.g. via scm_registry_set).
 SCM_API const char* scm_tostring(VM* vm, ValueT* p, int* len);
+
+// ---------- debugger (Phase 2) ----------
+// The inspected chain: the hook-paused chain while a hook runs, the live
+// chain otherwise.  scm_getstack fills 'ar' from the frame 'level' calls
+// deep (0 = innermost) and returns false when the level is out of range;
+// ar->i_frm stays valid only while the inspected chain is alive.
+SCM_API bool scm_getstack(VM* vm, int level, scm_Debug* ar);
+
+// Frame locals/outers of the frame in 'ar'.  'n' must be within
+// [0, count); 'name' receives the interned variable name (permanent).
+// The setters write through to the frame slot (boxed variables deref the
+// box); uninitialized slots hold the void value.
+SCM_API int  scm_localcount(VM* vm, const scm_Debug* ar);
+SCM_API bool scm_getlocal(VM* vm, const scm_Debug* ar, int n,
+                          const char** name, ValueT* out);
+SCM_API bool scm_setlocal(VM* vm, const scm_Debug* ar, int n, ValueT* value);
+SCM_API int  scm_outercount(VM* vm, const scm_Debug* ar);
+SCM_API bool scm_getouter(VM* vm, const scm_Debug* ar, int n,
+                          const char** name, ValueT* out);
+SCM_API bool scm_setouter(VM* vm, const scm_Debug* ar, int n, ValueT* value);
+
+// Traceback text of the inspected chain as a Scheme string; 'msg' (may be
+// NULL) becomes the first line.
+SCM_API ValueT scm_traceback(VM* vm, const char* msg);
 
 // ---------- void return macro (contains return; just write return_void();) ----------
 #define return_void() return (*Svoidref)
