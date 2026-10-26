@@ -687,20 +687,6 @@ static ValueT scm_stub_debug_getinfo(VM* vm, ValueT* target)
   return *out;
 }
 
-/* Index of the local named 'name' in the frame; -1 when absent. */
-static int findlocal(CallFrame* frm, ValueT* name)
-{
-  int count = SCMDebug::localcount(frm);
-  for (int i = 0; i < count; i++)
-  {
-    ValueT nm;
-    SCMDebug::localname(frm, i, &nm);
-    if (symref(&nm) == symref(name))
-      return i;
-  }
-  return -1;
-}
-
 /* Index of the outer named 'name' in the frame; -1 when absent. */
 static int findouter(CallFrame* frm, ValueT* name)
 {
@@ -715,23 +701,7 @@ static int findouter(CallFrame* frm, ValueT* name)
   return -1;
 }
 
-/* Build the (name . value) alist of the frame's locals.  Uninitialized
-   slots hold the void value and are listed as such: void is also a
-   legitimate value a local can be defined with, so it is not filtered. */
-static void localvals(VM* vm, CallFrame* frm, ValueT* out)
-{
-  Sgcvar3(vm, namev, val, entry);
-  int count = SCMDebug::localcount(frm);
-  for (int i = count - 1; i >= 0; i--)
-  {
-    SCMDebug::localname(frm, i, namev);
-    SCMDebug::getlocal(frm, i, val);
-    setpair(entry, SCM::cons(vm, namev, val));
-    setpair(out, SCM::cons(vm, entry, out));
-  }
-}
-
-/* Same for the frame closure's outers. */
+/* Build the (name . value) alist of the frame closure's outers. */
 static void outervals(VM* vm, CallFrame* frm, ValueT* out)
 {
   Sgcvar3(vm, namev, val, entry);
@@ -746,71 +716,70 @@ static void outervals(VM* vm, CallFrame* frm, ValueT* out)
 }
 
 /*
-** (debug-locals [level])
-** (name . value) alist of the frame's locals, the innermost frame when
-** the level is omitted.  Uninitialized locals hold the void value and
-** are listed as such.  #f when the level is out of range.
+** Name of parameter 'n' (0-based, rest parameter included) of an inactive
+** function; false for a native procedure and for an out-of-range index.
 */
-static ValueT scm_stub_debug_locals(VM* vm, ValueT* rest)
+static bool funcparamname(ValueT* fn, int n, ValueT* out)
 {
-  static const char* METHOD = "debug-locals";
-  int level = 0;
-  if (!isnull(rest))
-  {
-    ValueT* p = Scar(rest);
-    rest = Scdr(rest);
-    AssertArg(vm, isnumi(p), METHOD, p, "not a number");
-    Assert(vm, isnull(rest), "%s: too much arguments", METHOD);
-    level = numi(p);
-  }
-  Sgcvar1(vm, out);
-  CallFrame* frm = NULL;
-  if (!levelframe(vm, level, &frm))
-    return *Sfalseref;
-  localvals(vm, frm, out);
-  return *out;
+  if (!isclosure(fn))
+    return false;
+  LambdaPtr lambda = closureref(fn)->lambda;
+  if (lambda->vars == NULL || n < 0 || n >= lambda->argnum)
+    return false;
+  setsym(out, lambda->vars->local.get(n).sym);
+  return true;
 }
 
 /*
-** (debug-local level name)
-** Value of the named local in the frame at 'level' (an uninitialized
-** local yields the void value); #f when the frame or the name is out of
-** range.
+** (debug-getlocal level-or-proc index)
+** Frame form: two values, the name and value of local 'index' (0-based)
+** in the frame at 'level'; #f when the index is out of range, an error
+** when the level is.  Function form: the name of parameter 'index', no
+** value; #f for a native procedure or an out-of-range index.
 */
-static ValueT scm_stub_debug_local(VM* vm, ValueT* level, ValueT* name)
+static ValueT scm_stub_debug_getlocal(VM* vm, ValueT* target, ValueT* index)
 {
-  static const char* METHOD = "debug-local";
-  AssertArg(vm, isnumi(level), METHOD, level, "not a number");
-  AssertArg(vm, issym(name), METHOD, name, "not a symbol");
+  static const char* METHOD = "debug-getlocal";
+  AssertArg(vm, isnumi(target) || isclosure(target) || isnativeproc(target),
+            METHOD, target, "not a level or function");
+  AssertArg(vm, isnumi(index), METHOD, index, "not an integer");
+  int n = numi(index);
+
+  Sgcvar2(vm, name, val);
+  if (!isnumi(target))
+    return funcparamname(target, n, name) ? *name : *Sfalseref;
+
   CallFrame* frm = NULL;
-  if (!levelframe(vm, numi(level), &frm))
+  Assert(vm, levelframe(vm, numi(target), &frm), "%s: level out of range", METHOD);
+  if (n < 0 || n >= SCMDebug::localcount(frm))
     return *Sfalseref;
-  int n = findlocal(frm, name);
-  ValueT out;
-  if (n < 0)
-    return *Sfalseref;
-  SCMDebug::getlocal(frm, n, &out);
-  return out;
+  SCMDebug::localname(frm, n, name);
+  SCMDebug::getlocal(frm, n, val);
+  setpair(val, SCM::cons(vm, val, Snullref));
+  setpair(val, SCM::cons(vm, name, val));
+  return SCM::packvalues(vm, val);
 }
 
 /*
-** (debug-setlocal! level name value)
-** Write through to the named local; #t on success, #f when the frame or
-** the name is out of range.
+** (debug-setlocal level index value)
+** Write local 'index' (0-based) of the frame at 'level', boxed slots
+** written through; returns the local's name.  #f when the index is out
+** of range, an error when the level is.
 */
-static ValueT scm_stub_debug_setlocal(VM* vm, ValueT* level, ValueT* name, ValueT* val)
+static ValueT scm_stub_debug_setlocal(VM* vm, ValueT* level, ValueT* index, ValueT* val)
 {
-  static const char* METHOD = "debug-setlocal!";
-  AssertArg(vm, isnumi(level), METHOD, level, "not a number");
-  AssertArg(vm, issym(name), METHOD, name, "not a symbol");
+  static const char* METHOD = "debug-setlocal";
+  AssertArg(vm, isnumi(level), METHOD, level, "not a level");
+  AssertArg(vm, isnumi(index), METHOD, index, "not an integer");
   CallFrame* frm = NULL;
-  if (!levelframe(vm, numi(level), &frm))
-    return *Sfalseref;
-  int n = findlocal(frm, name);
-  if (n < 0)
+  Assert(vm, levelframe(vm, numi(level), &frm), "%s: level out of range", METHOD);
+  int n = numi(index);
+  if (n < 0 || n >= SCMDebug::localcount(frm))
     return *Sfalseref;
   SCMDebug::setlocal(frm, n, val);
-  return *Strueref;
+  Sgcvar1(vm, name);
+  SCMDebug::localname(frm, n, name);
+  return *name;
 }
 
 /*
@@ -1624,10 +1593,9 @@ void SCMDebug::init(VM* vm)
     RegCProc("debug-sethook", scm_stub_debug_sethook),
     RegCProc("debug-gethook", scm_stub_debug_gethook),
     RegCProc("debug-getinfo", scm_stub_debug_getinfo),
+    RegCProc("debug-getlocal", scm_stub_debug_getlocal),
+    RegCProc("debug-setlocal", scm_stub_debug_setlocal),
     RegCProc("debug-frames", scm_stub_debug_frames),
-    RegCProc("debug-locals", scm_stub_debug_locals, true),
-    RegCProc("debug-local", scm_stub_debug_local),
-    RegCProc("debug-setlocal!", scm_stub_debug_setlocal),
     RegCProc("debug-outers", scm_stub_debug_outers, true),
     RegCProc("debug-outer", scm_stub_debug_outer),
     RegCProc("debug-setouter!", scm_stub_debug_setouter),
