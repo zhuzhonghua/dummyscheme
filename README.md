@@ -31,6 +31,27 @@ It could be easily embed to many host programs, only need to copy some .h/.cpp f
 - `syntax-rules` hygienic macros, custom ellipsis is also supported
 - Number tower, bignum is supported too
 - Line-level debug info with source location tracking
+- Lua-like Scheme-level debug API (debug library):
+```
+debug-getinfo <level-or-proc>       → alist (what/source/short_src/currentline/
+                                        linedefined/lastlinedefined/nups/nparams/
+                                        isvararg/istailcall/name/namewhat/
+                                        func/activelines)
+debug-getlocal <level> <index>      → name + value (multi-value) or #f
+debug-setlocal <level> <index> <v>  → name or #f
+debug-getoutervalue <proc> <idx>    → name + value (1-based outer index) or #f
+debug-setoutervalue <proc> <idx> <v>→ name or #f
+debug-outervalueid <proc> <idx>     → opaque id; shared box = same id
+debug-outervaluejoin <p1> <i1> <p2> <i2>  → #t; write-through after join
+debug-sethook <spec> <count> <proc> → (set hook; spec = 'call/'return/'line/
+                                        'count; count = trigger every N insns)
+debug-gethook                       → (spec count proc) or (#f ())
+debug-getregistry                   → shared hash-table (survives GC)
+debug-traceback [<msg>]             → string, multi-line
+```
+Frame-stepping uses the same mask bits as Lua (`call`, `return`, `line`,
+`count`) and a single hook closure — no C-level breakpoint table;
+breakpoints are built on top of `debug-sethook` in Scheme itself.
 - Lua-like embeddability and portability: platform-independent, easy to integrate into C/C++ host applications
 - Full tests passed with r4rstest (pass SCHEME_STD_R4RS=1) and r5rs-tests
 - dynamic-wind support, netsted with call/cc, jump to(out) dynamic-wind's thunk/body, allow to jump out dynamic-wind's before and after, but jumping into is not forbidden

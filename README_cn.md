@@ -31,6 +31,26 @@ aftertest.scm（449 项检查）另覆盖 pcall/xpcall/error、协程多值、�
 - `syntax-rules` 卫生宏，也支持自定义省略号
 - 数值塔，支持 bignum
 - 行级调试信息，带源码位置跟踪
+- 类 Lua 的 Scheme 层调试接口（debug 库）：
+```
+debug-getinfo <level-or-proc>       → alist（what/source/short_src/currentline/
+                                        linedefined/lastlinedefined/nups/nparams/
+                                        isvararg/istailcall/name/namewhat/
+                                        func/activelines）
+debug-getlocal <level> <index>      → 名字 + 值（多值返回）或 #f
+debug-setlocal <level> <index> <v>  → 名字或 #f
+debug-getoutervalue <proc> <idx>    → 名字 + 值（outer 从 1 开始）或 #f
+debug-setoutervalue <proc> <idx> <v>→ 名字或 #f
+debug-outervalueid <proc> <idx>     → 不透明 id；共享 box 一定同 id
+debug-outervaluejoin <p1> <i1> <p2> <i2>  → #t；join 后两侧写穿
+debug-sethook <spec> <count> <proc> → 设 hook；spec = 'call/'return/'line/'count，
+                                        count 每 N 条指令触发一次
+debug-gethook                       → (spec count proc) 或 (#f ())
+debug-getregistry                   → 跨 GC 存活的共享 hash-table
+debug-traceback [<msg>]             → 多行 traceback 字符串
+```
+事件触发位与 Lua 对齐（`call`/`return`/`line`/`count`），单槽位 hook
+闭包——没有 C 层断点表；断点在 Scheme 层基于 `debug-sethook` 自行实现。
 - 类似 Lua 的可嵌入性和可移植性：与平台无关，容易集成进 C/C++ 宿主程序
 - r4rstest（加 `SCHEME_STD_R4RS=1` 编译）和 r5rs-tests 全部测试通过
 - 支持 dynamic-wind，与 call/cc 嵌套，可以从 dynamic-wind 的 thunk/body 里跳出去；

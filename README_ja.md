@@ -31,6 +31,27 @@ Lua のような Scheme 実装が欲しいと考えました。行レベルの�
 - `syntax-rules` 衛生的マクロ、カスタム省略記号もサポート
 - 数タワー、bignum もサポート
 - ソース位置追跡付きの行レベルデバッグ情報
+- Lua ライクな Scheme 層デバッグ API（debug ライブラリ）：
+```
+debug-getinfo <level-or-proc>       → alist（what/source/short_src/currentline/
+                                        linedefined/lastlinedefined/nups/nparams/
+                                        isvararg/istailcall/name/namewhat/
+                                        func/activelines）
+debug-getlocal <level> <index>      → 名前 + 値（多値返却）または #f
+debug-setlocal <level> <index> <v>  → 名前または #f
+debug-getoutervalue <proc> <idx>    → 名前 + 値（outer は 1 始まり）または #f
+debug-setoutervalue <proc> <idx> <v>→ 名前または #f
+debug-outervalueid <proc> <idx>     → 不透明な id；共有 box は必ず同 id
+debug-outervaluejoin <p1> <i1> <p2> <i2>  → #t；join 後は双方向 write-through
+debug-sethook <spec> <count> <proc> → hook 設定；spec = 'call/'return/'line/'count、
+                                        count は N 命令ごとに触发
+debug-gethook                       → (spec count proc) または (#f ())
+debug-getregistry                   → GC をまたいで生存する共有 hash-table
+debug-traceback [<msg>]             → 複数行の traceback 文字列
+```
+イベントマスクは Lua と同じ（`call`/`return`/`line`/`count`）、hook クロージャは
+1 スロットのみ。C 層のブレークポイントテーブルはなく、ブレークポイントは
+Scheme 側で `debug-sethook` を使って実装する。
 - 組み込み性と可搬性：プラットフォーム非依存、C/C++ ホストアプリケーションへの統合が容易
 - r4rstest（SCHEME_STD_R4RS=1）と r5rs-tests で全テスト合格
 - dynamic-wind サポート、call/cc とネストし、dynamic-wind の thunk/body の内外へのジャンプを許可
