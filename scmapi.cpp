@@ -134,12 +134,17 @@ const char* scm_get_string(VM* vm, ValueT* p, int* len)
 
 bool scm_get_bool(VM* vm, ValueT* p)
 {
-  if (!p || !isboolean(p))
+  if (!p)
   {
     typeerr(vm, p, "boolean");
     return false;
   }
-  return istrue(p);
+  if (!isboolean(p))
+  {
+    typeerr(vm, p, "boolean");
+    return false;
+  }
+  return !isfalse(p);
 }
 
 scm_char scm_get_char(VM* vm, ValueT* p)
