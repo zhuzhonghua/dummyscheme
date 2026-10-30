@@ -3550,7 +3550,7 @@ void GlobalVM::init()
   OutputPortFileObj* ofile = NULL;
   oport = ofile = Sr0(vm, OutputPortFileObj);
   ofile->file = stderr;
-  sethashtable(&registry, Sr1(vm, HashTableObj, vm));  /* GC-root value registry (like LUA_REGISTRYINDEX); traced in GlobalVM::fullmark */
+  sethashtable(&registry, Sr1(vm, HashTableObj, vm));  /* GC-root value registry; traced in GlobalVM::fullmark */
   getintern()->init();
   sethashtable(&genv, Sr1(vm, HashTableObj, vm));    /* global environment table */
   const char* indexc = "__index";

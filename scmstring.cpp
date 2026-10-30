@@ -549,10 +549,10 @@ static ValueT scm_stub_format(VM* vm, ValueT* p, ValueT* args)
   return res;
 }
 
-/* ---- string-format: Lua string.format (printf-style), strobj-backed ----
+/* ---- string-format: printf-style formatting, strobj-backed ----
    %[flags][width][.precision]conv, conv in c d i u o x X e E f g G s %;
    flags/width/precision are copied verbatim into the C sub-format (no '*'),
-   mirroring Lua's getformat + addlenmod (lstrlib.c str_format). */
+   and a 64-bit length modifier is spliced in before the specifier. */
 
 static ValueT* fmt_nextarg(VM* vm, ValueT*& args, const char* METHOD)
 {
@@ -590,7 +590,7 @@ static void fmt_emit(VM* vm, Lbuffer& out, const char* METHOD, const char* subfm
   out.put(buf, r);
 }
 
-/* Lua addlenmod: splice the 64-bit length modifier before the specifier */
+/* splice the 64-bit length modifier before the specifier */
 static void addlenmod(char* subfmt, int* sl, char spec)
 {
   subfmt[(*sl)++] = 'l';
@@ -719,7 +719,7 @@ static ValueT scm_stub_string_format(VM* vm, ValueT* p, ValueT* args)
   return res;  /* ~Lbuffer() frees the buffer */
 }
 
-/* ---- string.pack family (Lua-compatible syntax, strobj-backed) ----
+/* ---- string.pack family (packed binary strings, strobj-backed) ----
    (string-pack fmt . args) -> binary string
    (string-unpack fmt s [pos]) -> values ... nextpos  (pos 0-based, may be negative)
    (string-packsize fmt) -> fixed size (errors on variable-length options)
@@ -790,7 +790,7 @@ static void packdouble(Lbuffer* out, double f, int n, int endian)
   unsigned char tmp[8] = {0};
   if (n == 4)
   {
-    float g = (float)f;  /* 'f' option: 4-byte float (Lua packs float) */
+    float g = (float)f;  /* 'f' option: 4-byte float */
     memcpy(tmp, &g, 4);
   }
   else
@@ -1143,7 +1143,7 @@ static ValueT scm_stub_string_packsize(VM* vm, ValueT* p)
   return out;
 }
 
-/* Lua string.char / string.byte (bytes as integers, 0-based indexing) */
+/* string.char / string.byte (bytes as integers, 0-based indexing) */
 
 static ValueT scm_stub_string_char(VM* vm, ValueT* p, ValueT* args)
 {

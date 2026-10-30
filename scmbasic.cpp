@@ -488,7 +488,7 @@ static ValueT scm_stub_xpcall(VM* vm, ValueT* thunk, ValueT* handler)
   return G(vm)->ac0;
 }
 
-/* (type x) -> type symbol; Lua `type` counterpart for ported code & debugging */
+/* (type x) -> type symbol; for ported code & debugging */
 static ValueT scm_stub_type(VM* vm, ValueT* p)
 {
   static const char* METHOD = "type";

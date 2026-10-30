@@ -1423,7 +1423,7 @@ public:
   void makeseed();
   int seed;
   scm_uint randstate;  /* SRFI-27 random source state */
-  ValueT registry;  /* GC-root value registry (like LUA_REGISTRYINDEX); traced in fullmark */
+  ValueT registry;  /* GC-root value registry; traced in fullmark */
 protected:
   void init();
   void initprimitive();
@@ -1481,7 +1481,7 @@ struct BoxObj : public RefObject {
   ValueT val;
 };
 
-/* max size of the array part is 2^MAXBITS (Lua MAXBITS = BITS_INT-2, capped at 24) */
+/* max size of the array part is 2^MAXBITS (BITS_INT-2, capped at 24) */
 #if INT_MAX > 16777215 /* int has more than 24 bits */
 #define SCMMAXBITS 24
 #else
@@ -1537,9 +1537,11 @@ protected:
 
   /* raw lookup: this table only, no metatable recursion */
   ValueT* rawget(ValueT* key);
-  /* follow metatable.__index (table or procedure) */
+  /* follow metatable.__index (table or procedure); a procedure returning
+     the undefined value means the key stays absent */
   ValueT* indexfallback(VM* vm, ValueT* key);
-  /* follow metatable.__newindex (table or procedure); returns true if handled */
+  /* follow metatable.__newindex (table or procedure); returns true if handled
+     (a procedure returning #f declines the write) */
   bool newindexfallback(VM* vm, ValueT* key, ValueT* val);
 
 protected:

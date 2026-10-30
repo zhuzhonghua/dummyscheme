@@ -49,7 +49,7 @@ uint HashTableObj::gethash(ValueT* v)
   }
 }
 
-/* whether an integer key is a candidate for the array part (Lua arrayindex) */
+/* whether an integer key is a candidate for the array part */
 int HashTableObj::arrayindex(ValueT* key)
 {
   if (isnumi(key))
@@ -130,13 +130,15 @@ ValueT* HashTableObj::indexfallback(VM* vm, ValueT* key)
   if (isclosure(idx) || isnativeproc(idx))
   {
     /* procedure form: call (__index table key); the result is left in ac0,
-       which get() callers consume before the next invocation. */
+       which get() callers consume before the next invocation.  Returning
+       the undefined value means "absent", so a procedure can decline the
+       names it does not handle. */
     Sgcvar2(vm, selfv, keyv);
     sethashtable(selfv, this);
     *keyv = *key;
     ValueT* argv[2] = { selfv, keyv };
     (void) SCM::invokecall(vm, idx, argv, 2);
-    return &G(vm)->ac0;
+    return isundefined(&G(vm)->ac0) ? NULL : &G(vm)->ac0;
   }
   return NULL;
 }
@@ -155,14 +157,15 @@ bool HashTableObj::newindexfallback(VM* vm, ValueT* key, ValueT* val)
   }
   if (isclosure(ni) || isnativeproc(ni))
   {
-    /* procedure form: call (__newindex table key value) */
+    /* procedure form: call (__newindex table key value); returning #f
+       declines the write and set() takes the normal insertion path */
     Sgcvar3(vm, selfv, keyv, valv);
     sethashtable(selfv, this);
     *keyv = *key;
     *valv = *val;
     ValueT* argv[3] = { selfv, keyv, valv };
-    (void) SCM::invokecall(vm, ni, argv, 3);
-    return true;
+    ValueT r = SCM::invokecall(vm, ni, argv, 3);
+    return !isfalse(&r);
   }
   return false;
 }
@@ -181,7 +184,7 @@ bool HashTableObj::keyeq(ValueT* a, ValueT* b)
   return SCM::eqp(a, b);
 }
 
-/* hash-part slot of key, or -1 if absent (Lua: invalid key for next) */
+/* hash-part slot of key, or -1 if absent */
 int HashTableObj::nodeindex(ValueT* key)
 {
   if (!node)
@@ -199,7 +202,7 @@ int HashTableObj::nodeindex(ValueT* key)
   }
 }
 
-/* Lua luaH_next: kv = #f means start; otherwise kv is the previous (key . val).
+/* iteration step: kv = #f means start; otherwise kv is the previous (key . val).
    Returns the next (key . val), or #f when traversal is done. */
 ValueT HashTableObj::next(VM* vm, ValueT* kv)
 {
@@ -448,7 +451,7 @@ void HashTableObj::setnodevector(VM* vm, int lsize)
   lsizenode = (byte)lsize;
 }
 
-/* rebuild the table with new array size and hash size (Lua resize) */
+/* rebuild the table with new array size and hash size */
 void HashTableObj::resize(VM* vm, int nasize, int nhsize)
 {
   int oldasize = sizearray;

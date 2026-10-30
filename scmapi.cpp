@@ -464,7 +464,7 @@ void scm_destroy_vm(VM* vm)
   ScmAlloc a = g->getfrealloc();
   void* ud = g->getallocud();
   g->getcachegroup()->fullsweep();   /* release cached pair pool (same path as GC) */
-  g->getobjgroup()->releaseall();    /* free all runtime objects, like Lua's freeall */
+  g->getobjgroup()->releaseall();    /* free all runtime objects */
   g->~GlobalVM();                    /* run member destructors (intern table, genv, ...) */
   a(ud, g, sizeof(GlobalVM), 0);     /* free the GlobalVM itself via its allocator */
 }
@@ -548,14 +548,14 @@ ValueT scm_registry_get(VM* vm, const char* name)
   Sgcvar1(vm, key);
   *key = scm_make_string(vm, name, (int)strlen(name));
   ValueT* v = hashtableref(&G(vm)->registry)->get(key);
-  return v ? *v : *Snullref;  /* null when absent, like Lua registry (nil) */
+  return v ? *v : *Snullref;  /* null when absent */
 }
 
 void scm_registry_unset(VM* vm, const char* name)
 {
   Sgcvar1(vm, key);
   *key = scm_make_string(vm, name, (int)strlen(name));
-  hashtableref(&G(vm)->registry)->set(vm, key, Snullref);  /* stores null, like Lua pushing nil to clear */
+  hashtableref(&G(vm)->registry)->set(vm, key, Snullref);  /* stores null to clear the slot */
 }
 
 // ---------- global variables ----------
@@ -578,6 +578,11 @@ ValueT scm_get_global(VM* vm, const char* name)
   ValueT v;
   if (slot) v = *slot; else setundefined(&v);
   return isundefined(&v) ? *Snullref : v;  /* null when not defined, like the registry API */
+}
+
+void scm_set_global_metatable(VM* vm, ValueT* mt)
+{
+  G(vm)->getgenv()->setmetatable(mt);
 }
 
 // ---------- option args / type names ----------
@@ -657,7 +662,7 @@ const char* scm_tostring(VM* vm, ValueT* p, int* len)
 
   Sgcvar1(vm, sv);
   *sv = scm_make_string(vm, out->strbuf.buf, out->strbuf.count);
-  /* keep the result alive across GC, like Lua's stack-top for lua_tolstring:
+  /* keep the result alive across GC:
      the returned pointer stays valid until the next scm_tostring call overwrites it */
   scm_registry_set(vm, "~tostring", *sv);
   if (len)

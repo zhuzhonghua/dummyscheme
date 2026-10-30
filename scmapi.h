@@ -23,7 +23,7 @@
 //     RegCProc("my-sum", scm_stub_my_sum, true),  // true   → rest (pair list)
 //     RegCProc(NULL, -1)
 //   };
-//   scm_register_lib(vm, myext);   // like luaL_setfuncs; arity inferred from the fn type
+//   scm_register_lib(vm, myext);   // bulk-register; arity inferred from the fn type
 //
 // ── 3. Type API ─────────────────────────────────────────
 //   if (scm_is_string(vm, p)) { ... }              // branch by type
@@ -132,27 +132,37 @@ SCM_API ValueT scm_table_get(VM* vm, ValueT* tbl, ValueT* key);
 // ---------- error (throws Scheme exception after printing fmt) ----------
 SCM_API void scm_error(VM* vm, const char* fmt, ...);
 
-// ---------- global registry (GC-root value slots; like LUA_REGISTRYINDEX) ----------
+// ---------- global registry (GC-root value slots) ----------
 // Registry is a ValueT field on GlobalVM and traced by GC (GlobalVM::fullmark),
 // so values survive across calls.
 SCM_API void scm_registry_set(VM* vm, const char* name, ValueT v);
-SCM_API ValueT scm_registry_get(VM* vm, const char* name);   // null when absent (like Lua registry nil)
-SCM_API void scm_registry_unset(VM* vm, const char* name);   // remove a slot (stores null, like luaL_unref)
+SCM_API ValueT scm_registry_get(VM* vm, const char* name);   // null when absent
+SCM_API void scm_registry_unset(VM* vm, const char* name);   // remove a slot (stores null)
 
 // ---------- global variables (Scheme top-level environment) ----------
 // Define or update a top-level variable, like `(define name value)` written at
-// the top level (Lua: lua_setglobal). Scheme code sees the value immediately;
-// the slot is GC-rooted by the global environment, so it survives across calls.
+// the top level.  Scheme code sees the value immediately; the slot is
+// GC-rooted by the global environment, so it survives across calls.
 SCM_API void   scm_set_global(VM* vm, const char* name, ValueT v);
-// Value of a top-level variable; null when it is not defined (Lua: lua_getglobal).
+// Value of a top-level variable; null when it is not defined.
 SCM_API ValueT scm_get_global(VM* vm, const char* name);
+
+// Installs `mt` as the metatable of the global environment: reads of names
+// not present in the global table follow mt.__index, and writes to such
+// names follow mt.__newindex.  __index and
+// __newindex may be tables or procedures.  A procedure __index returning the
+// undefined value means the name stays absent; a procedure __newindex
+// returning #f declines the write and the table stores the value normally.
+// This lets an embedder expose a virtual global (e.g. a response status
+// backed by host state) without adding a slot to the global table.
+SCM_API void scm_set_global_metatable(VM* vm, ValueT* mt);
 
 // ---------- VM entry ----------
 SCM_API VM* scm_create_vm(ScmAlloc a = salloc, void* ud = NULL);
 SCM_API void scm_destroy_vm(VM* vm);
 
 // ---------- host library registration & eval (embedding helpers) ----------
-// Registers a library of host functions, like luaL_setfuncs.  funcs is a
+// Registers a library of host functions.  funcs is a
 // NULL-terminated RegCProc array (last entry RegCProc(NULL, -1)) in exactly
 // the style the builtin libraries use (see SCMMath::init): the RegCProc
 // constructor infers the arity from the function type, and the `true` rest
@@ -191,11 +201,11 @@ SCM_API bool scm_apply(VM* vm, ValueT* fn, ValueT** argv, int argc, ValueT* out)
 SCM_API void scm_set_rng_seed(VM* vm, scm_uint seed);
 
 // ---------- option args / type names (all take VM only; GlobalVM is never exposed) ----------
-SCM_API scm_int      scm_opt_int(VM* vm, ValueT* p, scm_int def);  // like luaL_optinteger: nil/absent -> def, non-integer -> error
-SCM_API bool         scm_is_none_or_nil(VM* vm, ValueT* p);         // like lua_isnoneornil: absent arg (NULL p) or null
-SCM_API const char*  scm_typename(VM* vm, ValueT* p);              // static type name, like lua_typename (never GC'd)
+SCM_API scm_int      scm_opt_int(VM* vm, ValueT* p, scm_int def);  // nil/absent -> def, non-integer -> error
+SCM_API bool         scm_is_none_or_nil(VM* vm, ValueT* p);         // absent arg (NULL p) or null
+SCM_API const char*  scm_typename(VM* vm, ValueT* p);              // static type name (never GC'd)
 
-// ---------- lightuserdata (tagged raw pointer; no payload, no GC, like Lua lightuserdata) ----------
+// ---------- lightuserdata (tagged raw pointer; no payload, no GC) ----------
 // The pointed-to object is never traced or finalized by the VM: its lifetime
 // must be managed by the embedder and stay valid while the value is reachable.
 SCM_API ValueT scm_make_lightuserdata(VM* vm, void* p);   // wrap a raw pointer as a lightuserdata value
@@ -203,7 +213,7 @@ SCM_API bool    scm_is_lightuserdata(VM* vm, ValueT* p);  // type predicate
 SCM_API void*   scm_to_lightuserdata(VM* vm, ValueT* p);  // unwrap; raises an error on non-lightuserdata
 
 // ---------- value -> string (write semantics) ----------
-// Result is a Scheme string. Like Lua's lua_tolstring, the returned pointer is
+// Result is a Scheme string.  The returned pointer is
 // valid only until the next scm_tostring call (the result is kept in the registry
 // internal slot "~tostring", which the next call overwrites); callers that need
 // the text across VM/GC activity must copy it (strdup) or hold the string ValueT
