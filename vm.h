@@ -1537,9 +1537,9 @@ protected:
 
   /* raw lookup: this table only, no metatable recursion */
   ValueT* rawget(ValueT* key);
-  /* follow metatable.__index */
+  /* follow metatable.__index (table or procedure) */
   ValueT* indexfallback(VM* vm, ValueT* key);
-  /* follow metatable.__newindex (table form); returns true if forwarded */
+  /* follow metatable.__newindex (table or procedure); returns true if handled */
   bool newindexfallback(VM* vm, ValueT* key, ValueT* val);
 
 protected:

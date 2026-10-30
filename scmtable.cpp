@@ -127,6 +127,17 @@ ValueT* HashTableObj::indexfallback(VM* vm, ValueT* key)
     HashTableObj* target = hashtableref(idx);
     return target->get(key);
   }
+  if (isclosure(idx) || isnativeproc(idx))
+  {
+    /* procedure form: call (__index table key); the result is left in ac0,
+       which get() callers consume before the next invocation. */
+    Sgcvar2(vm, selfv, keyv);
+    sethashtable(selfv, this);
+    *keyv = *key;
+    ValueT* argv[2] = { selfv, keyv };
+    (void) SCM::invokecall(vm, idx, argv, 2);
+    return &G(vm)->ac0;
+  }
   return NULL;
 }
 
@@ -140,6 +151,17 @@ bool HashTableObj::newindexfallback(VM* vm, ValueT* key, ValueT* val)
   {
     HashTableObj* target = hashtableref(ni);
     target->set(vm, key, val);
+    return true;
+  }
+  if (isclosure(ni) || isnativeproc(ni))
+  {
+    /* procedure form: call (__newindex table key value) */
+    Sgcvar3(vm, selfv, keyv, valv);
+    sethashtable(selfv, this);
+    *keyv = *key;
+    *valv = *val;
+    ValueT* argv[3] = { selfv, keyv, valv };
+    (void) SCM::invokecall(vm, ni, argv, 3);
     return true;
   }
   return false;
