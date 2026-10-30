@@ -172,6 +172,17 @@ SCM_API void scm_destroy_vm(VM* vm);
 // IO streams.
 SCM_API void scm_register_lib(VM* vm, const RegCProc* funcs);
 
+// Creates a native C procedure value WITHOUT binding it into genv (unlike
+// scm_register_lib, which defines a global for each entry).  `def` is built
+// exactly like a registration entry: the RegCProc constructor infers the
+// arity from the function type, the `true` rest flag marks variadic
+// functions, and the name is used only for debugging/display.  Plain C
+// function entries only.  Typical use is metatable callbacks that must not
+// be reachable as script globals.  The returned value is unrooted: store it
+// into a root (an Sgcvar slot or a reachable table) before the next
+// allocation.
+SCM_API ValueT scm_make_native_proc(VM* vm, const RegCProc& def);
+
 // Evaluates `s` (NUL-terminated; `len` excludes the terminator) and returns
 // the value of the last expression.  Throws like evalstr (const char*).
 SCM_API ValueT scm_eval_string(VM* vm, const char* s, int len);

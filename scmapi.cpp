@@ -476,6 +476,16 @@ void scm_register_lib(VM* vm, const RegCProc* funcs)
   regcfunc(vm, funcs);
 }
 
+ValueT scm_make_native_proc(VM* vm, const RegCProc& def)
+{
+  ValueT nmsym;
+  SymPtr sym = G(vm)->getintern()->internsym(def.name, &nmsym);
+  ValueT v;
+  setnativeproc(&v, Sr4(vm, NativeProcObj, sym, def.cf, def.argnum,
+      def.argrest));
+  return v;
+}
+
 ValueT scm_eval_string(VM* vm, const char* s, int len)
 {
   /* evalstr() needs a NUL-terminated source; len may come from a wire
