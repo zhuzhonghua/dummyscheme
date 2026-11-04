@@ -271,6 +271,58 @@ ValueT* scm_list_ref(VM* vm, ValueT* list, int i)
   return Scar(p);
 }
 
+// ---------- list search ----------
+
+// First pair in `list` whose car satisfies `eq`; #f when there is none.
+static ValueT* memfind(VM* vm, ValueT* obj, ValueT* list, bool (*eq)(ValueT*, ValueT*))
+{
+  for (ValueT* p = list; p && !isnull(p); p = Scdr(p))
+  {
+    if (!ispair(p))
+    {
+      typeerr(vm, p, "pair");
+      return NULL;
+    }
+    if (eq(obj, Scar(p)))
+    {
+      return p;
+    }
+  }
+  return Sfalseref;
+}
+
+// First element pair of `alist` whose car satisfies `eq`; #f when there is
+// none.  Every element of the list must be a pair.
+static ValueT* assocfind(VM* vm, ValueT* key, ValueT* alist, bool (*eq)(ValueT*, ValueT*))
+{
+  for (ValueT* p = alist; p && !isnull(p); p = Scdr(p))
+  {
+    if (!ispair(p))
+    {
+      typeerr(vm, p, "pair");
+      return NULL;
+    }
+    ValueT* entry = Scar(p);
+    if (!ispair(entry))
+    {
+      typeerr(vm, entry, "pair");
+      return NULL;
+    }
+    if (eq(key, Scar(entry)))
+    {
+      return entry;
+    }
+  }
+  return Sfalseref;
+}
+
+ValueT* scm_assq(VM* vm, ValueT* key, ValueT* alist)  { return assocfind(vm, key, alist, SCM::eqp); }
+ValueT* scm_assv(VM* vm, ValueT* key, ValueT* alist)  { return assocfind(vm, key, alist, SCM::eqvp); }
+ValueT* scm_assoc(VM* vm, ValueT* key, ValueT* alist) { return assocfind(vm, key, alist, SCM::equalp); }
+ValueT* scm_memq(VM* vm, ValueT* obj, ValueT* list)   { return memfind(vm, obj, list, SCM::eqp); }
+ValueT* scm_memv(VM* vm, ValueT* obj, ValueT* list)   { return memfind(vm, obj, list, SCM::eqvp); }
+ValueT* scm_member(VM* vm, ValueT* obj, ValueT* list) { return memfind(vm, obj, list, SCM::equalp); }
+
 // ---------- constructors ----------
 
 ValueT scm_make_int(VM* vm, scm_int x)

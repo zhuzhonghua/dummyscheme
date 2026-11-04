@@ -109,6 +109,19 @@ SCM_API int     scm_list_len(VM* vm, ValueT* list);
 SCM_API int     scm_proper_list_len(VM* vm, ValueT* list);
 SCM_API ValueT* scm_list_ref(VM* vm, ValueT* list, int i);   // i-th element slot (0-based)
 
+// Search helpers.  Each walks a proper list and returns the slot it found:
+// assq/assv/assoc return the matching element pair, memq/memv/member the tail
+// starting at the match.  No match yields #f (the #f slot), so a Scheme-facing
+// host function can return the result unchanged.  Comparisons: assq/memq use
+// eq?, assv/memv use eqv?, assoc/member use equal?.  A non-list or an improper
+// list is an error, as is an alist element that is not a pair.
+SCM_API ValueT* scm_assq(VM* vm, ValueT* key, ValueT* alist);
+SCM_API ValueT* scm_assv(VM* vm, ValueT* key, ValueT* alist);
+SCM_API ValueT* scm_assoc(VM* vm, ValueT* key, ValueT* alist);
+SCM_API ValueT* scm_memq(VM* vm, ValueT* obj, ValueT* list);
+SCM_API ValueT* scm_memv(VM* vm, ValueT* obj, ValueT* list);
+SCM_API ValueT* scm_member(VM* vm, ValueT* obj, ValueT* list);
+
 // ---------- constructors (return ValueT) ----------
 SCM_API ValueT scm_make_int(VM* vm, scm_int x);
 SCM_API ValueT scm_make_float(VM* vm, scm_float x);
