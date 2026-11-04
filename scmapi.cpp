@@ -67,6 +67,12 @@ bool scm_is_char(VM* vm, ValueT* p)
   return ischar(p);
 }
 
+bool scm_is_symbol(VM* vm, ValueT* p)
+{
+  (void)vm;
+  return issym(p);
+}
+
 bool scm_is_pair(VM* vm, ValueT* p)
 {
   (void)vm;
@@ -360,6 +366,18 @@ ValueT scm_make_string(VM* vm, const char* s, int len)
 {
   ValueT v;
   setstr(&v, vm->strintern(s, len));
+  return v;
+}
+
+ValueT scm_make_symbol(VM* vm, const char* s)
+{
+  return scm_make_symbol(vm, s, (int)strlen(s));
+}
+
+ValueT scm_make_symbol(VM* vm, const char* s, int len)
+{
+  ValueT v;
+  setsym(&v, Intern(vm)->internsym(s, len));
   return v;
 }
 

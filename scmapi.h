@@ -59,6 +59,7 @@ SCM_API bool scm_is_bool(VM* vm, ValueT* p);
 SCM_API bool scm_is_true(VM* vm, ValueT* p);     // the #t value only
 SCM_API bool scm_is_false(VM* vm, ValueT* p);    // the #f value only
 SCM_API bool scm_is_char(VM* vm, ValueT* p);
+SCM_API bool scm_is_symbol(VM* vm, ValueT* p);   // interned symbol
 SCM_API bool scm_is_pair(VM* vm, ValueT* p);     // non-empty list
 SCM_API bool scm_is_list(VM* vm, ValueT* p);     // pair or '()
 SCM_API bool scm_is_null(VM* vm, ValueT* p);
@@ -129,6 +130,10 @@ SCM_API ValueT scm_make_bool(VM* vm, bool b);
 SCM_API ValueT scm_make_char(VM* vm, scm_char c);
 SCM_API ValueT scm_make_string(VM* vm, const char* s);             // len = strlen(s)
 SCM_API ValueT scm_make_string(VM* vm, const char* s, int len);    // s NUL-terminated; len excludes it
+// Interned symbol: the same name always yields an eq? value, and the symbol
+// stays alive as long as the VM does (the intern table roots it).
+SCM_API ValueT scm_make_symbol(VM* vm, const char* s);             // len = strlen(s)
+SCM_API ValueT scm_make_symbol(VM* vm, const char* s, int len);    // s NUL-terminated; len excludes it
 SCM_API ValueT scm_make_vector(VM* vm, int n);
 SCM_API ValueT scm_make_list(VM* vm, ValueT* items, int n);
 SCM_API ValueT scm_make_pair(VM* vm, ValueT* a, ValueT* b);
