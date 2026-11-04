@@ -895,7 +895,7 @@ struct PairObj : public RefObject {
 #define Sgcvar5(vm, a, b, c, d, e) Sgcvar4(vm,a,b,c,d);__s_gcvar(vm,e);
 #define Sgcvar6(vm, a, b, c, d, e, f) Sgcvar5(vm,a,b,c,d,e);__s_gcvar(vm,f);
 
-#define __s_gcvar(vm, NAME) StkVar VARNAME(NAME)(vm); ValueT* NAME = &(VARNAME(NAME) .val);
+#define __s_gcvar(vm, NAME) Scheme::StkVar VARNAME(NAME)(vm); Scheme::ValueT* NAME = &(VARNAME(NAME) .val);
 
 struct StkVar {
   ValueT val;
