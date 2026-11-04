@@ -414,7 +414,7 @@ struct NumBigObj;
 /* True or False */
 #define isfalse(VT) istype(VT, VT_FALSE)
 #define istrue(VT) istype(VT, VT_TRUE)
-#define isboolean(VT) isfalse(VT) || istrue(VT)
+#define isboolean(VT) (isfalse(VT) || istrue(VT))
 
 /* Char */
 #define SCM_CHAR_MIN 0
