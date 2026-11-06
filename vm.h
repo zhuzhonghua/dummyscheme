@@ -1511,6 +1511,9 @@ public:
   bool get(SymPtr key, ValueT* out);
   void set(VM* vm, ValueT* key, ValueT* val);
   void set(VM* vm, SymPtr sym, ValueT* val);
+  /* remove: the key stays as a tombstone (undefined value) until a rehash */
+  bool remove(VM* vm, ValueT* key);
+  bool remove(VM* vm, SymPtr key);
   /* given previous result kv (#f = start), return next (key . val) or #f */
   ValueT next(VM* vm, ValueT* kv);
 

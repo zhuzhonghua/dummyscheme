@@ -104,6 +104,230 @@ static ValueT scm_stub_load(VM* vm, ValueT* p)
   return Svoidref;
 }
 
+/* -------------------------------------------------------------------------
+ * require -- name-based module loading
+ *
+ *   (require "lib.util")
+ *
+ * The cache key is the module name exactly as passed to require.  The name
+ * is not normalized and no path canonicalization is done.  The name is
+ * mapped to a file through a template list (default
+ * "./?.scm;./?/init.scm"):
+ *
+ *   '.' in the module name becomes the directory separator,
+ *   '?' in each ';'-separated template is replaced by that name.
+ *
+ * The list is read from SCHEME_PATH once at startup, stored in the registry
+ * and can be read or replaced at run time with (require-path) and
+ * (require-path! "...").  A ";;" in a new list expands to the default list.
+ * ---------------------------------------------------------------------- */
+
+#ifndef SCM_PATH_MAX
+#define SCM_PATH_MAX 4096
+#endif
+
+#if defined(_WIN32)
+#define SCM_DIRSEP '\\'
+#else
+#define SCM_DIRSEP '/'
+#endif
+
+static const char* REQUIRE_CACHE_KEY = "@require.loaded";
+static const char* REQUIRE_PATH_KEY = "@require.path";
+static const char* REQUIRE_DEFAULT_PATH = "./?.scm;./?/init.scm";
+
+static ValueT require_cache(VM* vm)
+{
+  Sgcvar1(vm, key);
+  setstr(key, vm->strintern(REQUIRE_CACHE_KEY,
+                            (int)strlen(REQUIRE_CACHE_KEY)));
+
+  HashTableObj* reg = hashtableref(&G(vm)->registry);
+  ValueT* slot = reg->get(key);
+  if (slot && ishashtable(slot))
+    return *slot;
+
+  Sgcvar1(vm, tbl);
+  sethashtable(tbl, Sr1(vm, HashTableObj, vm));
+  reg->set(vm, key, tbl);
+  return *tbl;
+}
+
+/* Build the path value, expanding the first ";;" to the default list. */
+static ValueT require_make_path(VM* vm, const char* path)
+{
+  ValueT out;
+  const char* mark = strstr(path, ";;");
+  if (mark == NULL)
+  {
+    setstr(&out, vm->strintern(path, (int)strlen(path)));
+    return out;
+  }
+
+  int plen = (int)(mark - path);
+  const char* suffix = mark + 2;
+
+  Lbuffer buf(vm);
+  if (plen > 0)
+  {
+    buf.put(path, plen);
+    buf.put(';');
+  }
+  buf.put(REQUIRE_DEFAULT_PATH);
+  if (*suffix)
+  {
+    buf.put(';');
+    buf.put(suffix);
+  }
+
+  setstr(&out, vm->strintern(buf.buf, buf.count));
+  return out;
+}
+
+static ValueT require_set_path(VM* vm, const char* path)
+{
+  Sgcvar2(vm, key, val);
+  setstr(key, vm->strintern(REQUIRE_PATH_KEY,
+                            (int)strlen(REQUIRE_PATH_KEY)));
+  *val = require_make_path(vm, path);
+  hashtableref(&G(vm)->registry)->set(vm, key, val);
+  return *val;
+}
+
+static ValueT require_get_path(VM* vm)
+{
+  Sgcvar1(vm, key);
+  setstr(key, vm->strintern(REQUIRE_PATH_KEY,
+                            (int)strlen(REQUIRE_PATH_KEY)));
+  ValueT* slot = hashtableref(&G(vm)->registry)->get(key);
+  if (slot && isstr(slot))
+    return *slot;
+
+  const char* path = getenv("SCHEME_PATH");
+  if (path == NULL)
+    path = REQUIRE_DEFAULT_PATH;
+  return require_set_path(vm, path);
+}
+
+static bool require_readable(const char* path)
+{
+  FILE* f = fopen(path, "r");
+  if (f == NULL) return false;
+  fclose(f);
+  return true;
+}
+
+/* Search the ';'-separated template list: replace '.' in the module name
+ * with the directory separator, then substitute the name for '?' in each
+ * template.  Return the first readable file. */
+static bool require_searchpath(const char* name, const char* path,
+                               char* out, int outlen)
+{
+  char namebuf[SCM_PATH_MAX];
+  int n = 0;
+  for (const char* p = name; *p && n < (int)sizeof(namebuf) - 1; ++p)
+    namebuf[n++] = (*p == '.') ? SCM_DIRSEP : *p;
+  namebuf[n] = '\0';
+
+  const char* p = path;
+  while (*p)
+  {
+    const char* end = strchr(p, ';');
+    int plen = end ? (int)(end - p) : (int)strlen(p);
+
+    int k = 0;
+    for (int i = 0; i < plen && k < outlen - 1; ++i)
+    {
+      if (p[i] == '?')
+      {
+        for (int j = 0; namebuf[j] && k < outlen - 1; ++j)
+          out[k++] = namebuf[j];
+      }
+      else
+        out[k++] = p[i];
+    }
+    out[k] = '\0';
+
+    if (require_readable(out))
+      return true;
+
+    if (!end) break;
+    p = end + 1;
+  }
+  return false;
+}
+
+static ValueT scm_stub_require(VM* vm, ValueT* p)
+{
+  static const char* METHOD = "require";
+  AssertArg(vm, isstr(p), METHOD, p, "not a string");
+
+  const char* name = Ssstr(strref(p));
+
+  Sgcvar3(vm, cache, key, pathvt);
+  *cache = require_cache(vm);
+  setstr(key, vm->strintern(name, (int)strlen(name)));
+
+  HashTableObj* tab = hashtableref(cache);
+  ValueT* hit = tab->get(key);
+  if (hit)
+  {
+    if (isfalse(hit))
+      Error(vm, "require: cyclic dependency while loading '%s'", name);
+    return *hit;
+  }
+
+  *pathvt = require_get_path(vm);
+  const char* path = Ssstr(strref(pathvt));
+  char file[SCM_PATH_MAX];
+  if (!require_searchpath(name, path, file, sizeof(file)))
+    Error(vm, "require: module '%s' not found (require-path=%s)", name, path);
+
+  tab->set(vm, key, Sfalseref);   /* loading */
+  try
+  {
+    vm->loadfile(file);
+  }
+  catch (...)
+  {
+    tab->remove(vm, key);  /* do not cache failures */
+    throw;
+  }
+  tab->set(vm, key, Strueref);    /* loaded */
+  return Strueref;
+}
+
+/* (require-clear! "lib.util") -- forget a loaded module so that the next
+ * require loads it again. */
+static ValueT scm_stub_require_clear(VM* vm, ValueT* p)
+{
+  static const char* METHOD = "require-clear!";
+  AssertArg(vm, isstr(p), METHOD, p, "not a string");
+
+  const char* name = Ssstr(strref(p));
+
+  Sgcvar2(vm, cache, key);
+  *cache = require_cache(vm);
+  setstr(key, vm->strintern(name, (int)strlen(name)));
+  hashtableref(cache)->remove(vm, key);
+  return Svoidref;
+}
+
+/* (require-path) -- current template list. */
+static ValueT scm_stub_require_path(VM* vm)
+{
+  return require_get_path(vm);
+}
+
+/* (require-path! "templates") -- replace the template list. */
+static ValueT scm_stub_require_path_set(VM* vm, ValueT* p)
+{
+  static const char* METHOD = "require-path!";
+  AssertArg(vm, isstr(p), METHOD, p, "not a string");
+  require_set_path(vm, Ssstr(strref(p)));
+  return Svoidref;
+}
+
 static ValueT scm_stub_iportp(VM* vm, ValueT* p)
 {
   return frombool(isiport(p));
@@ -290,8 +514,14 @@ static ValueT scm_stub_read(VM* vm, ValueT* args)
 
 void SCMPort::init(VM* vm)
 {
+  require_get_path(vm);  /* read SCHEME_PATH once at startup */
+
   const RegCProc port[] = {
     RegCProc("load", scm_stub_load),
+    RegCProc("require", scm_stub_require),
+    RegCProc("require-clear!", scm_stub_require_clear),
+    RegCProc("require-path", scm_stub_require_path),
+    RegCProc("require-path!", scm_stub_require_path_set),
     RegCProc("display", scm_stub_display, true),
     RegCProc("write", scm_stub_write, true),
     RegCProc("newline", scm_stub_newline, true),

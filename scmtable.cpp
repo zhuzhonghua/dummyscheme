@@ -240,7 +240,7 @@ ValueT HashTableObj::next(VM* vm, ValueT* kv)
   for (i -= sizearray; i < (node ? twoto(lsizenode) : 0); i++)
   {
     TableNode* n = &node[i];
-    if (!isundefined(&n->key))
+    if (!isundefined(&n->key) && !isundefined(&n->val))
     {
       ValueT out;
       setpair(&out, SCM::cons(vm, &n->key, &n->val));
@@ -301,6 +301,25 @@ void HashTableObj::set(VM* vm, SymPtr name, ValueT* val)
   set(vm, &symvt, val);
 }
 
+/* Delete by emptying the value and keeping the key as a tombstone.  A later
+   set() with the same key reuses the node; a rehash drops it. */
+bool HashTableObj::remove(VM* vm, ValueT* key)
+{
+  ValueT* slot = rawget(key);
+  if (!slot || isundefined(slot))
+    return false;
+  setundefined(slot);
+  GC(vm)->checkBarrier(this);
+  return true;
+}
+
+bool HashTableObj::remove(VM* vm, SymPtr key)
+{
+  ValueT symvt;
+  setsym(&symvt, key);
+  return remove(vm, &symvt);
+}
+
 bool HashTableObj::get(SymPtr key, ValueT* out)
 {
   ValueT* slot = get(key);
@@ -341,6 +360,16 @@ void HashTableObj::set(VM* vm, ValueT* key, ValueT* val)
 
   if (newindexfallback(vm, key, val))
     return;
+
+  /* A removed key keeps its node as a tombstone (undefined value).  Look it
+     up again: a __newindex procedure may have run and rehashed the table. */
+  slot = rawget(key);
+  if (slot)
+  {
+    *slot = *val;
+    GC(vm)->checkBarrier(this);
+    return;
+  }
 
   if (!node || (!isundefined(&mainposition(key)->key) && getfreepos() == NULL))
   {
@@ -384,12 +413,13 @@ void HashTableObj::numuse(int* narray, int* nhash)
   for (; lg <= SCMMAXBITS; lg++) nums[lg] = 0;
   *narray = totaluse;
 
-  /* count elements in hash part, marking those that fit the array part */
+  /* count elements in hash part, marking those that fit the array part;
+     nodes with an undefined value are tombstones and are not counted */
   i = node ? twoto(lsizenode) : 0;
   while (i--)
   {
     TableNode* n = &node[i];
-    if (!isundefined(&n->key))
+    if (!isundefined(&n->key) && !isundefined(&n->val))
     {
       int k = arrayindex(&n->key);
       if (k >= 0)
@@ -500,7 +530,7 @@ void HashTableObj::resize(VM* vm, int nasize, int nhsize)
     for (int i = twoto(oldhsize) - 1; i >= 0; i--)
     {
       TableNode* old = nold + i;
-      if (!isundefined(&old->key))
+      if (!isundefined(&old->key) && !isundefined(&old->val))
       {
         ValueT k = old->key;
         ValueT v = old->val;
@@ -608,6 +638,13 @@ static ValueT scm_stub_hash_table_set(VM* vm, ValueT* ht, ValueT* key, ValueT* v
   return Svoidref;
 }
 
+static ValueT scm_stub_hash_table_delete(VM* vm, ValueT* ht, ValueT* key)
+{
+  static const char* METHOD = "hash-table-delete!";
+  AssertArg(vm, ishashtable(ht), METHOD, ht, " is not a hash-table");
+  return frombool(hashtableref(ht)->remove(vm, key));
+}
+
 static ValueT scm_stub_hash_table_next(VM* vm, ValueT* ht, ValueT* kv)
 {
   static const char* METHOD = "hash-table-next";
@@ -622,6 +659,7 @@ void SCMTable::init(VM* vm)
     RegCProc("make-hash-table", scm_stub_make_hash_table, true),
     RegCProc("hash-table-ref", scm_stub_hash_table_ref),
     RegCProc("hash-table-set!", scm_stub_hash_table_set),
+    RegCProc("hash-table-delete!", scm_stub_hash_table_delete),
     RegCProc("hash-table-next", scm_stub_hash_table_next),
     RegCProc(NULL, -1)
   };
