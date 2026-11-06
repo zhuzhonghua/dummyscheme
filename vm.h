@@ -1680,17 +1680,28 @@ struct InputPortObj : public RefObject {
   int peekchar() { return n < size ? buff[n] : fillbuff(0); }
   int readchar() { return n < size ? buff[n++] : fillbuff(1); }
   int nextc() { return readchar(); }
-  void unreadchar(int c) { n--; }
+  void unreadchar(int c) { if (n > 0) n--; }
   int fillbuff(int initn) {
     if (!file) return -1;
     if (eof) return -1;
-    size = fread(buff, 1, sizeof(buff), file);
+
+    /* A terminal delivers input line by line, so a full-buffer fread would
+       block until sizeof(buff) bytes arrive.  Ask stdio for one byte there. */
+    size_t want = sizeof(buff);
+#if defined(SCM_PLATFORM_WINDOWS)
+    if (_isatty(_fileno(file))) want = 1;
+#elif defined(SCM_PLATFORM_APPLE) || defined(SCM_PLATFORM_LINUX)
+    if (isatty(fileno(file))) want = 1;
+#else
+    /* WASM and other platforms: keep the bulk fread path */
+#endif
+
+    size = (int)fread(buff, 1, want, file);
     if (size > 0)
-      return (n=initn, buff[0]);
-    else {
-      eof = true;
-      return -1;
-  }
+      return (n = initn, buff[0]);
+
+    eof = true;
+    return -1;
   }
 
   uchar buff[32];
