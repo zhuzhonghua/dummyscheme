@@ -622,6 +622,44 @@
          (list (hash-table-ref ht 5000) (hash-table-ref ht 1001) (hash-table-ref ht 100)))
        '(6 0 1000))
 
+;; deletion leaves a tombstone that a later set! reuses and a rehash drops
+(define hd (make-hash-table))
+(hash-table-set! hd 'a 1)
+(hash-table-set! hd 'b 2)
+(check 'ht-delete-result (hash-table-delete! hd 'a) #t)
+(check 'ht-delete-absent (hash-table-delete! hd 'a) #f)
+(check 'ht-delete-ref-missing
+       (car (pcall (lambda () (hash-table-ref hd 'a))))
+       #f)
+(check 'ht-delete-reinsert
+       (begin (hash-table-set! hd 'a 3) (hash-table-ref hd 'a)) 3)
+(check 'ht-delete-alist
+       (let ((al (hash-table->alist hd)))
+         (list (length al)
+               (let ((p (assq 'a al))) (and p (cdr p)))
+               (let ((p (assq 'b al))) (and p (cdr p)))))
+       '(2 3 2))
+(check 'ht-delete-array
+       (let ((h (make-hash-table)))
+         (hash-table-set! h 1 'a)
+         (hash-table-set! h 2 'b)
+         (hash-table-delete! h 1)
+         (list (car (pcall (lambda () (hash-table-ref h 1))))
+               (hash-table-ref h 2)
+               (hash-table-keys h)))
+       '(#f b (2)))
+(check 'ht-delete-rehash
+       (let ((h (make-hash-table)))
+         (do ((i 0 (+ i 1))) ((= i 50))
+           (hash-table-set! h (string-append "k" (number->string i)) i))
+         (do ((i 0 (+ i 1))) ((= i 50))
+           (hash-table-delete! h (string-append "k" (number->string i))))
+         (do ((i 0 (+ i 1))) ((= i 50))
+           (hash-table-set! h (string-append "n" (number->string i)) i))
+         (list (length (hash-table->alist h))
+               (hash-table-ref h "n49")))
+       '(50 49))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; 11. hash-table traversal (Lua luaH_next style: kv = #f starts, next (key . val) or #f)
 
@@ -1552,6 +1590,93 @@
 (check 'type-hash (type (make-hash-table)) 'hash-table)
 (check 'type-bytes (type (bytevector 1 2)) 'bytevector)
 (check 'type-closure (type (lambda (x) x)) 'closure)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 20. require
+
+(section "20. require")
+
+(define require-test-a-count 0)
+(define require-test-init-count 0)
+(define require-test-util-count 0)
+(define require-test-retry-count 0)
+(define require-test-alt-count 0)
+
+;; The template list is read from SCHEME_PATH at startup and can be read or
+;; replaced at run time.
+(define require-test-orig-path (require-path))
+(require-path! "./?.scm;./?/init.scm")
+(check 'require-path-getter (require-path) "./?.scm;./?/init.scm")
+
+;; ";;" expands to the default list.
+(require-path! "head;;tail")
+(check 'require-path-double-semicolon
+       (require-path)
+       "head;./?.scm;./?/init.scm;tail")
+
+;; A new list takes effect for the next require.
+(require-path! "./require-test/alt/?.scm")
+(require "altmod")
+(check 'require-path-setter require-test-alt-count 1)
+(require-path! "./?.scm;./?/init.scm")
+
+;; A module name is the cache key; the file runs once.
+(require "require-test.a")
+(require "require-test.a")
+(check 'require-once require-test-a-count 1)
+
+;; load is uncached and runs the file every time.
+(load "require-test/a.scm")
+(check 'load-each-time require-test-a-count 2)
+
+;; '.' in a module name becomes a directory separator.
+(require "require-test.lib.util")
+(require "require-test.lib.util")
+(check 'require-dotted require-test-util-count 1)
+
+;; The "?/init.scm" template resolves a module directory.
+(require "require-test")
+(require "require-test")
+(check 'require-init-template require-test-init-count 1)
+
+;; require-clear! makes the next require load the file again.
+(require-clear! "require-test.a")
+(require "require-test.a")
+(check 'require-after-clear require-test-a-count 3)
+
+;; A failed load is not cached: fix the cause and require again.
+(check 'require-retry-first-fails
+       (car (pcall (lambda () (require "require-test.retry"))))
+       #f)
+(check 'require-retry-ran-once require-test-retry-count 1)
+(define require-test-retry-ready #t)
+(check 'require-retry-succeeds
+       (car (pcall (lambda () (require "require-test.retry"))))
+       #t)
+(check 'require-retry-ran-twice require-test-retry-count 2)
+(require "require-test.retry")
+(check 'require-retry-cached require-test-retry-count 2)
+
+;; Cyclic requires are reported instead of recursing forever.
+(check 'require-cycle
+       (pcall (lambda () (require "require-test.cycle1")))
+       '(#f . "require: cyclic dependency while loading 'require-test.cycle1'"))
+
+;; A missing module reports the search path.
+(define require-missing-result
+  (pcall (lambda () (require "require-test.no-such-module"))))
+(check 'require-missing (car require-missing-result) #f)
+(check 'require-missing-message (string? (cdr require-missing-result)) #t)
+
+;; require accepts a string only.
+(check 'require-non-string
+       (xpcall (lambda () (require 'require-test.a)) (lambda (e) e))
+       "require: not a string")
+(check 'require-path-non-string
+       (xpcall (lambda () (require-path! 'x)) (lambda (e) e))
+       "require-path!: not a string")
+
+(require-path! require-test-orig-path)
 
 (display "aftertest passed ") (display *npass*)
 (display " failed ") (display *nfail*)
