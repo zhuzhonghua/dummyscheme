@@ -3602,6 +3602,7 @@ GlobalVM::GlobalVM(ScmAlloc a, void* ud):
   intern(this), cacheGroup(this),
   uniquen(0), g(this)
 {
+  ac0 = Sundefined;  /* ac0 is a GC root (traced in fullmark); init before any alloc */
   makeseed();
   randstate = (scm_uint)seed;
   init();

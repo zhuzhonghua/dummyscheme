@@ -1438,7 +1438,7 @@ public:
   VM* mainstk() { return &main; }
   ScmAlloc getfrealloc() { return frealloc; }
   void* getallocud() { return allocud; }
-  void fullmark() { mainstk()->fullmark(); getgc()->trace(registry); }
+  void fullmark() { mainstk()->fullmark(); getgc()->trace(registry); getgc()->trace(ac0); }
   void stepmarkframes() { mainstk()->stepmarkframes(); }
   void regfullmark() { mainstk()->regfullmark(); }
   void printccode(LambdaObj* lambda) { mainstk()->printccode(lambda); }

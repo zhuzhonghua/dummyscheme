@@ -10,17 +10,60 @@ namespace Scheme {
 
 // ---------- internals ----------
 
+// Turn a finished message into the char* thrown to pcall/xpcall.  The string
+// is non-interned (ninstrintern, the same path scm_errv uses) and parked in
+// GlobalVM::ac0, which is a GC root (traced in GlobalVM::fullmark), so the
+// buffer stays valid until the catcher copies it.
+static const char* errstr(VM* vm, const char* buf, int len)
+{
+  StrObj* s = G(vm)->ninstrintern(buf, len);
+  setstr(&G(vm)->ac0, s);
+  return strref(&G(vm)->ac0)->str;
+}
+
+// Format an API error, print it for console visibility, and return the text to
+// throw so pcall/xpcall receive the real message instead of a bare literal.
+static const char* apierrv(VM* vm, const char* fmt, va_list ap)
+{
+  char buf[SCM_ERRBUF_SIZE] = {0};
+  vsnprintf(buf, sizeof(buf), fmt, ap);
+  Print("%s\n", buf);
+  return errstr(vm, buf, (int)strlen(buf));
+}
+
+static void apierr(VM* vm, const char* fmt, ...)
+{
+  va_list ap;
+  va_start(ap, fmt);
+  const char* err = apierrv(vm, fmt, ap);
+  va_end(ap);
+  throw err;
+}
+
+// Render a value (write form) into an Lbuffer for inclusion in error text.
+static void render_value(VM* vm, Lbuffer& buf, ValueT* p)
+{
+  Sgcvar1(vm, oport);
+  OutputPortStrObj* op = Sr1(vm, OutputPortStrObj, vm);
+  setoport(oport, op);
+  vm->printvalue0(op, p);
+  buf.put(op->strbuf.buf, op->strbuf.count);
+  op->close();
+}
+
 // Type mismatch error: expected <type>, got <value>; always throws.
 static void typeerr(VM* vm, ValueT* p, const char* expect)
 {
-  Print("expected %s", expect);
+  Lbuffer buf(vm);
+  buf.put("expected ");
+  buf.put(expect);
   if (p)
   {
-    Print(", got ");
-    vm->printvalue0(p);
+    buf.put(", got ");
+    render_value(vm, buf, p);
   }
-  Print("\n");
-  throw "ScmError";
+  Print("%.*s\n", buf.count, buf.buf);
+  throw errstr(vm, buf.buf, buf.count);
 }
 
 // ---------- type predicates ----------
@@ -225,10 +268,7 @@ int scm_list_len(VM* vm, ValueT* list)
   {
     if (!ispair(p))
     {
-      Print("expected a proper list, got ");
-      if (p) vm->printvalue0(p);
-      Print("\n");
-      throw "ScmError";
+      typeerr(vm, p, "a proper list");
     }
     n++;
     p = Scdr(p);
@@ -264,15 +304,13 @@ ValueT* scm_list_ref(VM* vm, ValueT* list, int i)
   {
     if (!ispair(p))
     {
-      Print("list index out of range\n");
-      throw "ScmError";
+      apierr(vm, "list index out of range");
     }
     p = Scdr(p);
   }
   if (isnull(p))
   {
-    Print("list index out of range\n");
-    throw "ScmError";
+    apierr(vm, "list index out of range");
   }
   return Scar(p);
 }
@@ -420,8 +458,7 @@ void scm_vector_set(VM* vm, ValueT* vec, int i, ValueT v)
   ArrayObj* arr = arrayref(vec);
   if (i < 0 || i >= arr->arrayn())
   {
-    Print("vector index %d out of range\n", i);
-    throw "ScmError";
+    apierr(vm, "vector index %d out of range", i);
   }
   arr->set(i, &v);
 }
@@ -436,8 +473,7 @@ ValueT scm_vector_ref(VM* vm, ValueT* vec, int i)
   ArrayObj* arr = arrayref(vec);
   if (i < 0 || i >= arr->arrayn())
   {
-    Print("vector index %d out of range\n", i);
-    throw "ScmError";
+    apierr(vm, "vector index %d out of range", i);
   }
   return *arr->get(i);
 }
@@ -473,8 +509,7 @@ ValueT scm_table_ref(VM* vm, ValueT* tbl, ValueT* key)
   ValueT* slot = t->get(key);
   if (!slot || isundefined(slot))
   {
-    Print("key not found\n");
-    throw "ScmError";
+    apierr(vm, "key not found");
   }
   return *slot;
 }
@@ -499,14 +534,11 @@ ValueT scm_table_get(VM* vm, ValueT* tbl, ValueT* key)
 
 void scm_error(VM* vm, const char* fmt, ...)
 {
-  (void)vm;
-  char buf[512];
   va_list ap;
   va_start(ap, fmt);
-  vsnprintf(buf, sizeof(buf), fmt, ap);
+  const char* err = apierrv(vm, fmt, ap);
   va_end(ap);
-  Print("%s\n", buf);
-  throw "ScmError";
+  throw err;
 }
 
 // ---------- VM entry ----------
