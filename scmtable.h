@@ -9,6 +9,7 @@ public:
   static void init(VM* vm);
   static ValueT maketable(VM* vm);
   static ValueT ref(VM* vm, ValueT* ht, ValueT* key);
+  static bool exists(VM* vm, ValueT* ht, ValueT* key);
   static void set(VM* vm, ValueT* ht, ValueT* key, ValueT* val);
 };
 

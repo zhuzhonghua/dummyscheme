@@ -612,6 +612,14 @@ ValueT SCMTable::ref(VM* vm, ValueT* ht, ValueT* key)
   return *slot;
 }
 
+bool SCMTable::exists(VM* vm, ValueT* ht, ValueT* key)
+{
+  static const char* METHOD = "hash-table-exists?";
+  AssertArg(vm, ishashtable(ht), METHOD, ht, " is not a hash-table");
+  ValueT* slot = hashtableref(ht)->get(key);
+  return slot && !isundefined(slot);
+}
+
 void SCMTable::set(VM* vm, ValueT* ht, ValueT* key, ValueT* val)
 {
   static const char* METHOD = "hash-table-set!";
@@ -630,6 +638,11 @@ static ValueT scm_stub_make_hash_table(VM* vm, ValueT* args)
 static ValueT scm_stub_hash_table_ref(VM* vm, ValueT* ht, ValueT* key)
 {
   return SCMTable::ref(vm, ht, key);
+}
+
+static ValueT scm_stub_hash_table_exists(VM* vm, ValueT* ht, ValueT* key)
+{
+  return frombool(SCMTable::exists(vm, ht, key));
 }
 
 static ValueT scm_stub_hash_table_set(VM* vm, ValueT* ht, ValueT* key, ValueT* val)
@@ -658,6 +671,7 @@ void SCMTable::init(VM* vm)
   const RegCProc hashes[] = {
     RegCProc("make-hash-table", scm_stub_make_hash_table, true),
     RegCProc("hash-table-ref", scm_stub_hash_table_ref),
+    RegCProc("hash-table-exists?", scm_stub_hash_table_exists),
     RegCProc("hash-table-set!", scm_stub_hash_table_set),
     RegCProc("hash-table-delete!", scm_stub_hash_table_delete),
     RegCProc("hash-table-next", scm_stub_hash_table_next),
